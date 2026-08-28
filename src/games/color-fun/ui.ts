@@ -169,6 +169,31 @@ export const CLF_CSS = `
   .clf-swatch.clf-fresh .clf-swatch-dot{animation:none;}
   .clf-flake{animation:none;display:none;}
 }
+/* N-43(trio-r11):915×412 七关型色盘/调色锅整排掉进 .clf-scrolly 线下。
+   矮横屏改双栏——画布左、操作排右 sticky；画布放开 55vh 下限。竖屏与高屏零变化。
+   排在 tighter 前面：pinTighter 守门从 .clf-tighter 切到文件尾，不能把 .clf-tool 扫进来。 */
+@media (max-height:500px){
+  .clf-wrap{min-height:0;}
+  .clf-stage{min-height:0;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,42%);
+    grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
+    align-items:stretch;gap:6px 10px;padding:6px 8px;}
+  .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
+  .clf-wrap>.clf-top{grid-area:top;}
+  .clf-wrap>.clf-preview{grid-area:preview;}
+  .clf-wrap>.clf-legend{grid-area:legend;}
+  .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
+    max-height:min(200px,calc(100dvh - 120px));align-self:stretch;}
+  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:4px;
+    width:100%;max-width:100%;}
+  .clf-wrap.clf-scrolly{overflow:hidden;}
+  .clf-wrap .clf-chips{max-height:36px;}
+  .clf-wrap .clf-mixer,.clf-wrap .clf-tools,.clf-wrap .clf-primaries{flex-wrap:nowrap;max-width:100%;}
+  .clf-wrap .clf-palette{max-width:100%;justify-content:center;padding:0 2px;}
+  .clf-wrap .clf-msg{min-height:0;}
+}
 /* 「再挤挤」这一档（W5R3-TA-02）——它治的不是「够不着」，是**来回滚**。
    真机 320×568 第 181 关：这一屏 701px 塞进 282px 的窗口，每一颗按钮慢拖都够得着，
    可画布 180px + 调色锅那一排 105px = 285px > 282px，canPinCanvas() 判「钉不住」，
@@ -194,30 +219,6 @@ export const CLF_CSS = `
 .clf-wrap.clf-tighter .clf-palette{padding:2px 2px 3px;gap:6px;}
 .clf-wrap.clf-tighter .clf-swatch-name{font-size:12px;line-height:1.1;}
 .clf-wrap.clf-tighter .clf-msg{min-height:16px;font-size:13px;line-height:1.3;}
-/* N-43(trio-r11):915×412 七关型色盘/调色锅整排掉进 .clf-scrolly 线下。
-   矮横屏改双栏——画布左、操作排右 sticky；画布放开 55vh 下限。竖屏与高屏零变化。 */
-@media (max-height:500px){
-  .clf-wrap{min-height:0;}
-  .clf-stage{min-height:0;}
-}
-@media (max-height:500px) and (min-width:640px){
-  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,42%);
-    grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
-    align-items:stretch;gap:6px 10px;padding:6px 8px;}
-  .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
-  .clf-wrap>.clf-top{grid-area:top;}
-  .clf-wrap>.clf-preview{grid-area:preview;}
-  .clf-wrap>.clf-legend{grid-area:legend;}
-  .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
-    max-height:min(200px,calc(100dvh - 120px));align-self:stretch;}
-  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:4px;
-    width:100%;max-width:100%;}
-  .clf-wrap.clf-scrolly{overflow:hidden;}
-  .clf-wrap .clf-chips{max-height:36px;}
-  .clf-wrap .clf-mixer,.clf-wrap .clf-tools,.clf-wrap .clf-primaries{flex-wrap:nowrap;max-width:100%;}
-  .clf-wrap .clf-palette{max-width:100%;justify-content:center;padding:0 2px;}
-  .clf-wrap .clf-msg{min-height:0;}
-}
 `;
 
 /**
