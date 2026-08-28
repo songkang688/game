@@ -36,6 +36,9 @@ export const WRAP_PADDING_X = 20;
 /** `.mst-sky` 的最大宽度（再宽星星就散得看不出高低了） */
 export const SKY_MAX_PX = 360;
 
+/** L-1(trio-r7):矮横屏里「音越高摆越上」的抬升量,60 → 28(高低关系与热区不变) */
+export const SHORT_RISE_PX = 28;
+
 /**
  * 星星键盘的可用宽度。老写法把 360 直接写死在 `createStarBoard` 里、从不问真实屏宽，
  * 于是 320px 的老机器上算出来的键排比屏幕还宽，两端的键整个滑出去
@@ -409,6 +412,21 @@ export const MST_CSS = `
   .mst-bar-tick{top:8px;height:28px;}
   .mst-score{padding:${SHORT_SIZES.scorePad}px 12px;gap:8px;}
 }
+/* L-1(trio-r7):915×412 一族矮横屏,滚动窗只剩 ~208px,「🔁 再听一遍」半截、
+   声音设置四钮(静音/音量/音色/速度)整排折叠线下(r4 原账),孩子得靠上面那档的
+   竖滚才够得着。键盘宽有 ${SKY_MAX_PX}px 上限(hostWidth 封顶),所以矮横屏切
+   「徽章+键盘左 / 两条工具行右」双栏,左栏恒 ≥${SKY_MAX_PX}px 键排一个像素不裁;
+   比 700px 窄的横屏机器仍走上面那档「自己滚 + 手势放行」的老路。
+   只挂在关卡壳(mst-level)上:advanced 视奏台与自由弹奏沙盒的 .mst-wrap 不卷入。
+   热区、keyLayout 内联尺寸、听记判定零触碰。 */
+@media (max-height:500px) and (min-width:700px){
+  .mst-wrap.mst-level{display:grid;max-width:none;
+    grid-template-columns:minmax(${SKY_MAX_PX}px,1fr) minmax(180px,230px);
+    column-gap:12px;row-gap:${SHORT_SIZES.wrapGap}px;align-items:start;justify-items:center;}
+  .mst-wrap.mst-level>.mst-head{grid-column:1;grid-row:1;justify-self:stretch;}
+  .mst-wrap.mst-level>.mst-sky{grid-column:1;grid-row:2;}
+  .mst-wrap.mst-level>.mst-tools{grid-column:2;}
+}
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}
   .mst-badge-listen{animation:none;}
@@ -501,7 +519,12 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
   const fits = layoutFits(layout, count, available);
   const lowMidi = Math.min(...opts.midis);
   const highMidi = Math.max(...opts.midis);
-  const rise = count > 1 ? 60 : 0;
+  // 音越高摆得越上的抬升量:矮横屏(L-1 双栏档)收到 28px——高低关系与热区都不变,
+  // 键排总高省下 32px,412px 视口里最低的哆/来两键连名字整个进屏
+  // (和 keyLayout 一样只在挂载时量一次;量不到 matchMedia 的桩环境照旧 60)
+  const shortViewport =
+    typeof matchMedia === "function" && matchMedia("(max-height:500px)").matches;
+  const rise = count > 1 ? (shortViewport ? SHORT_RISE_PX : 60) : 0;
 
   const sky = document.createElement("div");
   sky.className = "mst-sky";

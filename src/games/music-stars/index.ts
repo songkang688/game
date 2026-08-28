@@ -88,10 +88,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
   }
 
   const wrap = document.createElement("div");
-  wrap.className = "mst-wrap";
+  // mst-level 是矮横屏双栏档的标记:advanced/沙盒也用 .mst-wrap,别把它们卷进 grid
+  wrap.className = "mst-wrap mst-level";
   wrap.style.background = THEME_BG[cfg.theme];
   injectCss(wrap);
   const head = document.createElement("div");
+  head.className = "mst-head";
   head.innerHTML = `
     <div class="mst-top">
       <div class="mst-badge mst-song"></div>
