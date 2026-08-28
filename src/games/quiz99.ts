@@ -176,7 +176,7 @@ const QUIZ_CSS = `
      再切「题面左 / 问句+朗读+选项+消息右」双栏:读题 → 作答同屏零滚动。
      span 4 恰好盖住右栏四个常驻项(跨到空行 Chrome 会把题面高摊进去凭空长高);
      可选行(跳关说明/直达)整行横跨,在不在都不错位。竖屏与平板零变化。 */
-  .qz-wrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(300px,55%); column-gap: 12px; align-items: start; }
+  .qz-wrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(300px,55%); column-gap: 12px; row-gap: 4px; align-items: start; }
   .qz-top, .qz-bar, .qz-skip, .qz-jump { grid-column: 1/-1; }
   .qz-prompt { grid-column: 1; grid-row: span 4; align-self: stretch; }
   .qz-ask, .qz-say-row, .qz-choices, .qz-msg { grid-column: 2; }
