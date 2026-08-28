@@ -568,7 +568,7 @@ const L99_CSS = `
   .l99-stagebar{padding:6px 8px;gap:6px;}
   .l99-stagetitle{font-size:14px;}
   .l99-stage{padding:6px;}
-  .l99-jump-note{font-size:14px;margin:0;}
+  .l99-jump-note{font-size:16px;margin:0;}
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
 }
