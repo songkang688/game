@@ -180,6 +180,20 @@ const CSS = `
   .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
+  /* C-6 残留(trio-r8 合并终态):pads sticky 钉住了五键,可工具行(缩放/望远镜)402..498、
+     提示 672 还在 overflow:hidden 的 wrap 外,用户滚也滚不到。只动推理关(as-deduce 标记):
+     右栏放宽到 300px 起(五键一行 246px 得装下),D-pad 压成一行(3x3 里的占位 span 在
+     flex 里零宽,热区 44 一个不动)、工具行不换行可横滑、线索盒收矮内滚(读为主,能滚不算罪);
+     find 关保持已验收原样,判定/seed/线索数据零触碰。 */
+  .as-wrap.as-deduce{grid-template-columns:minmax(0,1fr) minmax(300px,48%);}
+  /* 1/-1 在没有显式行的网格里解析成「只占第 1 行」:画布把 row1 撑到 208px,
+     工具行被顶到 402 线下——显式跨满右栏四行(线索/工具/方向盘/提示) */
+  .as-wrap.as-deduce>.as-canvas{grid-row:1/span 4;}
+  .as-wrap.as-deduce>.as-clues{max-height:52px;}
+  .as-wrap.as-deduce>.als-tools{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:100%;}
+  .as-wrap.as-deduce>.as-pads{flex-wrap:nowrap;align-items:center;}
+  .as-wrap.as-deduce .as-pad{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;}
+  .as-wrap.as-deduce .as-pad-t{width:100%;text-align:center;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
 .as-open,.as-back{min-height:44px;}
