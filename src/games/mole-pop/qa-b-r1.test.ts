@@ -248,6 +248,11 @@ describe("档B R1 · 地鼠嘭嘭 · 360px 窄屏", () => {
   it("3×3 地洞棋盘用等分列,不写死像素", () => {
     expect(CSS).toMatch(/\.mp-board\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*1fr\)/);
   });
+
+  it("C-5 矮屏与平板横屏按余高钳棋盘宽", () => {
+    expect(CSS).toContain("max-width: min(100%, calc(100dvh - 240px))");
+    expect(CSS).toContain("@media (min-width: 700px) and (max-height: 840px)");
+  });
 });
 
 describe("档B R1 · 地鼠嘭嘭 · 硬约束自查", () => {

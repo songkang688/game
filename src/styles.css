@@ -3334,3 +3334,18 @@ html {
     overflow: hidden;
   }
 }
+
+/* U-9:平板横屏「重摆题面」扩 N-66 档,500 档原文不动 */
+@media (min-width: 700px) and (max-height: 840px) {
+  .cg-wrap .cg-board {
+    max-width: min(360px, 62dvh);
+    margin-inline: auto;
+  }
+  .cg-wrap .cg-tools {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: 4px 0 2px;
+    background: linear-gradient(180deg, rgba(242, 247, 234, 0.35), #eaf3e4);
+  }
+}

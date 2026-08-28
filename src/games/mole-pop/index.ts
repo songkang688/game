@@ -155,6 +155,13 @@ const CSS = `
 .mp-over-t { font-size: 22px; font-weight: 900; color: #6F8C42; margin-bottom: 8px; }
 .mp-over-s { font-size: 15px; font-weight: 700; color: #8A7A3E; line-height: 1.6; margin-bottom: 14px; }
 @media (max-width: 380px) { .mp-board { gap: 12px; } .mp-badge { font-size: 14px; padding: 4px 8px; } }
+/* C-5 / U-8:3×3 洞格按余高反推,915 与平板横屏都能看见三排 */
+@media (max-height: 500px) {
+  .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
+}
+@media (min-width: 700px) and (max-height: 840px) {
+  .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .mp-hole .mp-face { animation: none; }
   .mp-hole.mp-sink { transform: none; }

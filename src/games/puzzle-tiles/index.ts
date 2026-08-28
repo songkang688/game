@@ -83,6 +83,12 @@ const CSS = `
 .pz-hint:active { transform: translateY(2px); box-shadow: 0 1px 0 #B7A3E8; }
 .pz-hint:disabled { opacity: .5; }
 .pz-board { display: grid; gap: 8px; position: relative; }
+@media (max-height: 500px) {
+  .pz-board { max-width: min(100%, calc(100dvh - 220px)); margin: 0 auto; }
+}
+@media (min-width: 700px) and (max-height: 840px) {
+  .pz-board { max-width: min(100%, calc(100dvh - 220px)); margin: 0 auto; }
+}
 .pz-tile { aspect-ratio: 1; border: none; border-radius: 16px; font-size: var(--pz-fs, clamp(22px, 8vw, 44px)); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .14s; box-shadow: 0 3px 8px rgba(120,120,200,.2); padding: 0; }
 .pz-tile small { font-size: var(--pz-num, 12px); color: rgba(90,80,120,.65); font-weight: 700; }
 .pz-tile:active { transform: scale(.94); }

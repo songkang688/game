@@ -269,6 +269,13 @@ export const CSS = `
   .mst-wrap{padding:6px;--mst-bleed:16px;}
   .mst-seats{flex-direction:column;}
 }
+/* U-18:方格盘宽驱动高,矮屏/平板横屏按余高反推钳宽,末行不再顶穿 l99 舞台 */
+@media (max-height:840px){
+  .mst-boardwrap{max-width:min(100%, calc(100dvh - 220px));margin-inline:auto;}
+}
+@media (max-height:500px){
+  .mst-boardwrap{max-width:min(100%, calc(100dvh - 168px));margin-inline:auto;}
+}
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}
   .mst-spin,.mst-cell.mst-belt::after,.mst-chainpop,.mst-cheer-star{animation:none;}

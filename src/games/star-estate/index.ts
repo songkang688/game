@@ -273,6 +273,15 @@ const CSS = `
   .se-wrap{max-height:calc(100dvh - 76px);}
   .se-board-wrap{max-height:min(156px,38dvh);}
 }
+/* U-1:平板横屏(768/820 高)吃不到 500 档,同款 sticky + 棋盘钳高扩一档 */
+@media (max-height:900px){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(280px,52dvh);max-width:min(280px,52dvh,calc(100dvh - 140px));}
+}
 /* r18 · N-3:模式屏(1v3/短盘/双人)实测 .se-wrap 顶距 128,76 的预算让 .se-pad 的
    sticky 根本钉不住(掷骰 442 线下)。只在模式屏补真预算;座位藏净资产行抬棋盘;
    行动排收窄靠右,少遮棋盘下缘。闯关 .se-wrap 与 38dvh 棋盘钳一律不动。 */

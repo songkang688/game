@@ -794,4 +794,9 @@ describe("1.3 视觉契约 · 主题查表与结算仪式", () => {
     expect(CSS).toContain(".mst-gray");
     expect(CSS).toMatch(/mst-gray\{filter:grayscale/);
   });
+
+  it("U-18 矮屏/平板按余高钳棋盘宽", () => {
+    expect(CSS).toContain("@media (max-height:840px)");
+    expect(CSS).toContain("max-width:min(100%, calc(100dvh - 220px))");
+  });
 });
