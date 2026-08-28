@@ -21,7 +21,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { hasSticker, sticker } from "../../art/kit/stickers";
 import { BOARD_ART_CSS, STICKER_FONT_RATIO, glyphHTML, sceneStickersReady } from "./boardArt";
-import { FLIPPABLE, buildScene } from "./scene12";
+import { FLIPPABLE, buildEndlessScene, buildScene, plainCell } from "./scene12";
 import { CHAPTERS, LEVELS, THEME_POOLS } from "./levels";
 
 const PICTO = /\p{Extended_Pictographic}/u;
@@ -46,8 +46,9 @@ function themeGlyphs(theme: number): string[] {
   return [...new Set([...pool, ...lookalikeTwins(pool)])];
 }
 
-describe("W8R1-04 · 第 1–3 章图集配齐（题库零改动）", () => {
-  it("表情池 + 双胞胎替换对，一张贴纸都不缺", () => {
+describe("W8R1-04 · 十章图集配齐（题库零改动）", () => {
+  it("十章全亮灯：表情池 + 双胞胎替换对，一张贴纸都不缺", () => {
+    expect(READY_THEMES.length).toBe(THEME_POOLS.length);
     for (const theme of READY_THEMES) {
       expect(themeGlyphs(theme).filter((e) => !hasSticker(e)), `第 ${theme + 1} 章`).toEqual([]);
     }
@@ -61,27 +62,33 @@ describe("W8R1-04 · 第 1–3 章图集配齐（题库零改动）", () => {
   });
 });
 
-describe("W8R1-04 · 整关门控", () => {
-  it("前 3 章全部关卡（含连环轮次）贴纸就绪", () => {
+describe("W8R1-04 · 整关门控（第 3 轮终验 · 188 关全量回归）", () => {
+  it("188 关全量（含三图 / 动态 / 镜像 / 连环的每一轮）贴纸就绪，无混排无漏网", () => {
+    expect(LEVELS.length).toBe(188);
+    expect(CHAPTERS.reduce((s, c) => s + c.size, 0)).toBe(188);
     for (let level = 0; level < LEVELS.length; level++) {
-      if (!READY_THEMES.includes(LEVELS[level].theme)) continue;
       for (let round = 0; round < Math.max(1, LEVELS[level].rounds); round++) {
         expect(sceneStickersReady(buildScene(level, round)), `第 ${level + 1} 关第 ${round + 1} 轮`).toBe(true);
       }
     }
   });
 
-  it("图集没配齐的章节整关关闸，绝不出半贴纸半 emoji 的混排图", () => {
-    let checked = 0;
-    for (let level = 0; level < LEVELS.length; level++) {
-      const theme = LEVELS[level].theme;
-      if (READY_THEMES.includes(theme)) continue;
-      // 第 4 章起每章抽第一关（连环模式抽第一轮）
-      if (LEVELS.findIndex((c) => c.theme === theme) !== level) continue;
-      expect(sceneStickersReady(buildScene(level, 0)), `第 ${level + 1} 关`).toBe(false);
-      checked++;
+  it("无尽马拉松前 30 轮（十章池子各三巡 + 双胞胎替换渐入）同样全量就绪", () => {
+    for (let round = 1; round <= 30; round++) {
+      expect(sceneStickersReady(buildEndlessScene(round)), `无尽第 ${round} 轮`).toBe(true);
     }
-    expect(checked).toBe(CHAPTERS.length - READY_THEMES.length);
+  });
+
+  it("门控机制原样：盘面混进没有贴纸的图案，整关关闸回 1.2 emoji 直出", () => {
+    const cell = (emoji: string): ReturnType<typeof plainCell> => plainCell(emoji);
+    const scene = {
+      left: [cell("🍎"), cell("🤷")],
+      second: null,
+      right: [cell("🍎"), cell("🍌")],
+    };
+    expect(sceneStickersReady(scene)).toBe(false);
+    expect(sceneStickersReady({ left: [cell("🍎")], second: [cell("🤷")], right: [cell("🍎")] })).toBe(false);
+    expect(sceneStickersReady({ left: [cell("🍎")], second: null, right: [cell("🍌")] })).toBe(true);
   });
 });
 
@@ -129,9 +136,9 @@ async function silhouetteAsymmetry(svg: string): Promise<number> {
 }
 
 describe("W8R1-04 · FLIPPABLE 非对称契约", () => {
-  it("已配贴纸的 FLIPPABLE 图案，剪影与镜像的像素差异 ≥ 10%（换朝向翻得出来）", async () => {
+  it("FLIPPABLE 全表贴纸配齐，且剪影与镜像的像素差异 ≥ 10%（换朝向翻得出来）", async () => {
     const covered = [...FLIPPABLE].filter((e) => hasSticker(e));
-    expect(covered.length).toBeGreaterThan(0);
+    expect(covered.length, "FLIPPABLE 图案必须一张不缺").toBe(FLIPPABLE.size);
     for (const e of covered) {
       const score = await silhouetteAsymmetry(sticker(e, 48)!);
       expect(score, `${e} 剪影不对称度 ${(score * 100).toFixed(1)}%`).toBeGreaterThanOrEqual(0.1);
@@ -141,6 +148,56 @@ describe("W8R1-04 · FLIPPABLE 非对称契约", () => {
   it("指标对照组：对称造型（⭐ / 🔵）差异 < 5%，证明口径本身没失真", async () => {
     for (const e of ["⭐", "🔵"]) {
       expect(await silhouetteAsymmetry(sticker(e, 48)!), e).toBeLessThan(0.05);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 双胞胎区分位（第 3 轮终验 · 设计稿 4.2「像但可辨」的机器化钉子）
+// ---------------------------------------------------------------------------
+
+/**
+ * 每对双胞胎钉一个稳定区分位：cue 片段必须出现在 own 的贴纸里、
+ * 且不出现在 twin 的贴纸里——谁把两张画成一个样，这里直接红。
+ */
+const TWIN_CUES: Array<{ own: string; twin: string; cue: string; what: string }> = [
+  { own: "🎂", twin: "🍰", cue: "#8ecbe8", what: "生日蛋糕的蓝蜡烛（🍰 是切片配草莓）" },
+  { own: "🍭", twin: "🍬", cue: "M24 31.5 L24 43", what: "棒棒糖的小木棒（🍬 是双扭糖纸）" },
+  { own: "🍩", twin: "🍪", cue: 'fill-rule="evenodd"', what: "甜甜圈的中孔（🍪 无孔配巧克力豆）" },
+  { own: "🌟", twin: "⭐", cue: 'opacity=".22"', what: "亮星星的光晕（⭐ 无光晕）" },
+  { own: "🌠", twin: "✨", cue: "#ffe9a8", what: "流星的长拖尾（✨ 是三星簇）" },
+  { own: "🏀", twin: "⚽", cue: "#f08c3a", what: "篮球的橙底弧线缝（⚽ 黑白五边形）" },
+  { own: "🚂", twin: "🚗", cue: "#5f6678", what: "火车头的深色大车轮与烟囱侧（🚗 是轿车）" },
+  { own: "🚁", twin: "✈️", cue: "M6 8.5 L42 8.5", what: "直升机的顶置旋翼（✈️ 是固定翼）" },
+  { own: "📕", twin: "📒", cue: "#ff6b6b", what: "红课本的正红封面（📒 金黄线圈本）" },
+  { own: "🌀", twin: "🌪️", cue: "a3 3 0 0 1 3 3", what: "旋涡的圆盘螺旋芯（🌪️ 是漏斗）" },
+  { own: "🫧", twin: "💧", cue: 'fill-opacity=".55"', what: "泡泡串的透明三连泡（💧 是实心单滴）" },
+  { own: "🪸", twin: "🪷", cue: "#f2d9a8", what: "珊瑚枝的沙丘底座（🪷 是整朵花）" },
+  { own: "⌛", twin: "⏱️", cue: 'stroke-dasharray="2.2 1.6"', what: "沙漏的细沙流（⏱️ 是表冠圆表盘）" },
+];
+
+describe("W8R1-04 · 双胞胎区分位", () => {
+  it("区分位钉子表覆盖题库 LOOKALIKE 的全部双胞胎对", () => {
+    const src = readFileSync(new URL("./levels.ts", import.meta.url), "utf8");
+    const block = src.slice(src.indexOf("const LOOKALIKE"), src.indexOf("export type DiffMode"));
+    const pairs = new Set<string>();
+    for (const m of block.matchAll(/"([^"]+)":\s*"([^"]+)"/g)) {
+      pairs.add([m[1], m[2]].sort().join("↔"));
+    }
+    const pinned = new Set(TWIN_CUES.map((t) => [t.own, t.twin].sort().join("↔")));
+    expect([...pairs].filter((p) => !pinned.has(p))).toEqual([]);
+    expect(pinned.size).toBe(pairs.size);
+  });
+
+  it("每对双胞胎：贴纸不同张，且区分位片段只在自己那张上", () => {
+    for (const { own, twin, cue, what } of TWIN_CUES) {
+      const a = sticker(own, 32)!;
+      const b = sticker(twin, 32)!;
+      expect(a, `${own} 缺贴纸`).toBeTruthy();
+      expect(b, `${twin} 缺贴纸`).toBeTruthy();
+      expect(a, `${own}↔${twin} 画成了同一张`).not.toBe(b);
+      expect(a.includes(cue), `${own} 丢了区分位：${what}`).toBe(true);
+      expect(b.includes(cue), `${twin} 不该有 ${own} 的区分位：${what}`).toBe(false);
     }
   });
 });
