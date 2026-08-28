@@ -185,6 +185,15 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+/* N-124 模式:915×412 摇杆/甩弹并排钉在画布旁,不改 ARENA 尺寸与 arenaCanvasSize */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .mcr-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;justify-items:stretch;
+    max-height:calc(100dvh - 108px);overflow:hidden;box-sizing:border-box;}
+  .mcr-hud,.mcr-tip{grid-column:1/-1;}
+  .mcr-stage{grid-column:1;min-width:0;}
+  .mcr-pads{grid-column:2;grid-row:2;flex-direction:column;align-items:flex-start;width:auto;min-height:0;
+    position:sticky;top:0;z-index:5;}
+}
 @media (prefers-reduced-motion:reduce){
   .mcr-fire:active,.mcr-btn:active,.mcr-card:active,.mcr-back:active,.mcr-hudbtn:active{transform:none;}
 }

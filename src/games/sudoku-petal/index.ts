@@ -459,6 +459,18 @@ export const SP_CSS = `
   .sp-key{min-height:40px;font-size:15px;}
   .sp-msg,.sp-hintbox{max-height:2.2em;overflow:hidden;}
 }
+/* N-124 模式:915×412 盘旁 3 列数字排,500 档原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .sp-wrap{max-height:calc(100dvh - 108px);display:flex;flex-direction:column;min-height:0;box-sizing:border-box;}
+  .sp-top{flex:0 0 auto;}
+  .sp-seats{flex:1 1 auto;min-height:0;overflow:auto;flex-wrap:nowrap;gap:8px;}
+  .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px;max-width:50%;}
+  .sp-pad{width:auto;max-width:140px;margin-top:0;grid-template-columns:repeat(3,1fr);
+    position:sticky;bottom:0;z-index:5;flex:0 0 auto;
+    background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);padding-top:4px;}
+  .sp-tools{position:sticky;bottom:0;z-index:6;flex:0 0 auto;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
+    padding-top:4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}
   .sp-cell.sp-bloom .sp-petal{animation:none;}

@@ -137,6 +137,17 @@ const CSS = `
 .brk-over h3 { margin: 0 0 6px; font-size: 19px; color: #7A5AA8; }
 .brk-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }
 .brk-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+/* N-124 模式:915×412 粗指针中间档钉回关 CTA,不改 画布物理台面 W/H */
+@media (max-height:820px) and (pointer:coarse){
+  .brk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;
+    box-sizing:border-box;min-height:0;}
+  .brk-top,.brk-power,.brk-msg{flex:0 0 auto;}
+  .brk-canvas{max-height:min(160px,38dvh);}
+  .brk-ctrl,.brk-again{position:sticky;bottom:0;z-index:4;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,239,228,.2),#FFEFE4);}
+  .brk-msg{max-height:1.3em;overflow:hidden;margin-top:2px;}
+  .brk-back{min-height:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
+}
 @media (prefers-reduced-motion: reduce) {
   .brk-btn:active, .brk-open:active { transform: none; }
 }
