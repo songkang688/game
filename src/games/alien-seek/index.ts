@@ -181,17 +181,33 @@ const CSS = `
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
-/* r18 B:平板横屏(501–900 高)缩放工具 755、方向盘 831+ 同样沉出视口,
-   复用 C-6 已验证的双栏配方;≤500 的 r11 档一字不动。 */
+/* r18 B:412 高的找物关侧栏(清单56+缩放96+方向盘166+提示)总高≈380px,as-wrap 可视只有
+   ~208px。病根是没有显式行模板时 grid-row:1/-1 跨不了隐式行——画布把第 1 行撑到自己那么
+   高,侧栏其余行整段被推下去还被 overflow:hidden 裁掉。补上显式行模板让画布真正跨行,
+   找物关放开自钳交给 l99-stage 的竖向滚动安全网,画布 sticky 钉顶滚动时场景不消失。
+   线索关侧栏塞得下,一字不动。 */
+@media (max-height:500px) and (min-width:640px){
+  .as-wrap:has(.als-tools){height:auto;max-height:none;overflow:visible;
+    grid-template-rows:repeat(4,auto) minmax(0,1fr);}
+  .as-wrap:has(.als-tools)>.as-canvas{position:sticky;top:0;z-index:1;align-self:start;}
+  /* 工具/方向盘都回文档流:sticky 钉底会把方向盘拽上来盖住缩放工具 */
+  .as-wrap:has(.als-tools)>.als-tools{position:static;}
+  .as-wrap:has(.als-tools)>.as-pads{position:static;background:none;}
+  /* auto 行里清单的百分比内容会塌成一条缝,目标头像看不见;钉回 56px */
+  .as-wrap:has(.als-tools)>.als-list{min-height:56px;}
+}
+/* r18 B:平板横屏(501–900 高)缩放工具 755、方向盘 831+ 同样沉出视口,复用 C-6 双栏配方,
+   并声明显式行模板(见上):侧栏清单/工具/方向盘紧凑排在画布右边,中间不再破一个大洞。
+   ≤500 的 r11 档一字不动。 */
 @media (max-height:900px) and (min-height:501px) and (min-width:900px){
   .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
-    gap:8px 12px;align-items:stretch;align-content:start;height:100%;max-height:100%;min-height:0;overflow:hidden;}
-  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+    grid-template-rows:repeat(4,auto) minmax(0,1fr);
+    gap:8px 12px;align-items:stretch;height:100%;max-height:100%;min-height:0;overflow:hidden;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;align-self:start;}
   .as-wrap>.as-clues{grid-column:2;max-height:28%;overflow:auto;padding:6px 8px;gap:3px;}
   .as-wrap>.als-list{grid-column:2;max-height:76px;}
-  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
-  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
-    background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
+  .as-wrap>.als-tools{grid-column:2;}
+  .as-wrap>.as-pads{grid-column:2;margin:0;}
   .as-wrap>.as-tip{grid-column:2;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
