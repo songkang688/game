@@ -1,0 +1,60 @@
+# 三人组第 17 轮 · 学习优化员抽验笔记（本轮只学习、只记录，零代码改动）
+
+> 基线：`origin/game-1.3 = 3cf42925`（含 PR #78 N-75…N-85、摘合 N-77/N-86/N-87/N-88/N-47）。
+> **不覆盖** `trio-r14*` / `trio-r15*` / `trio-r16*` 原文。
+> **编号**：已用到 **N-88**。本工位从 **N-89** 续编。
+> 本拍父监督云量子代理无心跳，学习员在父 VM 本机交卷；`src/**` 一行未动。
+> 主档 **915×412**。工装不进库。
+
+## 一、抽验方式
+
+- 读 `docs/qa/trio-r16-playbook.md` 余力项 + 源码对照（无头 Chrome 本拍未再开，数字沿用 r16 915 实测）。
+- 读 `.cursor/skills/1.3-visual/{frontend-design,canvas-design,theme-factory}`。
+- 换面：有底栏但**没有** `max-height:500px` 的休闲款；气球天空常量；台球工具排。
+
+## 二、对账（已合入 → ✅，勿再做）
+
+| 批次 | SHA / PR | 结论 |
+| --- | --- | --- |
+| 摘合 | `30cc10ab` | N-77 相册、N-87 冲刺菜单 CTA、N-88 格斗开打、N-47 芯片 ✅ |
+| N-86 | `7a2d560b` | brave-path 大厅 ✅ |
+| r15 B | PR #78 `8cbe0441` | N-75…N-85 ✅；**N-55 对战十二键仍开** |
+| r12 B | `9648a8ac` | N-60/61/62 **源码**已 sticky + `SHORT_PANE_H=200`；r16 915 仍贴线切 ~28px |
+| r14 B | `d78c9e50` | N-69…74 源码已合 |
+| r13/r14 A | `215958e` / `87c5aff` | N-63 / C-6 / N-37 / N-68 / N-73 ✅ |
+| PR #76/#77/#79/#80 | — | 整 PR 偏旧，**禁止**再合（会倒删 N-75+） |
+
+## 三、旧号余力（不换号）
+
+| # | 对象 | 源码对照 | 性质 |
+| --- | --- | --- | --- |
+| N-60/61 | orb / snake 闯关技能 | `.oa-pad`/`.sr-pad` 已 sticky；`OA_SHORT_PANE_H=200` 有守门测试 | 🔧 再垫 ~28px，**禁止**把 200 改掉或整钮重写 |
+| N-62 | merge-2048 四向 | `.mg-pad` sticky 已在 | 🔧 同贴线 |
+| N-12 | pool-stars | **无任何 `max-height` 媒体**；击球钮 `min-height` 大、`.ps-bars` 竖排 | 🔧 补矮横屏：蓄力+击球 sticky 底；勿改台面物理 |
+| N-10 | weiqi-garden | 矮屏规则是 `@media (min-width:700px) and (max-height:500px)`，915 已命中仍切 | 🔧 sticky 被壳 `overflow` 吃掉时改 `fixed` 底或收 `.wq-scroll`；勿放宽 700 |
+| N-3 | star-estate | 板 `max-height:min(156px,38dvh)`；格 13px@429 | 🔧 只动预览/格，勿再收板导致更小 |
+| N-55 | snow-fight **对战**十二键 | `data-duo` 3×2 并排已在；N-85 闯关已合 | 🔧 915 复测对战；勿第二套闯关垫 |
+| C-8 | balloon-pop **闯关** | `SKY_H = 420`（逻辑常量，walkthrough 钉死）天空 CSS `height:420px` | 🔧 **只改显示高**（`.blp-sky` max-height），**禁止改 `SKY_H`**（胜负/上升时间） |
+
+## 四、新抽验（N-89 起）
+
+| # | 对象 | 依据 | 性质 |
+| --- | --- | --- | --- |
+| N-89 | **壳层短横屏标题条**挤占舞台（≠ 重写 N-60 paneH） | r15 曾把 wrap chrome 76→108 给壳标题让位；r16 技能键仍切 28px，像是壳 HUD + sticky 叠层 | 🔧 A：915 量 `.game-title` / 模式条，能收壳就收壳；禁止改 `OA_SHORT_PANE_H` |
+| N-90 | **tap-tiles** 无矮屏 `max-height` 媒体 | r16 观察 crop 66；源码只有 `max-width:420/340` | 🔧 B：关内操作/提示进 412；勿改判定 |
+| N-91 | **fruit-catch** 闯关画布+底键 | sticky 只在 `max-height:520px`；`MIN_CANVAS_DISPLAY_PX=160` + 56px 键；r16 crop 159「无键线下」 | 🔧 B：钳 `.frc-canvas` 显示高，键已 sticky 则勿第二套键 |
+
+**本轮不新开**：N-87/88/86/75–85/77/47/68/73/63/C-6。duo-rush 赛道 N-40 勿回退。
+
+## 五、skills
+
+- `frontend-design`：唯一 CTA 必须在第一屏。台球「击球」和气球点戳区都是唯一动作，不能排在 412 线下。失败文案保持鼓励，不改词库。
+- `canvas-design`：空间说话。气球天空 420px 是逻辑世界高度；视觉层应用 `max-height` 裁显示，不要改世界常量。
+- `theme-factory`：触区 44 与 Q 粉彩不冲突；再垫用 sticky/固定底，不要加第三套渐变条。
+
+## 六、已收口 / 学习员纪律
+
+- 禁止覆盖 r14–r16 笔记文件。
+- 禁止把 N-89 写成 N-60 第三套技能键。
+- 禁止把 C-8 修成改 `SKY_H`。
+- 云量子 C 若稍后复活写同一对 r17 文件：取先合进 `game-1.3` 的版本。
