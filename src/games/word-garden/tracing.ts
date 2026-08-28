@@ -262,7 +262,6 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   const countEl = wrap.querySelector(".wgd-count") as HTMLElement;
   const peekEl = wrap.querySelector(".wgd-peek") as HTMLElement;
   const pad = wrap.querySelector(".wgd-pad") as SVGSVGElement;
-  const padwrap = wrap.querySelector(".wgd-padwrap") as HTMLElement;
   const gardenEl = wrap.querySelector(".wgd-garden") as HTMLElement;
   const gardenRowEl = wrap.querySelector(".wgd-garden-row") as HTMLElement;
   const gardenCardEl = wrap.querySelector(".wgd-gardencard") as HTMLElement;
@@ -562,13 +561,8 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   render();
   msgEl.textContent = TRACE_INTRO;
   speak(TRACE_INTRO);
-  applyPadRoom();
+  sizePad();
   fit.relayout();
-  const onWinResize = (): void => {
-    applyPadRoom();
-    fit.relayout();
-  };
-  wrap.ownerDocument?.defaultView?.addEventListener("resize", onWinResize);
 
   return {
     destroy() {
@@ -578,7 +572,6 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       path = [];
       unwatchSpeech();
       stopSpeaking();
-      wrap.ownerDocument?.defaultView?.removeEventListener("resize", onWinResize);
       pad.removeEventListener("pointerdown", onDown);
       pad.removeEventListener("pointermove", onMove);
       pad.removeEventListener("pointerup", onUp);
