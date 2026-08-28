@@ -1,0 +1,11 @@
+{
+  "name": "一朵一星 (yiduo-yixing)",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "vite-dev",
+      "command": "npm run dev -- --host 127.0.0.1 --port 5173"
+    }
+  ],
+  "ports": [5173]
+}
