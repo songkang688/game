@@ -190,7 +190,7 @@ const CSS = `
   touch-action:none;}
 .tt-say{font-size:14px;font-weight:800;color:#7a6aa6;text-align:center;min-height:20px;line-height:1.4;}
 .tt-say-miss{color:#8b7fae;}
-.tt-keys{font-size:13px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
+.tt-keys{font-size:14px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
 .tt-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .tt-btns:empty{display:none;}
 .tt-btn{border:none;border-radius:14px;min-height:44px;padding:8px 16px;font-size:15px;font-weight:900;
@@ -240,8 +240,6 @@ const CSS = `
   color:#6a5892;line-height:1.7;}
 @media (max-width:420px){
   .tt-wrap{padding:8px;gap:6px;}
-  .tt-banner{font-size:13px;}
-  .tt-keys{font-size:13px;}
   .tt-stat{padding:4px 10px;}
 }
 /* 比规格下限还窄的老机器:收横向内边距把计分挤回一行,字号仍旧留在 16px */
