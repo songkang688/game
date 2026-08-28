@@ -484,6 +484,7 @@ export function bhVisualCss(): string {
   .bxh-confetti{opacity:.85;}
 }
 ${touchUpliftCss([".bh-mode", ".bh-btn"])}
+.bh-mode,.bh-btn{min-height:44px;}
 ${bodyFontUpliftCss([".bh-tag", ".bh-tip"])}
 `;
 }

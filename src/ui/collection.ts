@@ -347,7 +347,7 @@ const COLLECTION_CSS = `
   box-shadow:0 18px 46px rgba(120,90,140,.28);overflow:hidden}
 .collection-head{display:flex;align-items:center;gap:10px;padding:14px 18px;background:rgba(255,255,255,.75)}
 .collection-title{flex:1 1 auto;margin:0;font-size:20px;color:#6b4d72}
-.collection-stars{flex:0 0 auto;padding:4px 12px;border-radius:999px;background:#fff3c4;color:#8a6a1f;font-weight:700}
+.collection-stars{flex:0 0 auto;padding:4px 12px;border-radius:999px;background:#fff3c4;color:#8a6a1f;font-weight:700;min-height:44px;display:inline-flex;align-items:center}
 .collection-close{flex:0 0 auto;width:44px;height:44px;border:none;border-radius:50%;
   background:#ffe0ec;color:#a4557a;font-size:18px;cursor:pointer}
 .collection-note{margin:0;padding:6px 18px 0;font-size:13px;color:#8a7a93}
