@@ -83,8 +83,11 @@ export function tableLayout(viewportWidth: number, availHeight: number = MAX_VER
     // 剩余高度不够时优先整桌进屏，不靠 MIN_BALL 把桌子再撑出舞台
     scale = fit < minScale ? Math.max(fit, 0.01) : fit;
   } else {
-    scale = Math.min(avail / TABLE.w, 3.4);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+    // r18:横版此前完全不看余高,1024×768 上 340px 高的桌子把暂停顶出首屏。
+    // 与竖版同一条规则:高度紧张时优先整桌进屏;默认 capH=560 时行为与旧版一致
+    const fit = Math.min(avail / TABLE.w, 3.4, capH / TABLE.h);
+    const minScale = MIN_BALL_PX / (2 * TABLE.r);
+    scale = fit < minScale ? Math.max(fit, 0.01) : fit;
   }
   const cssW = vertical ? TABLE.h * scale : TABLE.w * scale;
   const cssH = vertical ? TABLE.w * scale : TABLE.h * scale;
@@ -555,12 +558,25 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     return seatOf(turn).ai !== null;
   }
 
+  /** 桌子上下自家的行(HUD + 蓄力/击球/加旋/袋口/提示)一共占多高;量不到按 0 记 */
+  function wrapChromePx(): number {
+    let sum = 0;
+    for (const row of [hud, bars, aimRow, extraRow, pockRow, tipBox]) {
+      sum += (row as HTMLElement).offsetHeight || 0;
+    }
+    // wrap 上下内衬 + 行间 gap 的保守余量
+    return sum > 0 ? sum + 44 : 0;
+  }
+
   function resize(): void {
     const room = stagePlayRoom(wrap, {
       w: viewportWidth(),
       h: MAX_VERTICAL_PX,
     });
-    lay = tableLayout(viewportWidth(), room.h);
+    // N-12 竖屏(390×844 主干实测):桌高只按舞台余高算,击球/暂停被自家行顶出
+    // 首屏而壳层竖向又不滚——把自家行从余高里扣掉,整桌 + 控制排一屏放下。
+    // 200px 下限保证再挤也留一块看得清的桌面;横版走 CSS 显示钳,这里不受影响
+    lay = tableLayout(viewportWidth(), Math.max(200, room.h - wrapChromePx()));
     canvas.width = Math.round(lay.cssW);
     canvas.height = Math.round(lay.cssH);
     canvas.style.width = `${lay.cssW}px`;

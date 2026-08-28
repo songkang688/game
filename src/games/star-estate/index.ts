@@ -258,6 +258,13 @@ const CSS = `
   .se-btn{min-width:72px;font-size:15px;padding:0 8px;}
   .se-deed{flex:1 1 100%;}
 }
+/* N-3 r18 兜底:棋盘+席位+抽屉摞起来常常超过壳层给的高度,而壳层竖向不滚
+   (390×844 主干实测掷骰 top 910、1024×768 也一样线下)。让 se-wrap 自己滚
+   (划到底),掷骰三键 sticky 钉底随时按得到;内容装得下时 sticky 呆在原位、
+   滚动条不出现,高屏一个像素不变。矮横屏双栏在下面的媒体块里另行覆盖 */
+.se-wrap{max-height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;}
+.se-pad{position:sticky;bottom:0;z-index:6;padding:8px 4px 4px;
+  background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);}
 /* N-3 配方 E：结束回合 / 掷骰钉底，棋盘按矮屏余高收方 */
 @media (max-height:500px){
   .se-board-wrap{max-width:min(560px, calc(100dvh - 140px));}
@@ -278,15 +285,17 @@ const CSS = `
    回合/席位/三键/播报走右列。格局只动 CSS,回合与胜负逻辑零触碰 */
 @media (min-width:640px) and (max-height:500px){
   .se-wrap{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;row-gap:4px;
-    align-content:start;align-items:start;}
+    align-content:start;align-items:start;overflow-y:auto;}
   .se-wrap>*{grid-column:2;min-width:0;}
   .se-board-wrap{grid-column:1;grid-row:1 / span 8;margin:0;flex:none;
     width:max(156px, min(calc(100dvh - 258px), 340px));max-width:none;max-height:none;}
   .se-top{margin-bottom:0;}
   .se-badge{max-height:2.4em;overflow:auto;padding:3px 8px;}
-  .se-seats{margin-bottom:0;gap:4px;}
-  .se-seat{padding:3px 6px;line-height:1.35;}
-  .se-pad{position:static;margin-top:0;padding:2px 0;background:none;box-shadow:none;}
+  .se-seats{margin-bottom:0;gap:4px;flex-wrap:nowrap;}
+  .se-seat{flex:1 1 0;padding:2px 6px;line-height:1.3;}
+  .se-seat .se-seat-info{display:none;}
+  /* 掷骰/购买/结束回合是每回合必点的键,排到右列最上;竞拍行同槽互斥出现 */
+  .se-pad{position:static;margin-top:0;padding:2px 0;background:none;box-shadow:none;order:-1;}
   .se-drawer{min-width:0;}
 }
 @media (prefers-reduced-motion:reduce){

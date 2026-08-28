@@ -33,4 +33,10 @@ describe("N-12 pool-stars 矮横屏控制排", () => {
     const vertical = tableLayout(360, 280);
     expect(vertical.cssH).toBeLessThanOrEqual(280);
   });
+
+  it("竖屏桌高把自家控制行从余高里扣掉(390×844 主干实测击球 top 922 线下)", () => {
+    expect(SRC).toContain("room.h - wrapChromePx()");
+    // 无根营地竖屏实测预算:余高 626、自家行 ~290 → 桌高 ≤ 336,整桌 + 击球一屏放下
+    expect(tableLayout(390, 336).cssH).toBeLessThanOrEqual(336);
+  });
 });

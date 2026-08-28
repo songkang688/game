@@ -283,7 +283,8 @@ const CSS = `
 @media (max-height:500px){
   .tt-wrap{padding:6px;gap:4px;}
   .tt-keys{display:none;}
-  .tt-say{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);z-index:3;
+  /* 旁白贴在画布顶(音符出生区):判定线附近一个像素都不遮 */
+  .tt-say{position:absolute;left:50%;top:58px;transform:translateX(-50%);z-index:3;
     max-width:94%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     background:rgba(255,255,255,.88);border-radius:10px;padding:1px 10px;pointer-events:none;}
 }
