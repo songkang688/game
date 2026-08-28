@@ -2211,7 +2211,7 @@ reg("🪐", "土星", () => {
   );
 });
 reg("🌈", "彩虹", () => {
-  const arcs = [
+  const arcs: [string, number][] = [
     [P.red, 16],
     [P.orange, 13.2],
     [P.gold, 10.4],
