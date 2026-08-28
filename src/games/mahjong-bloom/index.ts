@@ -249,9 +249,10 @@ export const MJ_CSS = `
   .mj-board{flex:1 1 auto;min-height:0;overflow:hidden;gap:4px;padding:4px;border-width:4px;}
   .mj-river{min-height:28px;max-height:48px;overflow:auto;}
   .mj-foe{min-height:22px;}
-  .mj-hand{position:sticky;bottom:0;z-index:5;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+  .mj-wrap{padding-bottom:58px;}
+  .mj-hand{position:fixed;left:10px;right:10px;bottom:6px;z-index:20;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
     flex:0 0 auto;padding:4px 2px 6px;row-gap:0;
-    background:linear-gradient(180deg,rgba(30,95,67,0),rgba(30,95,67,.55) 18px,#1e5f43);}
+    background:linear-gradient(180deg,rgba(30,95,67,0),rgba(30,95,67,.85) 12px,#1e5f43);}
 }
 @media (prefers-reduced-motion:reduce){
   .mj-fly{animation-duration:60ms;}
