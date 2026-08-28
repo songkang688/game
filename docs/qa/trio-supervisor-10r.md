@@ -31,7 +31,7 @@
 
 | 战役轮 | trio | A | B | C | 合入 `game-1.3` |
 | --- | --- | --- | --- | --- | --- |
-| 1 | r9 | 进行中 | 进行中 | 进行中 | 待 PR |
+| 1 | r9 | 进行中 `bc-6fb9ab37-21c5-5dbd-8c5c-5bf8b2b3b05e` 分支 `cursor/trio-r9-tester-a-c14c` | 进行中 `bc-96309319-8413-5042-ad99-0da94f6faf1e` 分支 `cursor/trio-r9-tester-b-c14c` | 进行中 `bc-fc4fbcdb-830d-5b32-a526-d718ef92137d` 分支 `cursor/trio-r9-learner-c14c` | 监督 PR #58；A/B/C 交卷后各开 PR 合入 `game-1.3` |
 | 2–10 | r10–r18 | 排队：执行上一轮 C 的 playbook | 同左 | 排队：对账本轮 A/B + 新抽验 | |
 
 ## 第 1 轮（r9）派工摘要
