@@ -204,6 +204,11 @@ const SHELL_CSS = `
 .rbg-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #BF4A4A; }
 .rbg-picks { display: flex; flex-direction: column; gap: 8px; }
 .rbg-pick { border: none; border-radius: 16px; padding: 10px 14px; font-size: 15px; font-weight: 900; cursor: pointer; font-family: inherit; text-align: left; background: #fff; color: #7A4A72; box-shadow: 0 3px 0 rgba(170,130,170,.3); display: flex; flex-direction: column; justify-content: center; min-height: ${TOGGLE_MIN_H}px; }
+/* N-124 模式:915×412 对战选对手,列改双栏。不改关内拉绳 / .rbg-toggle */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .rbg-picks{max-height:calc(100dvh - 108px);overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;box-sizing:border-box;}
+  .rbg-picks .rbg-over-title{grid-column:1 / -1;}
+}
 .rbg-pick:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(170,130,170,.3); }
 .rbg-pick-note { display: block; font-size: 13px; font-weight: 700; color: #8E7A96; margin-top: 2px; }
 .rbg-card { display: inline-flex; align-items: center; gap: 4px; background: #fff; border-radius: 12px; padding: 5px 10px; font-size: 14px; font-weight: 800; color: #8A5E66; box-shadow: 0 2px 6px rgba(190,120,130,.22); white-space: nowrap; }

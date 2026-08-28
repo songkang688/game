@@ -281,6 +281,13 @@ const CSS = `
   .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
   .dvs-pad .dvs-padname{width:auto;}
 }
+/* N-124 模式:915×412 设置页开打钮,380/420/520 原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .dvs-menu:has(.dvs-go){max-height:calc(100dvh - 108px);overflow:auto;box-sizing:border-box;}
+  .dvs-menu:has(.dvs-go) .dvs-sub{max-height:2.2em;overflow:hidden;}
+  .dvs-menu:has(.dvs-go) .dvs-pickrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+  .dvs-go{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,#c84483,#ad3a72);}
+}
 `;
 
 /* ------------------------------------------------------------------ */
