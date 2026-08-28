@@ -21,4 +21,19 @@ N-48/58/59、N-39 主修（四处 `showMap(true)` 保持）、N-43 第三套 scr
 
 测试只增：`level99.n63.test.ts`、`find-diff/tripleRow.r14.test.ts`、`alien-seek/deduceLock.r14.test.ts`、`shape-kingdom/deepChoice.r14.test.ts`、`music-stars/scoreKeys.r14.test.ts`、`n47residual.r14.test.ts`。
 
-kit 未扩。存档 key / meta.id / 题库 / seed / 胜负未改。
+### 915×412 浏览器（preview，独立 context，先写 `l99.<id>` 再换 hash）
+
+| # | 数字 |
+| --- | --- |
+| N-63 保龄 | `.bl-open` **82–126 IN**；舞台 scrollTop **0**（旧 −174） |
+| N-63 hop | `.l99-node-cur` **250–330 IN**；模式钮 **92–136 IN** |
+| N-68 第 100 关 | 「三图侦探社 · 第 100 关」；triple 横排；play 格 top **250 / 280 / 310**，末格底 **336 IN**（旧 471/501/531） |
+| N-68 第 1 关 | `.fdf-panels-row`、无 triple；格 **250–336 IN** |
+| C-6 | `.as-deduce`；scrollTop **0**；◀✓▶ **301–345**、▼ **350–394 IN**（旧 428/477） |
+| N-37 | `.qz-choice` 三钮 **300–346 IN**（旧 453） |
+| N-73 | `.mst-scoreplay`；哆 **346–411 IN**（旧 404 切） |
+| N-47 | 初级 9×9 **h=44**；`.ak-back` **h=44** |
+
+`npm test` **1174** files / **19455** tests；`npm run build` 绿。kit 未扩。存档 key / meta.id / 题库 / seed / 胜负未改。
+
+B 已先合 `d78c9e50`（N-69..74 休闲）。本分支 rebase 其上，撞车取先合版。
