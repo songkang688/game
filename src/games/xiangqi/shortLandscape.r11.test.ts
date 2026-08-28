@@ -12,4 +12,10 @@ describe("N-10 xiangqi r11 矮横屏工具行钉底", () => {
     expect(CSS).toContain("@media (min-width:700px) and (max-height:430px)");
     expect(CSS).toContain(".xq-wrap{max-width:196px;}");
   });
+
+  it("915 档棋盘左、工具列右，悔棋不跟在盘底", () => {
+    expect(CSS).toContain("@media (min-width:800px) and (max-height:430px)");
+    expect(CSS).toContain(".xq-boardhost{grid-column:1");
+    expect(CSS).toContain("flex-direction:column;flex-wrap:nowrap");
+  });
 });

@@ -176,9 +176,19 @@ export const CSS = `
   .xq-wrap{max-width:248px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
-/* 412 高时 248 宽棋盘仍把悔棋排顶出首屏,再收一档 */
+/* 412 高时 248 宽棋盘仍把悔棋排顶出首屏,再收一档；够宽时棋盘与工具列并排 */
 @media (min-width:700px) and (max-height:430px){
   .xq-wrap{max-width:196px;}
+}
+@media (min-width:800px) and (max-height:430px){
+  .xq-wrap{max-width:none;width:min(100%,420px);display:grid;
+    grid-template-columns:minmax(160px,240px) minmax(96px,132px);column-gap:8px;align-items:start;}
+  .xq-top,.xq-capsbar{grid-column:1/-1;}
+  .xq-boardhost{grid-column:1;grid-row:3;min-width:0;}
+  .xq-record{grid-column:1;max-height:28px;}
+  .xq-btns{grid-column:2;grid-row:3 / span 4;flex-direction:column;flex-wrap:nowrap;margin-top:0;
+    position:sticky;top:0;align-self:start;}
+  .xq-msg{grid-column:1;}
 }
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}

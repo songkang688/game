@@ -241,6 +241,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   capsEl.className = "xq-capsbar xq-hidden";
   wrap.appendChild(capsEl);
   const boardHost = document.createElement("div");
+  boardHost.className = "xq-boardhost";
   wrap.appendChild(boardHost);
   const recordEl = document.createElement("div");
   recordEl.className = "xq-record";
