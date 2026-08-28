@@ -19,7 +19,7 @@ import {
   canUseHint,
   deadlockTip,
   difficultyBadge,
-  fitCell,
+  fitCellRect,
   hintsLeft,
   makeEndlessRoom,
   moveDuration,
@@ -312,11 +312,43 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
 
   let cells: HTMLElement[] = [];
 
+  /** 一个盒子的下沿在哪儿(测试桩的 rect 没有 bottom,用 top+height 兜底) */
+  function rectBottom(r: { top: number; bottom?: number; height: number }): number {
+    return Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+  }
+
   /**
-   * 按「这会儿还剩多宽」定格子边长。
+   * 往上找平台舞台(`.game-stage`,定高 + 会裁内容)的下沿,那是真正的裁切线。
+   * 量不到(还没上屏 / 测试桩 / 独立挂载)就返回 NaN,竖向那把尺随之失效,
+   * 边长退回「只按宽算」。
+   */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = box.parentElement ?? null;
+    for (let i = 0; node && i < 8; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        // 滚动口是 padding box:clientHeight 量得出就用它(顺手把 4px 白边扣掉)
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /**
+   * 按「这会儿还剩多宽、多高」定格子边长。
    *
-   * 以前边长是媒体查询写死的,和列数无关,13 列的双鼠宽仓在 360px 上要 466px,
+   * 宽:以前边长是媒体查询写死的,和列数无关,13 列的双鼠宽仓在 360px 上要 466px,
    * 而 `.game-stage` 是 `overflow:hidden` —— 超出去的列不是能滑出来,是直接没了。
+   * 高:只按宽算,10 行高的仓库在 360×640 竖屏上棋盘一路长到 400px 开外,
+   * 把下面的触屏方向盘(唯一的手指走法)顶出裁切线;横屏 640×360 更是整块没了。
+   * 所以竖向同样量:从棋盘顶到裁切线,扣掉棋盘下面的方向盘 + 提示行,剩多少摆多少。
    */
   function fitBoard(): void {
     const style = typeof getComputedStyle === "function" ? getComputedStyle(box) : null;
@@ -324,7 +356,21 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     const avail = (box.clientWidth || 0) - pad;
     // 还没上屏就量不出宽度;先留着 CSS 里那一档,等下一帧再量
     if (avail <= 0) return;
-    cellPx = fitCell(def.w, avail);
+    let availH = Number.NaN;
+    const clipBottom = stageClipBottom();
+    if (
+      Number.isFinite(clipBottom) &&
+      typeof grid.getBoundingClientRect === "function" &&
+      typeof wrap.getBoundingClientRect === "function" &&
+      typeof box.getBoundingClientRect === "function"
+    ) {
+      const gridRect = grid.getBoundingClientRect();
+      // 棋盘下面还有多高的「家当」(方向盘 + 提示行):这些高度不随格子边长变,量一次就是稳的
+      const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(box.getBoundingClientRect()));
+      const padBottom = style ? parseFloat(style.paddingBottom) || 0 : 0;
+      if (Number.isFinite(gridRect.top)) availH = clipBottom - gridRect.top - below - padBottom - 4;
+    }
+    cellPx = fitCellRect(def.w, def.h, avail, availH);
     grid.style.setProperty("--cell", `${cellPx}px`);
   }
 

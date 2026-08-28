@@ -25,7 +25,7 @@ import {
   frightWarning,
   type Ghost,
 } from "./ghosts";
-import { MAX_CELL_PX, cellPxFor, maxCanvasWidth } from "./layout";
+import { MAX_CELL_PX, canvasDisplayCapPx, cellPxFor, maxCanvasWidth } from "./layout";
 import { CHAPTERS, configFor, endlessConfig, planFor, rateLevel } from "./levels";
 import {
   DELTA,
@@ -685,6 +685,51 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   canvas.addEventListener("touchend", onTouchEnd, { passive: true });
   window.addEventListener("keydown", onKey);
 
+  // ---- 画布显示高:量真实可视高再钳(见 layout.canvasDisplayCapPx 的注释) ----
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  function fitCanvasDisplay(): void {
+    if (destroyed || !canvas.style) return;
+    if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    canvas.style.maxHeight = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    // 画布下面的家当(提示行 + 虚拟方向键):高度不随画布显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    if (px !== null) canvas.style.maxHeight = `${px}px`;
+  }
+
+  fitCanvasDisplay();
+  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
+  const fitTimer = setTimeout(fitCanvasDisplay, 0);
+  window.addEventListener("resize", fitCanvasDisplay);
+
   renderPause();
   renderHud();
   raf = requestAnimationFrame(frame);
@@ -694,6 +739,8 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       destroyed = true;
       finished = true;
       stop();
+      clearTimeout(fitTimer);
+      window.removeEventListener("resize", fitCanvasDisplay);
       pauseBtn?.removeEventListener("click", onPauseClick);
       window.removeEventListener("keydown", onKey);
       canvas.removeEventListener("touchstart", onTouchStart);

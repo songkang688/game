@@ -45,3 +45,29 @@ export function mazeFits(viewportPx: number, cols: number): boolean {
 export function maxCanvasWidth(cols: number): number {
   return Math.max(1, Math.floor(cols)) * MAX_CELL_PX;
 }
+
+/** 画布显示高的下限:比这更矮迷宫就看不清了,低于它宁可交给舞台滚动 */
+export const MIN_CANVAS_DISPLAY_PX = 160;
+
+/**
+ * 画布该「显示」多高(null = 原生高度就装得下,一个样式都不用写)。
+ *
+ * 画布分辨率按屏宽定,显示层是 `width:100%; height:auto`——横屏 640×360 上
+ * 15 行 × 26px 的图显示高 ~390px,而 `.game-stage` 的可视高只剩 ~280px:
+ * 画布下半截连同虚拟方向键(触屏的主输入)一起掉在裁切线以下。
+ * 量出真实余量后给显示层钳一条 `max-height`:canvas 是带内在比例的 replaced
+ * 元素,浏览器会连宽一起等比收,迷宫不变形;触屏输入是相对滑动(dx/dy),
+ * 显示缩放不碰任何判定。
+ */
+export function canvasDisplayCapPx(
+  nativeH: number,
+  roomPx: number,
+  min = MIN_CANVAS_DISPLAY_PX
+): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
