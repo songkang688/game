@@ -246,7 +246,7 @@ const CSS = `
 .ld-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#f6f2ff,#fff4f8);display:flex;flex-direction:column;gap:8px;}
 .ld-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.ld-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
+.ld-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
 .ld-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
 .ld-over{border-radius:16px;background:#fffdfa;padding:14px;text-align:center;display:flex;
