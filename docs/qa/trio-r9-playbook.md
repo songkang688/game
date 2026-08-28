@@ -1,5 +1,7 @@
 # 三人组第 9 轮 · 测试修复员 A/B 任务清单（playbook）
 
+> **r10 对账标注（对照 `3c9902cb` = 当前 `game-1.3`，见 trio-r10-learn-notes 第二节）**：r9 基线 `6a9f42d0` 之后主干 **src 零合入**（仅 docs 三笔），本清单**全部 🔧 在主干上仍开账、本轮零 ✅**；r9 全部行号与实测数字对当前主干继续逐字有效（工装复证：hop-pads `.l99-node-cur` 426–502 与 r9 逐位一致）。**但在途分支已有 5 条并行动手且互相撞车**：① `trio-r9-tester-a-7779`（`39d61b50`，覆盖 N-38/33/37/36/34/35/30 + S-4 扩容 + 收藏册）；② `trio-r9-tester-a-c14c`（`4968eb7c`，覆盖 N-33/38/37/36 + 收藏册 + quiz99）——**与①同职能全面撞车（双 A 并行）**；③ `tester-a-r7-fixes-def4`（4 提交：N-30 / N-32 / N-27 / L-2 补账）；④ `trio-r9-tester-b-c14c`（N-25 / N-31 / N-1）；⑤ `casual-duo-fit-r5-b-4683` 已从 3 提交扩到 **11 提交**（新增 N-2…N-7、C-4/C-8/C-9），但**合并基点还停在 r5 时代 `3c7fb691`**，与主干真实冲突 8 个文件。`adventure-king/index.ts` 是主干+①+③+⑤ 的**四路热点**。合流顺序与逐项归属见 `trio-r10-playbook.md` 第〇节；本轮新伤 **N-40（家长面板弹窗功能钮线下，连 1024×768 都中）** 见 `trio-r10-learn-notes.md`。
+>
 > 依据：`trio-r9-learn-notes.md`（基线 `game-1.3 = 6a9f42d0`，全部条目带实测数字与截图核验）。
 > **对账要点（先读这条再动手）**：测试员 A 第 2 轮（`d451c32d`）已合入——**S-1 / S-2 / S-3 / S-4(l99 侧) / L-1 / C-1(含 ak-bar=N-28) / 竞技场留白 / garden-guard 节点图 / N-24 全部 ✅ 销账**，r7/r8 playbook 相应条目已加对账标注，谁也别再修一遍。**B 的在途分支 `cursor/casual-duo-fit-r5-b-4683`（未合入）覆盖 N-1 / C-2 C-3 C-5 C-6 C-7 / N-11…N-15 N-19 / N-16 N-17 N-18**——这些项动手前必须先 `git fetch` 看 B 是否已合入，撞车取先合版。
 > **只列仍未落地的 🔧**。r4–r8 原编号继续有效，本轮新发现从 **N-39** 续编（只有一条）。
@@ -27,23 +29,23 @@
 
 ## 壳层（给 A）
 
-### N-33 壳层结算弹窗矮横屏「再玩一次/回首页」折叠在弹窗内滚线下 🔧（连续两轮最重，走配方 I）
+### N-33 壳层结算弹窗矮横屏「再玩一次/回首页」折叠在弹窗内滚线下 🔧（连续两轮最重，走配方 I）〔r10 对账：主干未落地；在途①（dialogSticky.r9.test）与②双路都做了，合流取先合版；**新伤 N-40 家长面板与它同病根**，sticky 修复的验收矩阵必须把 `dialog--parent`（家族最长内容实例）纳入，见 r10 notes 模式 L〕
 
 - r8 原文有效，源码零提交复证（`styles.css:926` 无 sticky、`dialogs.ts` 零提交、A 的 +222 行全是首页规则）。**口径修正**：915×412 命中的是 `styles.css:1774` `@media (max-height:560px)` 档的 `max-height:92dvh`（可视 ≈379px），不是 86dvh 基础档——机理与修法不变，验收数字按 92dvh 算。
 - **正面样板就在库里**：攻略抽屉 sheet 态（`guide.ts` + `.guide-foot`）就是「读的滚（`.guide-body` 内滚）、按的钉（footer 常驻）」，本轮三档实测全绿——`.dialog-buttons` 照这个结构做 sticky 即可，别发明新方案。
 - 改哪/验收照 r8 playbook 原文。
 
-### N-38 关内直达小字永久态显示分钟数 🔧（一行级，先做拉绿）
+### N-38 关内直达小字永久态显示分钟数 🔧（一行级，先做拉绿）〔r10 对账：主干未落地；在途①②双路都做了，撞车取先合版〕
 
 - r8 原文有效；**行号漂移**：`rootJumpNote` 现在 `level99.ts:469`（A 在同文件加了星级 SVG 与 fitPane）。本轮截图再实锤：种永久态后显示「管理员权限还剩 136867925 分钟」。改法照 r8（走 `rootStatusLine` 或加 isPermanent 分支）。
 
-### S-4 扩容 `.qz-jump-input` + 收藏册热区两条 🔧（半小时级凑一批）
+### S-4 扩容 `.qz-jump-input` + 收藏册热区两条 🔧（半小时级凑一批）〔r10 对账：主干未落地；在途①②都改了 `collection.ts`（撞车），②另动了 `quiz99.ts`，合流取先合版〕
 
 - **S-4 主体（l99 侧）已由 A 修掉 ✅**，只剩扩容：`quiz99.ts:153` `.qz-jump-input` 仍 `min-height:38px` → 44px（管理员面，限时关 root 态里它还沉在线下,一次带走）。
 - 收藏册：`collection.ts:351` `.collection-close` 40×40 → 44×44；`:381` `.card-btn` 36px → 44px（孩子面红线;面板布局两档实测干净别动）。
 - 验收：三处 `getBoundingClientRect ≥ 44`,取反断言各一条。
 
-### N-37 管理员开启态挤压 quiz 族关内 🔧（验收矩阵本轮扩容）
+### N-37 管理员开启态挤压 quiz 族关内 🔧（验收矩阵本轮扩容）〔r10 对账：主干未落地；在途①（scene.ts/level99.ts）与②（quiz99.ts/level99.ts）双路都动了，撞车取先合版〕
 
 - r8 原文有效（root 抬头 ≈100px、quiz 宿主不让位;math-farm 整排线下/pinyin 首关切半）。**本轮加重档**：root 永久 + 915×412 进 pinyin-train **限时关 135**——crop 6→294,三张答案票 `pyt-ticket` 整排线下（top 608）,比首关切半重一档（root 抬头 + 计时条 + 火车画布带三层叠加）。
 - 改哪照 r8（矮横屏 root 行并一行或折叠;quiz 宿主高度把 root 行算进去）。**验收矩阵扩成：4 quiz 皮肤 × root 开/关 + 深关限时档（pinyin 135 关族）**;工装按「每档隔离 context」红线执行。
@@ -54,7 +56,7 @@
 
 ## 闯关学习（给 A）
 
-### N-39 l99 蓝本地图首次进图/回地图不聚焦当前关 🔧（新,一行级 × 4 处,全部 l99 款受益,走配方 K）
+### N-39 l99 蓝本地图首次进图/回地图不聚焦当前关 🔧（新,一行级 × 4 处,全部 l99 款受益,走配方 K）〔r10 对账：主干未落地，hop-pads 426–502 复证与 r9 逐位一致；**五条在途分支均未认领此项**（①的提交说明不含 N-39）——r9 排的 top4 拉绿项竟无人拿，r10 继续置顶〕
 
 - **现象**：915×412 首次进图,当前关格子整格线下：hop-pads 426–502 / red-blue-race 412–488 / poop-hero 412–488;math-farm / clock-house / word-garden / pinyin-train 408–484、tap-tiles 410–486 切半（抽 8 中 8）;1024×768 全在屏。首屏被章节页签 + 模式页签 + 图例提示吃满,孩子第一眼看不到能点的关。
 - **机理**：`level99.ts:782` `showMap(focusCurrent = false)` 默认不聚焦;聚焦机制现成（`:921` `scrollIntoView({block:"center"}) + focus`）但只有直达（`:820`）与跳过（`:824/:1054`）传 true;初次进图（`:1085`）与三处「回地图」（`:978/:1009/:1038`）走默认 false。
@@ -62,11 +64,11 @@
 - **验收**：915×412 首次进 hop-pads / red-blue-race / poop-hero 不滚可见可点当前关;过关 → 回地图同样;切章节页签仍回章头（`:851` 别误改）;1024×768 与竖屏零回归;补一条「初次 showMap 后 `.l99-node-cur` 在视口内」断言。**验收样本用 hop-pads**（头部最高,最严)。
 - **别与 N-23 补充版混账**：N-23 是 bubble-aim/candy-swing/sling-birds 三款自建地图没这机制（仍开账,B 侧）,N-39 是蓝本有机制没接线。
 
-### N-36 word-garden 描红关矮横屏米字格出屏 🔧
+### N-36 word-garden 描红关矮横屏米字格出屏 🔧〔r10 对账：主干未落地；在途①②都动了 `tracing.ts`（①+59 行/②+115 行,方案可能不同），撞车取先合版〕
 
 - r8 原文原样有效（`tracing.ts:75` `.wgd-pad` 仍 `min(72vw,300px)` + `touch-action:none`,零提交复证）。照 r8 playbook 执行。
 
-### L-2（续）clock-house 题面钟 / L-3（续）find-diff 贴纸补章 🔧
+### L-2（续）clock-house 题面钟 / L-3（续）find-diff 贴纸补章 🔧〔r10 对账：L-2 在途③已做（`d44e0129` faceLift 指针/轴心正则钉死自闭合写法+真机复验）；**L-3 仍无人认领**〕
 
 - r7 原文原样有效（`levels.ts:78` / `boardArt.ts` 头注零提交复证）。照 r7 playbook 执行。
 - **L-1 已由 A 修掉 ✅**（shape-kingdom / find-diff 本轮浏览器复证过）,从本清单除名。
@@ -75,28 +77,30 @@
 
 ## 休闲对战动手（给 B）
 
+> 〔r10 对账：⑤已扩到 11 提交，新增 N-2/N-3/N-4（回合必点组）、N-5/N-6/N-7（盘面组）、C-4/C-8/C-9——r4–r5 老账大扫除；但**合并基点仍停在 r5 时代 `3c7fb691`**，与主干真实冲突 8 文件（adventure-king / box-hamster / ice-fire-forest / orb-arena / prince-princess / snake-royale / sudoku-petal / tank-battle 各自 index.ts），比本条写时的预警又多了 snake-royale/orb-arena（A 的 fitPane 钳高）与 ice-fire-forest/tank-battle 两处。守门测试二合一要求不变。〕
+>
 > **第一件事：收自己的在途分支**。`cursor/casual-duo-fit-r5-b-4683` 基于 A 合入前的基线，rebase 到最新 `game-1.3` 时：
 > 1. box-hamster / prince-princess / sudoku-petal / adventure-king 的 `[hidden]` 行与 A 已合入版重叠——**取 A 版（先合版）**,弃自己的重复行;
 > 2. 守门测试撞车：你的 `src/games/__tests__/modebar-hidden-guard.test.ts` 与 A 已合入的 `src/games/modebarHidden.guard.test.ts` 同职能——**二合一**,保 A 版口径、把你新增的提名（sr-skins/sp-hintbox/tt-sum-bar）并进去,库里只留一份守门;
 > 3. 合入后 N-1 / C-2 C-3 C-5 C-6 C-7 / N-11…N-15 N-19 / N-16 N-17 N-18 按你交卷报告销账,量化数字记进报告。
 
-### N-25（续）fight-king 格斗塔 🔧（连续四轮最重未动）+ N-31 训练场
+### N-25（续）fight-king 格斗塔 🔧（连续四轮最重未动）+ N-31 训练场〔r10 对账：主干未落地；在途④（`decdfe42`+`86209d3d`）已做塔折叠+训练场 sticky+N-1 接果钳高——N-1 与⑤的 `7fa5b21c` 撞车（`fruit-catch/index.ts` 双路），取先合版〕
 
 - r6/r7 原文原样有效（fight-king 目录零提交复证）。915×412 裁 498 / 五钮全线下。照 r7 playbook,可与 N-31 同 PR。
 
-### N-34 拼写关 + N-35 全选关 🔧（同款一个 PR,走配方 G/J)
+### N-34 拼写关 + N-35 全选关 🔧（同款一个 PR,走配方 G/J)〔r10 对账：主干未落地；在途①已做（spell/pickAll + shortLandscape.r9.test）〕
 
 - r8 原文原样有效（`spell.ts` / `pickAll.ts` 零提交复证）。915×412 拼写裁 450 十一票线下 / 全选裁 179 全票线下。照 r8 playbook;验收矩阵 2 关型 × 4 视口;**限时关基线本轮四档复证干净,回归别劣化**。
 
-### N-30 adventure-king 无尽古堡 🔧（先对账 B 在途分支）
+### N-30 adventure-king 无尽古堡 🔧（先对账 B 在途分支）〔r10 对账：主干未落地；本条预警的撞车已成真且升级为**三路**——①（castleShell.r9.test）、③（`ae82f657` 棋盘左/D-pad 右双栏）、⑤（`b7d180d9` 古堡盘宽让右翼）都动了 `adventure-king/index.ts`（主干上还有 A 第 2 轮的 `[hidden]` 行,合计四路热点）。合流取先合版,其余两路弃重复行〕
 
 - r7 原文有效,但 **B 的在途分支已动古堡盘宽（`b7d180d9`「古堡盘按余量收+方向盘让右翼」）**——动手前先看该分支是否已合入/覆盖到 13 控件账;已覆盖就只补验收,未覆盖再按 r7 配方 G 做。撞车取先合版。
 
-### N-26（续）duo-vs-star 七键 / N-27（续）dot-maze 四模式 / N-29（续）bubble-aim + N-23（补充版）/ N-32（续）brave-path 🔧
+### N-26（续）duo-vs-star 七键 / N-27（续）dot-maze 四模式 / N-29（续）bubble-aim + N-23（补充版）/ N-32（续）brave-path 🔧〔r10 对账：N-27 与 N-32 在途③已做（`69d80def` 键排双栏 / `ad1f0e3b` 操作行 sticky+双栏）；**N-26 / N-29 / N-23 补充版仍无人认领**〕
 
 - 全部零提交复证,r6/r7 原文照旧。N-23 补充版（三款自建地图 focusCurrent）与 A 侧 N-39 是姊妹账——修法口径统一（`scrollIntoView({block:"center"})`）,两边各自验收。
 
-### r4–r5 未动项重申
+### r4–r5 未动项重申〔r10 对账：⑤新增提交已把 **N-2/N-3/N-4、N-5/N-6/N-7、C-4/C-8/C-9** 也做了；其中 `e0efd778` 一笔带过 shoot-range / balloon-pop / ice-fire-forest / puzzle-tiles / hue-hand 五款,很可能顺手覆盖了盘面完整组的部分编号（N-8/N-9/N-20/N-21/N-22）——**销账时以 diff 对照各 playbook 原文逐条核,别只看提交题目**；N-10 棋类横屏仍无人认领〕
 
 - **B 在途分支覆盖的**（N-1、C-2/C-3/C-5/C-6/C-7、N-11…N-15、N-19、N-16/N-17/N-18）：先合入销账,别重复修。
 - **在途分支没碰的**：N-2/N-3/N-4 回合必点组、N-5…N-9 + N-20 盘面完整组、N-10 棋类三款横屏（`66601b46` 早已合入且当时就量过,不够,仍开账）、N-21/N-22、C-4 snake-royale（A 只修了卡底留白,C-4 原账另查）、C-8/C-9。照 r4/r5 playbook 原文。
