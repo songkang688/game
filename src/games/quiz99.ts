@@ -153,6 +153,22 @@ const QUIZ_CSS = `
 .qz-jump-input { width: 76px; min-height: 38px; border: 2px solid #e0d6f2; border-radius: 12px; padding: 0 8px; font-family: inherit; font-size: 15px; font-weight: 800; }
 .qz-jump-go { border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer; background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
 .qz-jump-input:focus-visible, .qz-jump-go:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
+/* L-1(trio-r5):横屏矮屏(915×412 一族)答题器整块比舞台可视段还高,选项钮掉到折叠线下。
+   只收空隙与展示字号:题面从 42px 收到 26px 仍旧醒目,选项与朗读钮热区保持 ≥44px,
+   题目说明(.qz-ask)那档正文 16px 红线不动。竖屏与平板(高 >500px)零变化。 */
+@media (max-height: 500px) {
+  .qz-wrap { min-height: 0; padding: 8px 10px; gap: 6px; }
+  .qz-prompt { font-size: 26px; min-height: 44px; padding: 6px 10px; }
+  /* 题面插图(形状图/钟面这类 svg)按配方收高:选项行必须进屏,插图缩一点不影响认读 */
+  .qz-prompt svg, .qz-prompt img { max-height: 64px; width: auto; }
+  .qz-choices { gap: 8px; }
+  .qz-choice { min-height: 46px; font-size: 22px; padding: 4px 12px; }
+  .qz-choice.qz-big { min-width: 84px; min-height: 48px; font-size: 26px; }
+  .qz-msg { min-height: 18px; }
+  .qz-ask { min-height: 20px; }
+  .qz-say { min-height: 44px; padding: 6px 18px; }
+  .qz-badge { padding: 3px 10px; }
+}
 `;
 
 export function runQuiz(opts: QuizOptions): PlayHandle {

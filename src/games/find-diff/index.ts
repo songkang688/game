@@ -39,7 +39,10 @@ import {
   miniCellPx,
   missCooldownMs,
   panelCellPx,
+  panelCellPxRow,
   panelCellForRoom,
+  panelCellForRoomRow,
+  panelsSideBySide,
   regrowCellPx,
   stageRoomPx,
   openLevelOnMap,
@@ -137,6 +140,16 @@ const CSS = `
   overscroll-behavior:contain;}
 .fdf-zoom{transform-origin:center center;will-change:transform;}
 .fdf-panels{display:flex;flex-direction:column;gap:8px;width:100%;align-items:center;}
+/* L-1(trio-r5):真横屏(宽≥600 且宽>高)两图并排,一张图独享可视高;中缝变竖线、麻绳装饰收起。
+   seam 皮肤在 STAGE_CSS 里写着 width:96%,这里用三层选择器压过它,别让中缝把两图挤到屏幕两端 */
+.fdf-panels-row{flex-direction:row;align-items:flex-start;justify-content:center;gap:10px;}
+.fdf-panels-row .fdf-split,.fdf-panels-row .fdf-split.fdf-seam{width:3px;flex:0 0 3px;height:auto;
+  align-self:stretch;min-height:60px;background:linear-gradient(180deg,#ffd8e6,#c5b3f0,#ffd8e6);border-radius:3px;}
+.fdf-panels-row .fdf-split > *{display:none;}
+/* 标题收成一行:挂牌是 display:table 收身的,横排时让面板宽度跟着标题长,别让标题折行吃掉格子的高度 */
+.fdf-panels-row .fdf-label{white-space:nowrap;}
+/* 工具行挪进顶排后不再是 .fdf-desk 的直系子节点,z-index 垫层补回来 */
+.fdf-rowmode .fdf-top .fdf-tools{position:relative;z-index:1;}
 .fdf-row{display:flex;gap:6px;flex-wrap:nowrap;justify-content:center;}
 .fdf-panel{background:#ffffffec;border-radius:14px;padding:6px;box-shadow:0 3px 10px rgba(120,120,160,.18);}
 .fdf-split{width:86%;height:3px;border-radius:3px;background:linear-gradient(90deg,#ffd8e6,#c5b3f0,#ffd8e6);}
@@ -265,8 +278,13 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   const view = globalThis as { innerHeight?: number; innerWidth?: number };
   const triple = scene.second !== null;
+  // L-1(trio-r5):真横屏(915×412 一族)竖排装不下(数学账见 runtime.panelsSideBySide),
+  // 两图改并排,一张图独享可视高;三图模式保持原布局(上排两张参考图本来就并排)
+  const rowLayout = !triple && panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640);
   // 竖屏上下两图各占约 40% 高度，中间留 UI 条：格子按屏高摊，两张图始终同时可见
-  let playPx = panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
+  let playPx = rowLayout
+    ? panelCellPxRow(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX)
+    : panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
   const miniPx = triple ? miniCellPx(scene.cols, view.innerWidth ?? 360) : playPx;
 
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -298,7 +316,10 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   `;
   host.appendChild(root);
   // 屏高只是上限，真正能用的是舞台裁切线以内那一段——两者取小的那个
-  playPx = Math.min(playPx, panelCellForRoom(scene.rows, stageRoomPx(root), PLAY_CELL_PX));
+  playPx = Math.min(
+    playPx,
+    (rowLayout ? panelCellForRoomRow : panelCellForRoom)(scene.rows, stageRoomPx(root), PLAY_CELL_PX)
+  );
 
   const countEl = root.querySelector(".fdf-count") as HTMLElement;
   const hudEl = root.querySelector(".fdf-hud") as HTMLElement;
@@ -351,6 +372,13 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const refCells: HTMLElement[][] = [];
   let playCells: HTMLButtonElement[] = [];
 
+  if (rowLayout) {
+    panelsEl.classList.add("fdf-panels-row");
+    root.classList.add("fdf-rowmode");
+    // 工具行(提示键 + 放大滑杆)挪进顶排与徽章同行:横屏矮屏寸土寸金,
+    // 省出的整行高度还给两张图;915px 宽放得下,放不下 flex-wrap 自己折行
+    (root.querySelector(".fdf-top") as HTMLElement).appendChild(toolsEl);
+  }
   if (triple) {
     const row = document.createElement("div");
     row.className = "fdf-row";
@@ -360,7 +388,13 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     panelsEl.appendChild(row);
     refGrids.push(a.grid, b.grid);
   } else {
-    const top = makePanel(scene.mirrored ? "原图（下面是它的镜子像）" : "原图（看这里）", playPx);
+    // 并排时两图在左右而不是上下,标题的方位词跟着换,别让孩子找不到「下图」
+    const refLabel = scene.mirrored
+      ? rowLayout
+        ? "原图（右边是它的镜子像）"
+        : "原图（下面是它的镜子像）"
+      : "原图（看这里）";
+    const top = makePanel(refLabel, playPx);
     panelsEl.appendChild(top.panel);
     refGrids.push(top.grid);
   }
@@ -371,7 +405,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   split.classList.add("fdf-seam", `fdf-seam-${seam}`);
   split.innerHTML = seamHTML(seam);
   panelsEl.appendChild(split);
-  const play = makePanel(opts.playLabel, playPx);
+  const play = makePanel(rowLayout ? opts.playLabel.replace(/下图/g, "右图") : opts.playLabel, playPx);
   panelsEl.appendChild(play.panel);
   const playGrid = play.grid;
 
@@ -764,7 +798,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       if (!liveFit) return;
       // 挂载那一刻面板还空着,随内容长高的裁切祖先量出的余量偏小,格子被
       // 冤枉地钳到 26px;真实布局出来后按同一套公式复算,只放大不缩小
-      const grown = regrowCellPx(playPx, scene.rows, view.innerHeight ?? 640, stageRoomPx(root), PLAY_CELL_PX);
+      const grown = regrowCellPx(playPx, scene.rows, view.innerHeight ?? 640, stageRoomPx(root), PLAY_CELL_PX, rowLayout);
       if (grown !== null && foundSet.size === 0) {
         playPx = grown;
         // 格子盒子的尺寸在 grid 模板上,重填内容前得把模板一起改大
@@ -782,13 +816,19 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   }
   win?.addEventListener("resize", fitViewport);
 
+  /** 并排布局时把提示文案里的方位词换成左右(只改显示,MODE_HINTS 数据零触碰) */
+  function orientText(text: string): string {
+    if (!rowLayout) return text;
+    return text.replace(/上图/g, "左图").replace(/下图/g, "右图").replace(/上下对照/g, "左右对照");
+  }
+
   return {
     root,
     hud: hudEl,
     msg: msgEl,
     misses: () => missCount,
     setMessage: (text: string) => {
-      msgEl.textContent = text;
+      msgEl.textContent = orientText(text);
     },
     shuffleTo(step: number) {
       perm = movePermutation(scene.rows, scene.cols, step);

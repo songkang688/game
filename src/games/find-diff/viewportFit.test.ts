@@ -21,7 +21,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { VIEWPORT_MIN_ROOM, regrowCellPx, viewportRoomPx } from "./runtime";
+import {
+  PANEL_CHROME_ROW_PX,
+  VIEWPORT_MIN_ROOM,
+  panelCellForRoomRow,
+  panelCellPxRow,
+  panelsSideBySide,
+  regrowCellPx,
+  viewportRoomPx
+} from "./runtime";
 
 const SRC = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const CSS = SRC.slice(SRC.indexOf("const CSS = `"), SRC.indexOf("\n`;", SRC.indexOf("const CSS = `")));
@@ -128,5 +136,66 @@ describe("找不同 · 首帧后格子按真实余量回涨(三办 R4-A)", () =>
     const rafBlock = SRC.slice(SRC.indexOf("raf.call(win"), SRC.indexOf("win?.addEventListener"));
     expect(rafBlock).toContain("paintAll(false)");
     expect(rafBlock).toContain("fitViewport()");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 三办 R5 · 测试员 A(L-1):真横屏两图并排
+//
+// 竖着摞的数学账:两张 3 行图各 ~116px(26px 底线格 + 标题 + 边框)加中缝与
+// 165px 家当,至少 560px;915×412 的舞台可视段只有 ~260px,怎么钳都装不下,
+// 内滚 200px+、一半格子永远在折叠线下。并排后一张图独享整段可视高,全部进屏
+// (修后实测:915×412 crop=0、折叠线下 0、viewport 内滚 0)。
+// ---------------------------------------------------------------------------
+
+describe("找不同 · 真横屏两图并排(三办 R5-A L-1)", () => {
+  it("只认真横屏:宽 ≥600 且宽大于高;竖屏、方屏、平板竖用一律竖排", () => {
+    expect(panelsSideBySide(915, 412)).toBe(true);
+    expect(panelsSideBySide(1024, 768)).toBe(true);
+    expect(panelsSideBySide(640, 360)).toBe(true);
+    expect(panelsSideBySide(390, 844)).toBe(false);
+    expect(panelsSideBySide(412, 915)).toBe(false);
+    expect(panelsSideBySide(500, 400)).toBe(false); // 宽不够 600 的方屏
+    expect(panelsSideBySide(Number.NaN, 412)).toBe(false);
+  });
+
+  it("并排按单图摊格:915×412 舞台余量 260px 时 3 行格是 27px,不再卡 26 下限", () => {
+    expect(panelCellForRoomRow(3, 260)).toBe(27);
+    // 竖排口径下同样余量只能给 (260-165)/2/3 = 15 → 被钳到 26 下限然后内滚
+    expect(panelCellForRoomRow(3, 260)).toBeGreaterThanOrEqual(26);
+  });
+
+  it("并排的固定家当比竖排多一行独享标题", () => {
+    expect(PANEL_CHROME_ROW_PX).toBe(165 + 14);
+  });
+
+  it("并排按屏高摊格:单图能吃 62% 高,412 高的横屏 3 行直接到 44 上限", () => {
+    expect(panelCellPxRow(3, 412)).toBe(44);
+    expect(panelCellPxRow(6, 412)).toBe(37);
+    // 脏值回退老规矩
+    expect(panelCellPxRow(3, Number.NaN)).toBeGreaterThanOrEqual(26);
+  });
+
+  it("回涨也认并排口径(第 6 个参数)", () => {
+    // 并排:260px 余量下 26 → 27
+    expect(regrowCellPx(26, 3, 412, 260, 44, true)).toBe(27);
+    // 竖排同余量不回涨(公式给 26,不比当前大)
+    expect(regrowCellPx(26, 3, 412, 260, 44, false)).toBeNull();
+  });
+
+  it("挂载代码接了并排:布局类、标题方位词、回涨口径都在", () => {
+    expect(SRC).toContain("panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640)");
+    expect(SRC).toContain('panelsEl.classList.add("fdf-panels-row")');
+    expect(SRC).toContain('opts.playLabel.replace(/下图/g, "右图")');
+    expect(SRC).toContain("PLAY_CELL_PX, rowLayout)");
+    // 中缝皮肤的 96% 宽必须被三层选择器压回,否则两图被挤到屏幕两端
+    expect(SRC).toContain(".fdf-panels-row .fdf-split.fdf-seam");
+  });
+
+  it("提示文案里的方位词只在显示层换向,MODE_HINTS 数据零触碰", () => {
+    expect(SRC).toContain("function orientText(text: string): string");
+    expect(SRC).toContain('replace(/上下对照/g, "左右对照")');
+    // MODE_HINTS 原文还是「上下对照」的写法(数据没被改)
+    expect(SRC).toContain("定一条路线一行一行扫，上下对照着找！");
   });
 });

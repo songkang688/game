@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { TOTAL_LEVELS } from "./level99";
 import {
@@ -166,5 +167,41 @@ describe("quiz99 直达第 N 题（管理员权限）", () => {
     quizJumpIndex("6", 12);
     expect(quizStars(0, 12)).toBe(3);
     expect(quizStars(9, 12)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 三办 R5 · 测试员 A(L-1):横屏矮屏(915×412 一族)答题器整块比舞台可视段高,
+// 选项钮掉到折叠线下。修法是 @media (max-height:500px) 里只收空隙与展示字号。
+// 这里钉住:紧凑档在场、热区与字号红线没被顺手压穿、题面插图有 max-height 兜底。
+// ---------------------------------------------------------------------------
+
+describe("quiz99 横屏矮屏紧凑档(三办 R5-A L-1)", () => {
+  const src = readFileSync(new URL("./quiz99.ts", import.meta.url), "utf8");
+  const start = src.indexOf("@media (max-height: 500px)");
+  const block = src.slice(start, src.indexOf("`;", start));
+
+  it("紧凑档媒体查询在场,且只认 500px 以下的矮屏", () => {
+    expect(start).toBeGreaterThan(0);
+    expect(block).toContain(".qz-wrap { min-height: 0;");
+  });
+
+  it("选项与朗读钮热区 ≥44px,所有写死字号 ≥14px", () => {
+    // 只有按得着的控件吃 44px 红线;.qz-msg/.qz-ask 是文本行,不在此列
+    for (const m of block.matchAll(/\.qz-(?:choice|say)[^{]*\{([^}]*)\}/g)) {
+      const h = /min-height:\s*(\d+)px/.exec(m[1]);
+      if (h) expect(Number(h[1]), `紧凑档 ${m[0].slice(0, 30)}`).toBeGreaterThanOrEqual(44);
+    }
+    for (const m of block.matchAll(/font-size:\s*(\d+)px/g)) {
+      expect(Number(m[1]), `紧凑档 font-size ${m[0]}`).toBeGreaterThanOrEqual(14);
+    }
+  });
+
+  it("题面插图按配方收高:svg/img 有 max-height 兜底,选项行才能进屏", () => {
+    expect(block).toMatch(/\.qz-prompt svg, \.qz-prompt img \{ max-height: \d+px/);
+  });
+
+  it("正文红线不动:.qz-ask 的 17px 基准字号还在(紧凑档只收 min-height)", () => {
+    expect(src).toContain(".qz-ask { text-align: center; font-size: 17px;");
   });
 });
