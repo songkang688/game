@@ -15,6 +15,7 @@ import {
   type ModeEntry
 } from "../../engine";
 import { save } from "../../engine/save";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import { cardLabel, cardName, isRed, GEARS, type Card } from "./cards";
 import {
   cardArtSVG,
@@ -196,6 +197,23 @@ export const HC_CSS = `
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:18px;}
 .hc-pause-t{font-size:20px;font-weight:900;color:#9a5030;}
 .hc-keys{font-size:var(--mt-body,16px);font-weight:700;color:#7a6252;line-height:1.7;}
+/* r5 N-4:手机档手牌整排折叠线下,战况区/桌面/战报各收一号,配合 fitZones 让手牌进首屏 */
+@media (max-width:480px){
+  .hc-badge{padding:3px 8px;font-size:14px;}
+  .hc-top{margin-bottom:5px;}
+  .hc-seats{margin-bottom:5px;}
+  .hc-seat{padding:4px 6px;gap:5px;}
+  .hc-seat-face{flex:0 0 30px;width:30px;height:30px;}
+  .hc-seat-name,.hc-seat-line{font-size:14px;}
+  .hc-mid{margin:5px 0;}
+  .hc-deck-art{width:38px;height:48px;}
+  .hc-discard-art{width:34px;height:46px;}
+  .hc-hero-face{width:34px;height:34px;}
+  .hc-log{min-height:2.4em;padding:6px;font-size:14px;line-height:1.5;}
+  .hc-hand{padding:8px 4px 6px;row-gap:8px;}
+  .hc-pad{margin-top:5px;}
+  .hc-msg{min-height:1.4em;margin-top:4px;}
+}
 @media (max-width:360px){
   .hc-wrap{padding:8px;}
   .hc-seat{flex:1 1 46%;padding:5px 6px;}
@@ -207,6 +225,25 @@ export const HC_CSS = `
   .hc-deck-art{width:40px;height:52px;}
   .hc-discard-art{width:36px;height:50px;}
   .hc-btn{min-width:74px;font-size:15px;padding:0 8px;}
+}
+/* r5 N-4:矮横屏满打满算 412px,座位卡/桌面/战报各收一号,给手牌区多让两行 */
+@media (min-width:700px) and (max-height:520px){
+  .hc-wrap{padding:8px;}
+  .hc-top{margin-bottom:4px;}
+  .hc-badge{padding:3px 8px;font-size:14px;}
+  .hc-seats{margin-bottom:4px;}
+  .hc-seat{padding:3px 6px;min-height:38px;gap:5px;font-size:14px;}
+  .hc-seat-face{flex:0 0 28px;width:28px;height:28px;}
+  .hc-seat-name,.hc-seat-line{font-size:14px;}
+  .hc-mid{margin:4px 0;}
+  .hc-deck-art{width:36px;height:46px;}
+  .hc-discard-art{width:32px;height:44px;}
+  .hc-hero-face{width:32px;height:32px;}
+  .hc-log{min-height:2.4em;max-height:4.5em;padding:5px 8px;font-size:14px;line-height:1.45;}
+  .hc-hand{padding:8px 4px 6px;row-gap:6px;}
+  .hc-pad{margin-top:4px;}
+  .hc-btn{min-height:44px;}
+  .hc-msg{margin-top:3px;min-height:1.4em;font-size:14px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
@@ -459,6 +496,46 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
 
   host.appendChild(wrap);
 
+  /* r5 N-4:手牌与确定/结束回合是每回合必点,不许折叠线下。
+     竖着量一次总溢出,按「战报 → 战况区(座位卡) → 手牌区」的顺序各钳一刀:
+     战报最不值钱先收,座位卡钳高后区内滚,手牌区兜底也内滚(首排永远可见可点)。
+     量不到(单测桩)一个样式不写,永不抛。 */
+  const FIT_FLOORS = { log: 44, seats: 76, hand: 100 } as const;
+  function fitZones(): void {
+    if (typeof wrap.getBoundingClientRect !== "function") return;
+    for (const el of [logEl, seatRow, handEl]) {
+      el.style.maxHeight = "";
+      el.style.overflowY = "";
+    }
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const w = wrap.getBoundingClientRect();
+    if (!Number.isFinite(w.top)) return;
+    let over = rectBottom(w) - clip + 6;
+    if (!(over > 0)) return;
+    const zones: Array<[HTMLElement, number]> = [
+      [logEl, FIT_FLOORS.log],
+      [seatRow, FIT_FLOORS.seats],
+      [handEl, FIT_FLOORS.hand],
+    ];
+    for (const [el, floor] of zones) {
+      if (over <= 0) break;
+      if (typeof el.getBoundingClientRect !== "function") continue;
+      const h = el.getBoundingClientRect().height;
+      if (!Number.isFinite(h) || h <= floor) continue;
+      const cut = Math.min(over, h - floor);
+      el.style.maxHeight = `${Math.floor(h - cut)}px`;
+      el.style.overflowY = "auto";
+      over -= cut;
+    }
+  }
+  fitZones();
+  later(fitZones, 0);
+  // 首次 render 后座位卡/战报才有真实行高,再补量一次
+  later(fitZones, 300);
+  const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasResize) window.addEventListener("resize", fitZones);
+
   function say(text: string): void {
     msg.textContent = text;
   }
@@ -626,6 +703,8 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
 
     renderHand();
     renderButtons();
+    // 战报/座位卡/手牌的行高随局势变,每次重画后按可视余量再钳一轮
+    fitZones();
   }
 
   function renderHand(): void {
@@ -1076,6 +1155,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
       destroyed = true;
       for (const t of timers) clearTimeout(t);
       timers.clear();
+      if (hasResize) window.removeEventListener("resize", fitZones);
       (globalThis as { removeEventListener?: typeof window.removeEventListener }).removeEventListener?.(
         "keydown",
         onKey
