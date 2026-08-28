@@ -73,10 +73,15 @@ export const MAX_CELL = 44;
  * 按可用宽度算格子边长。宽度不够时**不会**把格子压小 ——
  * 直接维持 28px，画面比容器宽就交给外层横向滚动（配迷你地图看全局）。
  */
-export function cellPx(cols: number, width: number): number {
+export function cellPx(cols: number, width: number, maxHeight = 0, rows = 0): number {
   const usable = Number.isFinite(width) && width > 80 ? width : 320;
   const fit = Math.floor((usable - 10) / Math.max(1, cols));
-  return Math.max(MIN_CELL, Math.min(MAX_CELL, fit));
+  let px = Math.max(MIN_CELL, Math.min(MAX_CELL, fit));
+  if (Number.isFinite(maxHeight) && maxHeight >= 40 && rows > 0) {
+    const byH = Math.floor((maxHeight - 8) / rows);
+    px = Math.min(px, Math.max(22, byH));
+  }
+  return px;
 }
 
 /** 这张图在这个宽度下要不要横向滚动 */
@@ -420,6 +425,16 @@ export const MN_CSS = `
   .mn-chip{padding:5px 9px;}
   .mn-duo>div{min-width:0;flex:1 1 100%;}
 }
+@media (max-height:500px){
+  .mn-wrap{padding:6px;max-height:100%;overflow:hidden;box-sizing:border-box;}
+  .mn-msg{min-height:0;margin-top:2px;max-height:1.2em;overflow:hidden;}
+  .mn-hud{margin-bottom:4px;}
+  .mn-note{display:none;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .mn-duo{flex-wrap:nowrap;gap:8px;align-items:flex-start;}
+  .mn-duo>div{flex:1 1 0;min-width:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}
   .mn-cell.mn-bloom{animation:none;}
@@ -645,8 +660,15 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   }
 
   function layout(): void {
-    const px = cellPx(run.opts.w, Math.min(viewportWidth(), (host as { clientWidth?: number }).clientWidth || viewportWidth()));
-    const size = opts.compact ? Math.max(MIN_CELL, Math.round(px * 0.8)) : px;
+    const hostW = Math.min(viewportWidth(), (host as { clientWidth?: number }).clientWidth || viewportWidth());
+    let maxH = 0;
+    const vh = (globalThis as { innerHeight?: number }).innerHeight;
+    if (typeof vh === "number" && vh > 0 && vh <= 500 && typeof grid.getBoundingClientRect === "function") {
+      const top = grid.getBoundingClientRect().top;
+      if (Number.isFinite(top)) maxH = Math.max(40, vh - top - 8);
+    }
+    const px = cellPx(run.opts.w, hostW, maxH, run.opts.h);
+    const size = opts.compact && maxH <= 0 ? Math.max(MIN_CELL, Math.round(px * 0.8)) : px;
     grid.style.gridTemplateColumns = `repeat(${run.opts.w}, ${size}px)`;
     grid.style.fontSize = `${Math.max(13, Math.round(size * 0.52))}px`;
     for (const c of cells) {

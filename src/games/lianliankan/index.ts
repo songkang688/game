@@ -23,6 +23,7 @@ import {
   CELL_GAP_PX,
   HINT_MAX,
   Janitor,
+  PHONE_BOARD_W,
   RING_FRAC,
   SHAKE_MS,
   beginCollapse,
@@ -40,6 +41,7 @@ import {
   endlessTimeUp,
   endlessWord,
   gridTemplate,
+  boardBoxSize,
   hintPair,
   hintsLeft,
   selfHelp,
@@ -167,6 +169,14 @@ const CSS = `
 .llk-line.llk-line-calm { animation: none; }
 .llk-line .llk-dust { filter: drop-shadow(0 0 3px rgba(255,214,120,.8)); }
 .llk-msg { text-align: center; min-height: 22px; color: #8A5A30; font-weight: 700; margin-top: 8px; font-size: 15px; line-height: 1.45; }
+@media (max-height: 500px) {
+  .llk-wrap { padding: 8px; max-height: 100%; overflow: hidden; box-sizing: border-box; }
+  .llk-boardbox { width: min(100%, calc(100dvh - 160px)); max-height: calc(100dvh - 160px); margin-inline: auto; }
+  .llk-board { width: 100%; max-height: 100%; }
+  .llk-tools { position: sticky; bottom: 0; z-index: 4; margin-top: 6px; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(242,226,200,.2), #F2E2C8 40%); }
+  .llk-msg { min-height: 0; margin-top: 4px; max-height: 1.4em; overflow: hidden; }
+}
 .llk-modebar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关时模式条要真的让位 */
 .llk-modebar[hidden] { display: none; }
@@ -335,6 +345,23 @@ class BoardView {
   /** 360px 兜底：量出真实牌宽，低于 34px 就切成「顶面 + 描边」的轻量画法 */
   fit(): void {
     const w = this.boardEl.clientWidth;
+    const vh = (globalThis as { innerHeight?: number }).innerHeight ?? 0;
+    let availH = 0;
+    if (vh > 0 && vh <= 500 && typeof this.root.getBoundingClientRect === "function") {
+      const top = this.root.getBoundingClientRect().top;
+      if (Number.isFinite(top)) availH = Math.max(40, vh - top - 56);
+    }
+    if (availH > 40) {
+      const parentW = this.root.clientWidth || w || PHONE_BOARD_W;
+      const box = boardBoxSize(this.board.cols, this.board.rows, parentW, availH);
+      this.boardEl.style.width = `${Math.floor(box.width)}px`;
+      this.boardEl.style.height = `${Math.floor(box.height)}px`;
+      this.boardEl.style.marginInline = "auto";
+    } else {
+      this.boardEl.style.width = "";
+      this.boardEl.style.height = "";
+      this.boardEl.style.marginInline = "";
+    }
     const px =
       w > 0
         ? (w - CELL_GAP_PX * (this.board.cols + 1)) / (this.board.cols + RING_FRAC * 2)

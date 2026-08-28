@@ -367,6 +367,28 @@ export function gridTemplate(cols: number): string {
   return `${RING_FRAC}fr repeat(${cols}, 1fr) ${RING_FRAC}fr`;
 }
 
+/** 矮屏把盘收成正方形盒子：边长取宽高余量的较小值，格仍等比。 */
+export function boardBoxSize(
+  cols: number,
+  rows: number,
+  availW: number,
+  availH: number,
+  gap = CELL_GAP_PX
+): { cell: number; width: number; height: number } {
+  const colTracks = cols + RING_FRAC * 2;
+  const rowTracks = rows + RING_FRAC * 2;
+  const w = Number.isFinite(availW) && availW > 40 ? availW : PHONE_BOARD_W;
+  const h = Number.isFinite(availH) && availH > 40 ? availH : w;
+  const cellW = (w - gap * (cols + 1)) / colTracks;
+  const cellH = (h - gap * (rows + 1)) / rowTracks;
+  const cell = Math.max(18, Math.min(cellW, cellH));
+  return {
+    cell,
+    width: cell * colTracks + gap * (cols + 1),
+    height: cell * rowTracks + gap * (rows + 1)
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 五、无尽「连到底」
 // ---------------------------------------------------------------------------

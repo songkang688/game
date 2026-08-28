@@ -92,6 +92,8 @@ export const SHOWER_PETALS = 10;
 export const SHOWER_MS = 2600;
 /** 每格最小边长(360px 窄屏的红线) */
 export const CELL_MIN_PX = 34;
+/** 矮横屏双盘时允许再收一档，否则 9 格叠高必出 412 */
+export const CELL_MIN_LANDSCAPE_PX = 22;
 /** 每格最大边长,大屏上也别撑成巨无霸 */
 export const CELL_MAX_PX = 56;
 /** 数字钮的最小高度(手指红线) */
@@ -103,11 +105,16 @@ export const FONT_MIN_PX = 16;
  * 360px 窄屏也要塞得下:盘面占满宽,每格不小于 34px。
  * 两块盘只有在够宽的时候才真的左右分,窄屏自动上下摞着放。
  */
-export function cellPxFor(n: number, width: number, seats = 1): number {
+export function cellPxFor(n: number, width: number, seats = 1, height = 0): number {
   const w = Number.isFinite(width) && width > 0 ? width : 480;
   const usable = Math.max(220, w - 24);
   const per = seats > 1 && usable >= 720 ? usable / seats - 16 : usable;
-  const raw = Math.floor((per - (n - 1) - 6) / n);
+  let raw = Math.floor((per - (n - 1) - 6) / n);
+  if (Number.isFinite(height) && height >= 80) {
+    const rawH = Math.floor((height - (n - 1) - 16) / n);
+    raw = Math.min(raw, rawH);
+    return Math.max(CELL_MIN_LANDSCAPE_PX, Math.min(CELL_MAX_PX, raw));
+  }
   return Math.max(CELL_MIN_PX, Math.min(CELL_MAX_PX, raw));
 }
 
@@ -157,6 +164,18 @@ function reducedMotion(): boolean {
 function viewportWidth(): number {
   const w = (globalThis as { innerWidth?: number }).innerWidth;
   return typeof w === "number" && w > 0 ? w : 480;
+}
+
+function viewportHeight(): number {
+  const h = (globalThis as { innerHeight?: number }).innerHeight;
+  return typeof h === "number" && h > 0 ? h : 800;
+}
+
+/** 矮横屏双盘：给格子留的竖向预算（壳+顶栏+模式头大约占去 168） */
+export function boardHeightBudget(seats: number, height = viewportHeight()): number {
+  if (seats < 2) return 0;
+  if (!(Number.isFinite(height) && height > 0 && height <= 500)) return 0;
+  return Math.max(120, height - 168);
 }
 
 // ---------------------------------------------------------------------------
@@ -438,9 +457,24 @@ export const SP_CSS = `
   .sp-corner{display:none;}
 }
 @media (max-height:500px){
+  .sp-wrap{padding:6px;max-height:100%;overflow:hidden;box-sizing:border-box;}
+  .sp-wrap > .sp-msg{min-height:0;max-height:1.2em;overflow:hidden;margin-top:2px;}
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}
+  .sp-corner{display:none;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .sp-seats{flex-wrap:nowrap;gap:8px;align-items:stretch;}
+  .sp-seat{flex:1 1 0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(96px,120px);
+    grid-template-rows:auto minmax(0,1fr) auto auto;gap:4px 6px;align-items:stretch;}
+  .sp-name{grid-column:1/-1;font-size:14px;margin:0;}
+  .sp-grid{grid-column:1;grid-row:2/4;align-self:center;}
+  .sp-pad{grid-column:2;grid-row:2;position:static;width:auto;margin-top:0;grid-template-columns:repeat(3,1fr)!important;}
+  .sp-tools{grid-column:2;grid-row:3;position:static;flex-direction:column;margin-top:0;align-items:stretch;}
+  .sp-tool{padding:0 8px;min-height:44px;}
+  .sp-key{min-height:44px;}
+  .sp-msg,.sp-hintbox{grid-column:1/-1;min-height:0;max-height:1.2em;overflow:hidden;margin-top:0;}
 }
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}
@@ -1128,7 +1162,7 @@ export interface TableOpts {
 
 export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void; elapsedMs: () => number } {
   const wrap = document.createElement("div");
-  wrap.className = "sp-wrap";
+  wrap.className = opts.seats.length > 1 ? "sp-wrap sp-wrap-multi" : "sp-wrap";
 
   // 花田两个角落各一丛静态小花:纯装饰、不吃点击
   for (const side of ["l", "r"]) {
@@ -1309,7 +1343,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       name: "朵朵",
       who: "duo",
       entry,
-      cell: cellPxFor(entry.n, viewportWidth(), spec.race ? 2 : 1),
+      cell: cellPxFor(entry.n, viewportWidth(), spec.race ? 2 : 1, boardHeightBudget(spec.race ? 2 : 1)),
       errorLimit: spec.errorLimit,
       hintTier: spec.tier,
       sfx: ctx.sfx,
@@ -1322,7 +1356,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       who: null,
       ai: spec.aiTier,
       entry,
-      cell: Math.max(CELL_MIN_PX, Math.round(cellPxFor(entry.n, viewportWidth(), 2) * 0.86)),
+      cell: Math.max(CELL_MIN_LANDSCAPE_PX, Math.round(cellPxFor(entry.n, viewportWidth(), 2, boardHeightBudget(2)) * 0.86)),
       errorLimit: 0,
       hintTier: spec.tier,
       sfx: () => undefined,
@@ -1429,7 +1463,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           name: "朵朵",
           who: "duo",
           entry,
-          cell: cellPxFor(entry.n, viewportWidth(), 2),
+          cell: cellPxFor(entry.n, viewportWidth(), 2, boardHeightBudget(2)),
           errorLimit: 0,
           hintTier: spec.tier,
           sfx: (s) => api.play(s),
@@ -1440,7 +1474,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           who: null,
           ai: tier,
           entry,
-          cell: cellPxFor(entry.n, viewportWidth(), 2),
+          cell: cellPxFor(entry.n, viewportWidth(), 2, boardHeightBudget(2)),
           errorLimit: 0,
           hintTier: spec.tier,
           sfx: () => undefined,
@@ -1552,7 +1586,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     drop();
     const entry = bankAt(duoLevel);
     const spec = levelSpec(duoLevel);
-    const cell = cellPxFor(entry.n, viewportWidth(), 2);
+    const cell = cellPxFor(entry.n, viewportWidth(), 2, boardHeightBudget(2));
     table = createTable(board, {
       goalText: "同一题,左右各种一片",
       hint: "朵朵用 W A S D 移动、F 种下、G 切铅笔;星星用方向键、L 种下、K 切铅笔。手机上直接点各自的数字钮。",
@@ -1772,6 +1806,7 @@ export const SP_CONSTS = {
   SHOWER_PETALS,
   SHOWER_MS,
   CELL_MIN_PX,
+  CELL_MIN_LANDSCAPE_PX,
   CELL_MAX_PX,
   KEY_MIN_PX,
   FONT_MIN_PX

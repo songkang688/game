@@ -331,6 +331,18 @@ export function cardWidthAt(width: number, cols: number, rows: number, pad = 12)
   return Math.floor((Math.max(0, width) - pad * 2 - gap * (c - 1)) / c);
 }
 
+/**
+ * 双人轮流翻的列数。竖屏仍 4 列；矮横屏改横排（两行），第一屏能点到 ≥2 行。
+ * 配对规则仍按 pairs，只动摆法。
+ */
+export function versusGridCols(width: number, height: number, pairs = 8): number {
+  const cards = Math.max(2, pairs * 2);
+  if (Number.isFinite(height) && height > 0 && height <= 500 && Number.isFinite(width) && width >= 640) {
+    return Math.max(4, Math.ceil(cards / 2));
+  }
+  return 4;
+}
+
 // ---------------------------------------------------------------------------
 // 四之五、双人轮流翻（家里两个人抢着玩的那种）
 // ---------------------------------------------------------------------------

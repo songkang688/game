@@ -48,6 +48,7 @@ import {
   swapSlots,
   swapWarning,
   tapCard,
+  versusGridCols,
   versusLine,
   versusWinner,
   wonLine,
@@ -73,6 +74,12 @@ const CSS = `
 .mmc-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #8FC5FF, #C9A7F5); border-radius: 8px; transition: width .3s; }
 .mmc-board { display: grid; gap: 8px; }
 .mmc-card { position: relative; aspect-ratio: 3 / 4; min-height: 72px; border: none; background: none; padding: 0; cursor: pointer; perspective: 600px; }
+@media (max-height: 500px) {
+  .mmc-wrap.mmc-duo { padding: 6px; max-height: 100%; overflow: hidden; box-sizing: border-box; }
+  .mmc-wrap.mmc-duo .mmc-bar { display: none; }
+  .mmc-wrap.mmc-duo .mmc-card { aspect-ratio: 1; min-height: 44px; max-height: min(96px, 34vh); }
+  .mmc-wrap.mmc-duo .mmc-msg { margin-top: 4px; min-height: 0; }
+}
 .mmc-inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform var(--mc-flip-ms) ease-in-out; }
 .mmc-card.mmc-up .mmc-inner { transform: translateY(calc(-1 * var(--mc-lift-px))) rotateY(180deg); }
 .mmc-side { position: absolute; inset: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; box-shadow: 0 3px 6px var(--mc-shadow); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
@@ -264,13 +271,16 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   const rotateEvery = cfg.rotateEvery ?? 0;
   const decoys = cfg.decoys ?? 0;
   const swapEvery = cfg.swapEvery ?? 0;
-  const rows = Math.ceil(totalCards / Math.max(1, cfg.cols));
+  const vpW = (globalThis as { innerWidth?: number }).innerWidth ?? 480;
+  const vpH = (globalThis as { innerHeight?: number }).innerHeight ?? 800;
+  const cols = seats === 2 ? versusGridCols(vpW, vpH, cfg.pairs) : cfg.cols;
+  const rows = Math.ceil(totalCards / Math.max(1, cols));
 
   /** 翻牌状态机：开局要偷看的先按住不让翻 */
   let flip: FlipState = newFlipState(cfg.matchSize, cfg.peekMs > 0);
 
   const wrap = document.createElement("div");
-  wrap.className = "mmc-wrap";
+  wrap.className = seats === 2 ? "mmc-wrap mmc-duo" : "mmc-wrap";
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="mmc-top">
@@ -305,8 +315,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   const fillEl = wrap.querySelector(".mmc-fill") as HTMLElement;
   const msgEl = wrap.querySelector(".mmc-msg") as HTMLElement;
 
-  boardEl.style.gridTemplateColumns = `repeat(${cfg.cols}, minmax(0, 1fr))`;
-  boardEl.style.gap = `${boardGap(cfg.cols, rows)}px`;
+  boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  boardEl.style.gap = `${boardGap(cols, rows)}px`;
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -327,7 +337,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   }
 
   // 估一张卡的实宽：<48px 的小卡卡背省略四角圆花，只留环纹 + 中心徽章
-  const estCardW = cardWidthAt(boardEl.clientWidth || wrap.clientWidth || 360, cfg.cols, rows);
+  const estCardW = cardWidthAt(boardEl.clientWidth || wrap.clientWidth || 360, cols, rows);
 
   const slots: SlotEls[] = [];
   for (let s = 0; s < totalCards; s++) {
@@ -587,11 +597,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
    */
   function celebrateMatch(slotList: readonly number[]): void {
     if (prefersReduced() || slotList.length === 0) return;
-    const mc = slotList.reduce((a, s) => a + (s % cfg.cols), 0) / slotList.length;
-    const mr = slotList.reduce((a, s) => a + Math.floor(s / cfg.cols), 0) / slotList.length;
+    const mc = slotList.reduce((a, s) => a + (s % cols), 0) / slotList.length;
+    const mr = slotList.reduce((a, s) => a + Math.floor(s / cols), 0) / slotList.length;
     for (const s of slotList) {
-      const bx = Math.sign(mc - (s % cfg.cols)) * MC_ANIM.bumpPx;
-      const by = Math.sign(mr - Math.floor(s / cfg.cols)) * MC_ANIM.bumpPx;
+      const bx = Math.sign(mc - (s % cols)) * MC_ANIM.bumpPx;
+      const by = Math.sign(mr - Math.floor(s / cols)) * MC_ANIM.bumpPx;
       slots[s].btn.style.setProperty("--mc-bx", `${bx}px`);
       slots[s].btn.style.setProperty("--mc-by", `${by}px`);
     }

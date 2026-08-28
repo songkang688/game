@@ -128,6 +128,13 @@ export function wellDisplayPx(nativeH: number, roomPx: number, min = WELL_DISPLA
   return Math.max(min, cap);
 }
 
+/** 余量不够 WELL_DISPLAY_MIN 时改贴余量，避免再交给舞台自滚（N-74） */
+export function wellRoomMin(roomPx: number, floor = WELL_DISPLAY_MIN): number {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return floor;
+  if (roomPx >= floor) return floor;
+  return Math.max(96, Math.floor(roomPx));
+}
+
 const CSS = `
 .bd-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EEF4FF,#F9FBFF);
   border-radius:16px;padding:10px;user-select:none;}
@@ -175,6 +182,16 @@ const CSS = `
 .bd-over-s{font-size:16px;font-weight:700;color:#54709b;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 @media (min-width:760px){
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+}
+@media (max-height:500px){
+  .bd-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
+  .bd-seats{flex:1 1 auto;min-height:0;overflow:hidden;}
+  .bd-seats.bd-split{flex-direction:row;align-items:stretch;gap:6px;}
+  .bd-seat{min-width:0;flex:1 1 0;}
+  .bd-canvas{max-height:100%;}
+  .bd-pad{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;padding-top:4px;
+    background:linear-gradient(180deg,rgba(238,244,255,.35),#EEF4FF 40%);}
+  .bd-msg{min-height:0;max-height:1.3em;overflow:hidden;margin-top:2px;}
 }
 @media (max-width:360px){
   .bd-badge{padding:4px 8px;}
@@ -977,7 +994,8 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
       if (typeof c.getBoundingClientRect !== "function") continue;
       const top = c.getBoundingClientRect().top;
       if (!Number.isFinite(top)) continue;
-      const px = wellDisplayPx(c.height, clip - top - below - 4);
+      const room = clip - top - below - 4;
+      const px = wellDisplayPx(c.height, room, wellRoomMin(room));
       if (px !== null) {
         c.style.height = `${px}px`;
         // 宽交给内在比例(canvas 是 replaced 元素),max-width:100% 仍旧兜着窄屏
