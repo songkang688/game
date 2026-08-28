@@ -179,7 +179,15 @@ const CSS = `
   .bc-acts button{height:44px;width:52px;font-size:11.5px;}
 }
 @media (max-height:500px) and (min-width:640px){
-  .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
+  /* N-102:sticky 在 l99 裁切链内只会压住场地,双垫(摇杆+冲撞键)fixed 钉视口两下角,
+     场地拿回整档高度(旧实测画布只剩 140×140);z 压在 l99 弹层(30)之下。
+     提示条/蓄力说明让位给场地(竖屏仍在,暂停面板也有同一句玩法说明) */
+  .bc-tip,.bpc-legend{display:none;}
+  .bc-pads{display:contents;}
+  .bc-padwrap{position:fixed;bottom:10px;z-index:5;background:rgba(242,245,255,.92);
+    padding:6px 8px;border-radius:20px;box-shadow:0 3px 10px rgba(110,100,160,.28);}
+  .bc-padwrap:first-child{left:10px;right:auto;}
+  .bc-padwrap:last-child{left:auto;right:10px;}
 }
 @media (prefers-reduced-motion:reduce){
   .bc-btn:active,.bc-acts button:active,.bc-pick:active{transform:none;}
@@ -559,18 +567,29 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 
   // ---- 画面尺寸 --------------------------------------------------------------
   let scale = 4;
+  let extraCut = 0;
 
-  function layout(): void {
+  function layoutOnce(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
     // 场地上下压着标题栏、HUD、提示语和摇杆。矮屏按舞台剩余高度缩，不再猜 innerHeight-320。
     const guessed = Math.max(200, (window.innerHeight || 700) - 320);
     const stageH = Math.max(200, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    // N-102:矮横屏双垫 fixed 钉视口角落后不再占流内高度,别再按 118 双垫预算扣场地
+    let padsFixed = false;
+    try {
+      padsFixed =
+        !!pads.firstElementChild &&
+        typeof getComputedStyle === "function" &&
+        getComputedStyle(pads.firstElementChild).position === "fixed";
+    } catch {
+      padsFixed = false;
+    }
     const below = Math.max(
-      118,
-      (tip.offsetHeight || 0) + (pads.offsetHeight || 0) + (legend.offsetHeight || 0) + 10,
+      padsFixed ? 52 : 118,
+      (tip.offsetHeight || 0) + (padsFixed ? 0 : pads.offsetHeight || 0) + (legend.offsetHeight || 0) + 10,
     );
     const hudH = Math.max(36, hud.offsetHeight || 0);
-    const roomH = Math.max(140, stageH - hudH - below);
+    const roomH = Math.max(140, stageH - hudH - below - extraCut);
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);
@@ -580,6 +599,36 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(chh * dpr);
     g?.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  }
+
+  function layout(): void {
+    extraCut = 0;
+    layoutOnce();
+    // N-102:1024×768 实测刹车排被顶出 17px——铺完量 wrap 底对舞台可视底的缺口,超了收一刀重排
+    try {
+      if (typeof wrap.getBoundingClientRect !== "function") return;
+      const vh = window.innerHeight || 0;
+      let clipB = vh > 0 ? vh : Number.NaN;
+      let node: HTMLElement | null = wrap.parentElement;
+      for (let i = 0; node && i < 12; i++) {
+        const cls = String(node.className || "");
+        if (cls.includes("l99-stage") || cls.includes("game-stage")) {
+          const r = node.getBoundingClientRect();
+          const inner = node.clientHeight > 0 ? node.clientHeight : r.height;
+          clipB = vh > 0 ? Math.min(r.top + inner, vh) : r.top + inner;
+          break;
+        }
+        node = node.parentElement;
+      }
+      if (!Number.isFinite(clipB)) return;
+      const over = Math.ceil(wrap.getBoundingClientRect().bottom + 6 - clipB);
+      if (over > 0) {
+        extraCut = over;
+        layoutOnce();
+      }
+    } catch {
+      // 测试桩量不到就保持一次布局
+    }
   }
   layout();
   const onResize = (): void => {
