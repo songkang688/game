@@ -677,8 +677,9 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
 
   const onResize = (): void => {
     const grid = view.querySelector(".l99-grid");
-    if (grid instanceof HTMLElement) {
-      grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    // node 单测没有 HTMLElement 全局，用 style 鸭子类型
+    if (grid && typeof (grid as HTMLElement).style !== "undefined") {
+      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
     }
   };
   (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", onResize);
@@ -934,8 +935,12 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     view.appendChild(map);
 
     if (focusCurrent) {
-      const cur = grid.querySelector(".l99-node-cur");
-      if (cur instanceof HTMLElement) {
+      const cur = grid.querySelector(".l99-node-cur") as {
+        scrollIntoView?: (opts: { block: string }) => void;
+        focus?: () => void;
+      } | null;
+      // 不写 instanceof HTMLElement：node 单测没有这个全局，初次 showMap(true) 会整库红
+      if (cur) {
         try {
           cur.scrollIntoView?.({ block: "center" });
         } catch {
