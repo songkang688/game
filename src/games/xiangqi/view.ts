@@ -173,6 +173,15 @@ export const CSS = `
   .xq-wrap{max-width:380px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
+/* 390×667:宽<700 吃不到 380 钳,键排切出 140px。不盲拷 500 的 248px */
+@media (max-width:699px) and (max-height:840px) and (min-height:501px){
+  .xq-wrap{max-width:min(100%, calc((100dvh - 210px) * 0.82));}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
+}
+@media (max-width:699px) and (max-height:900px) and (min-height:841px){
+  .xq-wrap{max-width:min(100%, calc((100dvh - 210px) * 0.82));}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
+}
 @media (min-width:700px) and (max-height:500px){
   .xq-wrap{max-width:248px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}

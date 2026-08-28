@@ -445,6 +445,19 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 | word-garden / landlord | 840 `@media` 块内注释外移（clock-house/shell.test 会把注释当选择器） | — |
 | bowling-lane | 840&&min-height:501 钉停键；**不拷** 720 的 `bwl-legend{display:none}`；721 档原文仍在 | 667–768 高 |
 
+## 十九、本机监督续修（PR #107 · 390×844 漏 840 + 平板钳宽预算）
+
+云端 A/B/C 额度仍尽。本机无头 Chrome 五视口抽测后修（不改 500 原文）：
+
+| 项 | 实测 | 改法 |
+| --- | --- | --- |
+| mole-pop 1024×768 | 第三排切舞台 58px；840 仍用 500 的 `100dvh-240` 不够 | **只改** 700&&840 预算为 `100dvh-320`；500 的 240 原文不动 |
+| puzzle-tiles 1024×768 | 盘底切 156px | 700&&840 预算 `100dvh-380`；**另加** `max-width:699 && 840 && 501` 预算 400 救 390×667 |
+| hero-cards 390×844 | 高 844>840，手牌/回合键 HARD-OUT 且 sh==ch | **加** `900 && min-height:841` 钉底 + wrap 可滚；不拷 500 的 log 限高 |
+| xiangqi 390×667/844 | 宽<700 吃不到 380 钳，键排切 140px | **加** `max-width:699 && 840 && 501` 与 `900 && 841` 高度反推；不拷 248px |
+
+**新军规**：`max-height:840` 救不了 390×844；钉底/钳盘要补 `max-height:900px and (min-height:841px)`，或确认默认布局已进屏。700&&840 的高度反推预算不要盲拷 500 的 chrome 数字——平板舞台顶栏更肥。
+
 ## 附：第 3 轮环境水位
 
 - 环境再次重置后 `npm ci` + `npm run build` 全绿；零改 src，未重跑全量 vitest（水位沿用：19484 绿 + N-105 的 5 红）。

@@ -252,6 +252,7 @@ describe("档B R1 · 地鼠嘭嘭 · 360px 窄屏", () => {
   it("C-5 矮屏与平板横屏按余高钳棋盘宽", () => {
     expect(CSS).toContain("max-width: min(100%, calc(100dvh - 240px))");
     expect(CSS).toContain("@media (min-width: 700px) and (max-height: 840px)");
+    expect(CSS).toContain("max-width: min(100%, calc(100dvh - 320px))");
   });
 });
 

@@ -13,6 +13,7 @@ describe("N-4 hero-cards 手牌行配方 E", () => {
 
   it("U-15 840 档同样钉手牌与出牌行", () => {
     expect(HC_CSS).toContain("@media (max-height:840px)");
+    expect(HC_CSS).toContain("@media (max-height:900px) and (min-height:841px)");
   });
 
   it("手牌换行规则仍在", () => {

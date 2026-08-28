@@ -159,8 +159,9 @@ const CSS = `
 @media (max-height: 500px) {
   .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
 }
+/* 1024×768 实测 240 预算仍让第三排切出舞台 58px;500 档 240 原文不动 */
 @media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
-  .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
+  .mp-board { max-width: min(100%, calc(100dvh - 320px)); margin: 0 auto; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mp-hole .mp-face { animation: none; }

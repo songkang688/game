@@ -235,6 +235,18 @@ export const HC_CSS = `
     background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
   }
 }
+/* 390×844 高>840,上条不命中;舞台 overflow 裁切手牌。不拷 500 的 log 限高 */
+@media (max-height:900px) and (min-height:841px){
+  .hc-wrap{height:100%;max-height:100%;min-height:0;overflow-y:auto;display:flex;flex-direction:column;box-sizing:border-box;}
+  .hc-hand{
+    position:sticky;bottom:52px;z-index:5;margin:0;padding:8px 4px 6px;
+    background:linear-gradient(180deg, rgba(255,248,242,.35), #FFF8F2 40%);
+  }
+  .hc-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:0;padding:6px 4px 4px;
+    background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
+  }
+}
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
   .hc-petal{display:none;}
