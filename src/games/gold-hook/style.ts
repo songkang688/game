@@ -137,6 +137,15 @@ export const CSS = `
   .gdh-home .gdh-card-name{font-size:18px;}
   .gdh-home .gdh-card-sub{font-size:13px;}
 }
+@media (min-width:700px) and (max-width:899px) and (min-height:700px){
+  .gdh-home{min-height:calc(100dvh - 180px);justify-content:center;gap:14px;}
+  .gdh-home .gdh-cards{gap:14px;}
+  .gdh-home .gdh-card{min-width:180px;max-width:240px;padding:16px 18px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .gdh-ctrl{position:sticky;bottom:0;z-index:3;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,251,244,0),#FFFBF4 40%);}
+}
 
 @media (max-width:420px){
   /* 窄屏上按钮把文字收起来只留图标,一行才塞得下,但热区一格都不缩 */

@@ -290,7 +290,7 @@ export const CSS = `
   .pcp-tip{max-height:1.2em;overflow:hidden;margin-top:2px;}
 }
 /* U-20:平板横屏键排不命中 500 档,同款 sticky 扩到 840 */
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .pcp-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
     background:linear-gradient(180deg,rgba(255,245,250,0),#FFF5FA 16px);padding-top:4px;}
 }

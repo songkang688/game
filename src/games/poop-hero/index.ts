@@ -239,6 +239,11 @@ export const PH_CSS = `
   .ph-pads[data-players="2"]{--k:44px;}
   .ph-tip{margin-top:4px;font-size:11px;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .ph-pads{position:sticky;bottom:0;z-index:5;margin-top:4px;--k:44px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .ph-pads[data-players="2"]{--k:44px;}
+}
 
 /* ---- 1.2 新增(一律 pph- 前缀)---- */
 .pph-chip-sort{background:#EAF3FF;color:#3F72A8;}

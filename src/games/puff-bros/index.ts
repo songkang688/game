@@ -289,7 +289,7 @@ const CSS = `
   .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;}
   .pfb-tip{grid-column:1/-1;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .pfb-pads{position:sticky;bottom:0;z-index:4;padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }

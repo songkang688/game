@@ -192,7 +192,7 @@ const CSS = `
   }
   .fk-pick-versus .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .fk-pick-train .fk-dummy-go,.fk-pick-versus .fk-versus-go{
     position:sticky;top:0;z-index:5;background:#fffdff;padding:6px 0;margin-bottom:8px;
   }
@@ -299,6 +299,16 @@ const CSS = `
   .fk-train-shell .fk-train-modes{
     position:sticky;top:0;z-index:4;background:#fffdff;padding:4px 0;
   }
+}
+@media (max-height:840px) and (min-height:641px){
+  .fk-train-shell .fk-pads{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;
+    background:linear-gradient(180deg,rgba(255,253,255,0),#fffdff 12px);
+    padding:8px 0 4px;
+  }
+  .fk-tower-hero:not(.fk-tower-open) .fk-grid,
+  .fk-tower-hero:not(.fk-tower-open) .fk-pick-t{display:none;}
+  .fk-tower-hero .fk-tower-compact{display:flex;}
 }
 .fk-live b{color:#c8497f;}
 .fk-hidden{display:none !important;}
