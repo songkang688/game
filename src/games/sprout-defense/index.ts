@@ -118,7 +118,9 @@ import {
   HorizonVariant,
 } from "./art";
 import { getLevelExtras } from "../../ui/level188Contract";
+import { isRootOpen } from "../../ui/root12Contract";
 import { save } from "../../engine/save";
+import { fitLineWith, mapNodePoints, unlockedWithRoot } from "./mapFit";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -706,7 +708,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
-          if (isThemeUnlocked(progress, c.idx)) {
+          if (themeOpenFor(c.idx)) {
             api.play("tap");
             chapterIdx = c.idx;
             phase = "map";
@@ -1436,7 +1438,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       const row = Math.floor(i / cols);
       const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
       themeCards.push({ idx: i, rect });
-      const unlocked = isThemeUnlocked(progress, i);
+      const unlocked = themeOpenFor(i);
       const cleared = themeCleared(progress, i);
       ctx.fillStyle = unlocked ? (st.dark ? st.laneB : st.laneA) : "#e8e8ee";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
@@ -1451,10 +1453,13 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       ctx.textBaseline = "middle";
       ctx.fillStyle = unlocked ? (st.dark ? "#fff" : st.accent) : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
-      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      // 390px 手机两列卡只有 150px 宽:标题 / 简介量宽截断,不再捅进邻卡(1.3 UX 走查修复)
+      const measure = (s: string): number => ctx.measureText(s).width;
+      const titleX = rect.x + 10 + ch * 0.42;
+      ctx.fillText(fitLineWith(measure, `第${i + 1}章 ${st.name}`, rect.x + rect.w - 8 - titleX), titleX, rect.y + ch * 0.3);
       ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? (st.dark ? "#e0e0f0" : "#5a5a6e") : "#a8a8b4";
-      ctx.fillText(unlocked ? st.blurb : "通关上一章解锁", rect.x + 10, rect.y + ch * 0.6);
+      ctx.fillText(fitLineWith(measure, unlocked ? st.blurb : "通关上一章解锁", rect.w - 20), rect.x + 10, rect.y + ch * 0.6);
       if (unlocked) {
         const sr = Math.min(6, ch * 0.09);
         const before = `${cleared}/${themeSize(i)} 关 · `;
@@ -1535,21 +1540,10 @@ export function mount(api: GameAPI): SproutDefenseHandle {
     mapNodes.length = 0;
     const count = themeSize(chapterIdx);
     const base = themeOffset(chapterIdx);
-    // 1.1 长章节(22/23 关)一行放 5 个,行数不至于太多
-    const cols = count > 12 ? 5 : 4;
-    const rows = Math.ceil(count / cols);
-    const mx0 = w * 0.12;
-    const mx1 = w * 0.88;
-    const my0 = 96;
-    const my1 = h - 40;
-    const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < count; i++) {
-      const row = Math.floor(i / cols);
-      const colRaw = i % cols;
-      const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: base + i, x, y, r: nr });
+    // 排布公式在 mapFit.mapNodePoints 里(行距钳制居中,1.3 UX 走查修复),
+    // runtime/art 测试也用它反推点击坐标,画与点永远对得上
+    for (const [i, p] of mapNodePoints(w, h, count).entries()) {
+      mapNodes.push({ idx: base + i, x: p.x, y: p.y, r: p.r });
     }
     // 连线改小叶片路径点:一片片叶子沿路排开,方向顺着路走
     for (let i = 0; i + 1 < mapNodes.length; i++) {
@@ -2417,7 +2411,13 @@ export function mount(api: GameAPI): SproutDefenseHandle {
   wrap.appendChild(skipBtn);
 
   function unlockedFor(idx: number): boolean {
-    return isLevelUnlocked(progress, idx) || skipped.has(idx - 1);
+    // 管理员权限(kangkang 密码)开着时全关可进;关着/过期回落到星级/跳关解锁
+    return unlockedWithRoot(isRootOpen(), isLevelUnlocked(progress, idx) || skipped.has(idx - 1));
+  }
+
+  /** 章节口径与关卡一致:root 开则全开 */
+  function themeOpenFor(ci: number): boolean {
+    return unlockedWithRoot(isRootOpen(), isThemeUnlocked(progress, ci));
   }
 
   canvas.addEventListener("pointerdown", onPointerDown);

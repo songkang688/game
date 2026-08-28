@@ -119,6 +119,8 @@ export const SR_CSS = `
 .sr-msg{text-align:center;min-height:20px;color:#3f7a52;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .sr-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会把浏览器自带的 [hidden]{display:none} 顶掉,进关收条全靠这一句 */
+.sr-modebar[hidden]{display:none;}
 .sr-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f7a52;text-align:center;overflow-wrap:anywhere;}
 .sr-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#6fc48b,#4f9e6b);box-shadow:0 4px 0 #3d7d54;}
@@ -1286,7 +1288,26 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 进关先把模式条与皮肤架收起来并把战场滚到眼前:手机上选关格子在页面
+      // 下半段,不收的话开局画面还停在顶上的模式按钮那里,孩子以为没反应
+      // (1.3 UX 走查修复;回地图时 destroy 里再放出来)
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        skinHost.hidden = true;
+        try {
+          stage.scrollIntoView?.({ block: "start" });
+        } catch {
+          // 老浏览器不支持 options 就算了,不影响开局
+        }
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            bar.hidden = false;
+            skinHost.hidden = false;
+          }
+        };
+      },
       mapHint: "只有头碰到别人的身体才会先去休息,自己的身体永远安全。",
       grandMessage: "188 关全部拿下,长蛇杯冠军就是你！",
       guideTitle: "长蛇争霸 · 原野笔记"

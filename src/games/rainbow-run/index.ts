@@ -235,6 +235,8 @@ import { touchArea } from "./touch";
 import type { Rect } from "./touch";
 import { save } from "../../engine/save";
 import { getLevelExtras } from "../../ui/level188Contract";
+import { isRootOpen } from "../../ui/root12Contract";
+import { mapRowYs, unlockedWithRoot } from "./mapFit";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -479,7 +481,9 @@ export function mount(api: GameAPI): RainbowRunHandle {
   const progress = loadProgress();
   /** 家长授权跳过的关(0 基);跳过的关星级仍是 0,但下一关照样解锁 */
   let skips = loadSkips();
-  const levelUnlocked = (idx: number): boolean => isUnlockedWith(progress, skips, idx);
+  // 管理员权限(kangkang 密码)开着时全关可进;关着/过期回落到星级/跳关解锁
+  const levelUnlocked = (idx: number): boolean =>
+    unlockedWithRoot(isRootOpen(), isUnlockedWith(progress, skips, idx));
   const themeUnlocked = (ci: number): boolean => levelUnlocked(themeOffset(ci));
 
   // ---- 局状态 ----
@@ -2281,12 +2285,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
     const my0 = 96;
     const my1 = h - 40;
     const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    // 行距夹上限再整块居中:11 关 3 行的世界不再被摊满整个画布(1.3 UX 走查修复)
+    const rowYs = mapRowYs(rows, my0, my1, Math.max(nr * 3.2, 84));
     for (let i = 0; i < size; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
       const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
+      const y = rowYs[row];
       mapNodes.push({ idx: base + i, x, y, r: nr });
     }
     ctx.strokeStyle = "rgba(255,255,255,0.65)";

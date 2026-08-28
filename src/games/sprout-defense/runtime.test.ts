@@ -11,7 +11,8 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { registerLevelExtras, resetLevelExtras } from "../../ui/level188Contract";
-import { LEVELS, PROGRESS_KEY, plantsUnlockedAt, serializeProgress } from "./logic";
+import { LEVELS, PROGRESS_KEY, plantsUnlockedAt, serializeProgress, themeSize } from "./logic";
+import { mapNodePoints } from "./mapFit";
 import { CARD_H, cardStripLayout, fieldMetrics } from "./sprout12";
 
 type Handler = (e: unknown) => void;
@@ -300,6 +301,12 @@ function cellPoint(col: number, lane: number): [number, number] {
   return [m.ox + (col + 0.5) * m.cw, m.oy + (lane + 0.5) * m.ch];
 }
 
+/** 第一章地图上第 1 关节点的中心:和 drawMap 共用 mapNodePoints,行距钳制后位置变了也不怕 */
+function firstNodePoint(): [number, number] {
+  const p = mapNodePoints(VIEW_W, VIEW_H, themeSize(0))[0];
+  return [p.x, p.y];
+}
+
 describe("sprout-defense 1.2 · 主链路", () => {
   it("首页 → 花园 → 关卡 → 选苗种植:一路点下来种得下苗", async () => {
     const h = install();
@@ -311,7 +318,7 @@ describe("sprout-defense 1.2 · 主链路", () => {
     // 首页选第一章(卡片在左上角),再点地图上的第一关
     canvas.tap(60, 100);
     h.flush(1);
-    canvas.tap(44, 96);
+    canvas.tap(...firstNodePoint());
     h.flush(1);
     // 开场面板点一下就开打
     canvas.tap(VIEW_W / 2, VIEW_H / 2);
@@ -338,7 +345,7 @@ describe("sprout-defense 1.2 · 主链路", () => {
     const canvas = h.canvas();
     canvas.tap(60, 100);
     h.flush(1);
-    canvas.tap(44, 96);
+    canvas.tap(...firstNodePoint());
     h.flush(1);
     canvas.tap(VIEW_W / 2, VIEW_H / 2);
     // 一株不种,让第一波直接推到家:60 秒足够

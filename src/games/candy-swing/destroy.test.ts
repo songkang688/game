@@ -81,6 +81,26 @@ describe("糖果秋千 · 1.2 destroy 归零", () => {
     game.destroy();
   });
 
+  // 1.3 UX 走查:平板横屏地图页放宽靠 cs-view-map 这个类,进关必须摘掉,
+  // 不然 3:4 的画布会被拉到 720px 宽、竖着装不下
+  it("地图页带 cs-view-map,进关摘掉,回选关再挂回来", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+
+    // 桩里 className 直赋值不进 classes 集合,所以从 cs-map 往上摸到 wrap、断言字符串
+    const wrap = findOne(h.root, "cs-map")?.parent;
+    expect(wrap, "cs-map 外面该套着 wrap").not.toBeNull();
+    expect(wrap!.className, "地图页该带宽屏放宽类").toContain("cs-view-map");
+    openFirstLevel(h);
+    expect(wrap!.className, "进关后放宽类没摘掉").not.toContain("cs-view-map");
+    findOne(h.root, "cs-back")?.fire("click");
+    h.flush(2);
+    expect(wrap!.className, "回选关后放宽类没挂回来").toContain("cs-view-map");
+
+    game.destroy();
+  });
+
   it("刚挂载就 destroy:rAF、window 监听、节点全部归零", async () => {
     const h = install();
     harness = h;

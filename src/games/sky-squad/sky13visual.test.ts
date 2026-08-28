@@ -382,8 +382,11 @@ describe("sky-squad 1.3 视觉 · 运行时", () => {
     expect(mod.CSS).toContain("border-radius:12px");
     expect(mod.CSS).toContain("rgba(255,255,255,.72)");
     expect(mod.CSS).toContain("1.5px solid");
-    // 1.2 的两条底线顺手复核:HUD 不换行、字号 ≥ 14px
+    // 1.2 的两条底线顺手复核:宽屏 HUD 不换行、字号 ≥ 14px;
+    // 1.3 走查补一条:≤420px 手机上 HUD 与模式栏换行,按钮不藏进横滑
     expect(mod.CSS).toContain("flex-wrap:nowrap");
+    expect(mod.CSS).toContain(".sks-hud{flex-wrap:wrap;overflow-x:visible;justify-content:center;}");
+    expect(mod.CSS).toContain(".sks-modebar{flex-wrap:wrap;overflow-x:visible;}");
     const sizes = [...mod.CSS.matchAll(/font-size:(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(14);
   });

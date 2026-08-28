@@ -99,6 +99,8 @@ import {
   twinStepScore,
 } from "./blade";
 import { save } from "../../engine/save";
+import { isRootOpen } from "../../ui/root12Contract";
+import { unlockedWithRoot } from "./mapFit";
 import { speak, stopSpeaking } from "../speech";
 // 1.3 视觉升级(第 20 步 B 档):专属剪影 / 切面果肉 / 舞台氛围 / 粒子,全是皮不动骨
 import {
@@ -337,6 +339,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   const progress = loadProgress();
   const best = loadBest();
+
+  // 管理员权限(kangkang 密码)开着时全回合可进;关着/过期回落到星级解锁
+  const themeOpen = (i: number): boolean => unlockedWithRoot(isRootOpen(), isThemeUnlocked(progress, i));
+  const roundOpen = (i: number): boolean => unlockedWithRoot(isRootOpen(), isLevelUnlocked(progress, i));
 
   // ---- 局状态 ----
   let mode: Mode = "classic";
@@ -1166,7 +1172,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
-          if (isThemeUnlocked(progress, c.idx)) {
+          if (themeOpen(c.idx)) {
             api.play("tap");
             chapterIdx = c.idx;
             phase = "map";
@@ -1186,7 +1192,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const n of mapNodes) {
         if (Math.hypot(x - n.x, y - n.y) <= n.r + 8) {
-          if (isLevelUnlocked(progress, n.idx)) {
+          if (roundOpen(n.idx)) {
             api.play("tap");
             roundIdx = n.idx;
             resetRound();
@@ -2448,7 +2454,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const row = Math.floor(i / cols);
       const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
       themeCards.push({ idx: i, rect });
-      const unlocked = isThemeUnlocked(progress, i);
+      const unlocked = themeOpen(i);
       const cleared = themeCleared(progress, i);
       ctx.fillStyle = unlocked ? st.bgTop : "#e8e8ee";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
@@ -2463,7 +2469,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
-      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      // 标题也走 fitLine:390px 两列卡里「第10章 回旋果谷」会捅进邻卡(1.3 UX 走查修复)
+      const titleX = rect.x + 10 + ch * 0.42;
+      ctx.fillText(fitLine(`第${i + 1}章 ${st.name}`, rect.x + rect.w - 8 - titleX), titleX, rect.y + ch * 0.3);
       // blurb 12px 封顶提为 14px 地板(1.2 遗留清零),配套 fitLine 测宽截断:
       // 360px 双列卡 cw≈153px 装不下整句,截到卡内宽并补省略号,不再溢出压邻卡
       ctx.font = `${Math.max(14, Math.round(ch * 0.16))}px sans-serif`;
@@ -2530,7 +2538,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.setLineDash([]);
     for (const n of mapNodes) {
       const def = ROUNDS[n.idx];
-      const unlocked = isLevelUnlocked(progress, n.idx);
+      const unlocked = roundOpen(n.idx);
       const got = progress[n.idx] ?? 0;
       const isFinal = n.idx - base === size - 1;
       const r = isFinal ? n.r * 1.25 : n.r;

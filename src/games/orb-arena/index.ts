@@ -104,6 +104,8 @@ export const OA_CSS = `
 .oa-msg{text-align:center;min-height:20px;color:#6b53a8;font-weight:800;margin-top:6px;font-size:16px;line-height:1.45;
   overflow-wrap:anywhere;}
 .oa-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会把浏览器自带的 [hidden]{display:none} 顶掉,进关收条全靠这一句 */
+.oa-modebar[hidden]{display:none;}
 .oa-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#6b53a8;text-align:center;overflow-wrap:anywhere;}
 .oa-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#9b7ede,#7b5cc4);box-shadow:0 4px 0 #62479f;}
@@ -1143,7 +1145,23 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 进关先收模式条并把竞技场滚到眼前:手机上开局画面不再停在顶上的
+      // 模式按钮那里(1.3 UX 走查修复;回地图时 destroy 里再放出来)
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        try {
+          stage.scrollIntoView?.({ block: "start" });
+        } catch {
+          // 老浏览器不支持 options 就算了,不影响开局
+        }
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "越大越慢:追不上就先回头把彩豆捡干净。",
       grandMessage: "188 关全部拿下,圆圆杯冠军就是你！",
       guideTitle: "圆圆大作战 · 竞技场笔记"

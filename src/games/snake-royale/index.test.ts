@@ -232,6 +232,30 @@ describe("整款游戏挂载", () => {
     expect(dom.globalListenerCount()).toBe(before);
   });
 
+  // 1.3 UX 走查:手机上开局画面停在顶部模式条那里,像没反应。
+  // 模式条是 display:flex,浏览器自带的 [hidden]{display:none} 会被它顶掉,
+  // CSS 里必须自己补一条,不然 hidden 属性设了也白设
+  it("模式条的 [hidden] 在 CSS 里自己压回 display:none", () => {
+    expect(SR_CSS).toContain(".sr-modebar[hidden]{display:none;}");
+  });
+
+  it("进关先收模式条与皮肤架,回选关再放出来", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const handle = mount(api);
+    const bar = root.byClass("sr-modebar")[0];
+    // 皮肤条被收起的是它外面那层宿主 div,不是 .sr-skins 本身
+    const skinHost = root.byClass("sr-skins")[0].parent!;
+    expect(bar.hidden).not.toBe(true);
+    root.byClass("l99-node")[0].fire("click");
+    expect(bar.hidden).toBe(true);
+    expect(skinHost.hidden).toBe(true);
+    root.byClass("l99-back")[0].fire("click");
+    expect(bar.hidden).toBe(false);
+    expect(skinHost.hidden).toBe(false);
+    handle.destroy();
+  });
+
   it("换皮肤只写自家那一个 key,不碰平台存档", () => {
     const root = new FakeEl("div");
     const { api } = fakeApi(root);

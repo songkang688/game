@@ -25,7 +25,8 @@ import {
   type BugArt,
   type PlantArtOpts,
 } from "./art";
-import { BUG_INFO, BugKind, PLANT_KINDS } from "./logic";
+import { BUG_INFO, BugKind, PLANT_KINDS, themeSize } from "./logic";
+import { mapNodePoints } from "./mapFit";
 
 /* ---------------- 录制型 2D context ---------------- */
 
@@ -598,10 +599,12 @@ describe("1.3 整局挂载:主页/地图/战场/结算的 emoji 清零", () => {
     const canvas = findCanvas(h.root)!;
     const ctx = canvas.getContext("2d")!;
 
-    // 主页 → 第一章 → 第一关 → 开打(坐标与 runtime.test 同一套版面)
+    // 主页 → 第一章 → 第一关 → 开打(坐标与 runtime.test 同一套版面,
+    // 地图节点用 mapNodePoints 反推,别写死行距钳制前的老坐标)
     canvas.tap(60, 100);
     h.flush(2);
-    canvas.tap(44, 96);
+    const node1 = mapNodePoints(360, 720, themeSize(0))[0];
+    canvas.tap(node1.x, node1.y);
     h.flush(2);
     canvas.tap(180, 360);
     h.flush(240);

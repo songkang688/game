@@ -148,6 +148,8 @@ import {
 } from "./art";
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
+import { isRootOpen } from "../../ui/root12Contract";
+import { fitLineWith, mapRowYs, unlockedWithRoot } from "./mapFit";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -343,6 +345,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 战役进度 ----
   const progress = loadProgress();
+
+  // 管理员权限(kangkang 密码)开着时全关可进;关着/过期回落到星级解锁
+  const themeOpen = (i: number): boolean => unlockedWithRoot(isRootOpen(), isThemeUnlocked(progress, i));
+  const levelOpen = (i: number): boolean => unlockedWithRoot(isRootOpen(), isLevelUnlocked(progress, i));
 
   // ---- 局状态 ----
   let levelIdx = 0;
@@ -729,7 +735,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
-          if (isThemeUnlocked(progress, c.idx)) {
+          if (themeOpen(c.idx)) {
             api.play("tap");
             chapterIdx = c.idx;
             phase = "map";
@@ -749,7 +755,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const n of mapNodes) {
         if (Math.hypot(x - n.x, y - n.y) <= n.r + 6) {
-          if (isLevelUnlocked(progress, n.idx)) {
+          if (levelOpen(n.idx)) {
             api.play("tap");
             loadLevel(n.idx);
           } else {
@@ -1586,7 +1592,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const row = Math.floor(i / cols);
       const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
       themeCards.push({ idx: i, rect });
-      const unlocked = isThemeUnlocked(progress, i);
+      const unlocked = themeOpen(i);
       const cleared = themeCleared(progress, i);
       ctx.fillStyle = unlocked ? st.bgA : "#e8e8ee";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
@@ -1606,17 +1612,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
-      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      // 390px 手机是两列卡,一张卡 150px 上下:标题 / 简介 / 进度全部先量宽,
+      // 截掉的补省略号,不再横着捅进邻卡(1.3 UX 走查修复)
+      const measure = (s: string): number => ctx.measureText(s).width;
+      const titleX = rect.x + 10 + ch * 0.42;
+      ctx.fillText(fitLineWith(measure, `第${i + 1}章 ${st.name}`, rect.x + rect.w - 8 - titleX), titleX, rect.y + ch * 0.3);
       ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
-      ctx.fillText(unlocked ? st.blurb : "通关上一章解锁", rect.x + 10, rect.y + ch * 0.6);
+      const bodyW = rect.w - 20;
+      ctx.fillText(fitLineWith(measure, unlocked ? st.blurb : "通关上一章解锁", bodyW), rect.x + 10, rect.y + ch * 0.6);
       if (unlocked) {
         // 「x/y 关 · ★n/m」:星星用绘制的金星
         const leftTxt = `${cleared}/${themeSize(i)} 关 · `;
         ctx.fillText(leftTxt, rect.x + 10, rect.y + ch * 0.82);
         const lw2 = ctx.measureText(leftTxt).width;
         drawGoldStar(ctx, rect.x + 10 + lw2 + 5, rect.y + ch * 0.82, 5, true);
-        ctx.fillText(`${themeStars(progress, i)}/${themeSize(i) * 3}`, rect.x + 10 + lw2 + 12, rect.y + ch * 0.82);
+        ctx.fillText(
+          fitLineWith(measure, `${themeStars(progress, i)}/${themeSize(i) * 3}`, Math.max(0, bodyW - lw2 - 12)),
+          rect.x + 10 + lw2 + 12,
+          rect.y + ch * 0.82
+        );
       }
     }
   }
@@ -1660,12 +1675,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const my0 = 96;
     const my1 = h - 40;
     const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    // 行距夹上限再整块居中:11 关 3 行的章节不再被摊满整个画布(1.3 UX 走查修复)
+    const rowYs = mapRowYs(rows, my0, my1, Math.max(nr * 3.2, 84));
     for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
       const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
+      const y = rowYs[row];
       mapNodes.push({ idx: base + i, x, y, r: nr });
     }
     // 连线:1.3 从虚线改成交替左右脚的小脚印路径
@@ -1674,7 +1691,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const decor = NODE_DECOR[THEME_ORDER[chapterIdx]];
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const unlocked = isLevelUnlocked(progress, n.idx);
+      const unlocked = levelOpen(n.idx);
       const got = progress[n.idx] ?? 0;
       const isBoss = def.feature.includes("BOSS");
       const r = isBoss ? n.r * 1.25 : n.r;
