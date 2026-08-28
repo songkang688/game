@@ -245,7 +245,7 @@ export const MJ_CSS = `
   .mj-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
   .mj-top{margin-bottom:4px;flex:0 0 auto;}
-  .mj-goal{flex:0 0 auto;font-size:14px;line-height:1.3;max-height:1.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mj-goal{flex:0 0 auto;line-height:1.3;max-height:1.3em;overflow:hidden;}
   .mj-board{flex:1 1 auto;min-height:0;overflow:hidden;gap:4px;padding:4px;border-width:4px;}
   .mj-river{min-height:28px;max-height:48px;overflow:auto;}
   .mj-foe{min-height:22px;}
