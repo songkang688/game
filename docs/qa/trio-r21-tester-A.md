@@ -25,6 +25,7 @@
 ## 测试
 
 增量：`src/games/level99.r21.test.ts`、`rootUnlock.test.ts` N-117 span 摘锁。
+本地 `npx vitest run`：**1202 files / 19513 tests** 全绿（2 skipped）；`npm run build` 绿。相对 playbook 参考水位 1193/19489 只增不减。
 
 ## 未能点按
 
