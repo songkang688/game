@@ -13,6 +13,7 @@ describe("N-39 蓝本地图聚焦当前关", () => {
     expect(SRC).toMatch(/\n  showMap\(true\);\n\n  return \{/);
     expect(SRC).toContain('cur.scrollIntoView?.({ block: "center" })');
     expect(SRC).toContain('grid.querySelector(".l99-node-cur")');
+    expect(SRC).not.toMatch(/querySelector\("\.l99-node-cur"\)[\s\S]{0,80}instanceof HTMLElement/);
   });
 
   it("过关 / 失败 / 关内选关 三处回地图都传 true", () => {
