@@ -22,11 +22,12 @@ describe("adventure-king 无尽古堡矮横屏双栏(N-30)", () => {
   });
 
   it("CSS:max-height:500px 档把 .advk-mid 切成横向双栏", () => {
-    const media = SRC.match(/@media \(max-height:500px\)\{([\s\S]*?)\n\}/);
-    expect(media, "缺 @media (max-height:500px) 档").toBeTruthy();
-    const body = media![1];
-    expect(body).toMatch(/\.advk-mid\{[^}]*flex-direction:row/);
-    expect(body).toMatch(/\.advk-side\{[^}]*display:grid/);
+    // N-16 之后走廊键排也有一个 max-height:500px 档,这里找的是含 .advk-mid 的古堡那块
+    const blocks = [...SRC.matchAll(/@media \(max-height:500px\)\{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+    const body = blocks.find((b) => b.includes(".advk-mid"));
+    expect(body, "缺含 .advk-mid 的 @media (max-height:500px) 档").toBeTruthy();
+    expect(body!).toMatch(/\.advk-mid\{[^}]*flex-direction:row/);
+    expect(body!).toMatch(/\.advk-side\{[^}]*display:grid/);
   });
 
   it("CSS:矮横屏房间格按可视余量钳宽(clamp 上限仍是原 420px)", () => {
