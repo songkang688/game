@@ -211,7 +211,9 @@ const CSS = `
   font-size:13px;font-weight:700;color:#5b4b82;line-height:1.75;margin-bottom:10px;}
 .bvp-log p{margin:0 0 3px;}
 .bvp-log p:last-child{color:#3f2f66;}
-.bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:sticky;bottom:0;z-index:6;
+  padding:8px 0 4px;background:linear-gradient(180deg,#f6efe4f0,#f6efe4);
+  box-shadow:0 -10px 16px rgba(80,50,100,.12);}
 @media(min-width:480px){.bvp-acts{grid-template-columns:1fr 1fr 1fr;}}
 .bvp-act{border:none;border-radius:14px;padding:11px 8px;font-family:inherit;cursor:pointer;text-align:center;
   background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);position:relative;overflow:hidden;
@@ -314,6 +316,9 @@ const CSS = `
 .bvp-conf-2{background:#f4a9c8;}
 @keyframes bvpConf{0%{opacity:0;transform:translateY(0) rotate(0deg);}15%{opacity:1;}
   100%{opacity:0;transform:translateY(72vh) rotate(300deg);}}
+@media (max-height:500px){
+  .bvp-log{max-height:72px;min-height:40px;}
+}
 @media (prefers-reduced-motion:reduce){
   .bvp-hpfill,.bvp-shfill,.bvp-fighter,.bvp-row,.bvp-act,.bvp-mz::after{transition:none;}
   .bvp-root{--bvp-t-fog:0ms;--bvp-t-float:0ms;--bvp-t-shake:0ms;--bvp-t-turn:0ms;}

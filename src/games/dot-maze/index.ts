@@ -88,14 +88,18 @@ const CSS = `
   box-shadow:0 2px 6px rgba(180,160,90,.25);white-space:nowrap;}
 .dmz-canvas{display:block;width:100%;height:auto;border-radius:14px;background:#241f3a;touch-action:none;}
 .dmz-note{text-align:center;min-height:20px;font-size:14px;font-weight:700;color:#7a6aa0;margin-top:8px;}
-.dmz-pad{display:grid;grid-template-columns:repeat(3,minmax(48px,1fr));gap:6px;justify-content:center;margin:10px auto 0;max-width:220px;}
+.dmz-playfield{display:flex;flex-direction:column;min-width:0;}
+.dmz-side{min-width:0;}
+.dmz-pad{display:grid;grid-template-columns:repeat(3,minmax(48px,1fr));gap:6px;justify-content:center;margin:10px auto 0;max-width:220px;
+  position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,#fffbeaf2,#f4f0fff8);padding:6px 0 2px;}
 .dmz-key{border:none;border-radius:14px;min-height:48px;font-size:20px;font-weight:900;color:#6b5a90;cursor:pointer;
   background:#ffffffd9;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;}
 .dmz-key:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .dmz-key-blank{visibility:hidden;}
 .dmz-pause{background:#fff3d6;color:#8a6a2f;font-size:17px;}
 /* 双人局:朵朵、星星各一套方向键并排,没有键盘的手机/平板也能俩人一起玩(1.3 UX 走查修复) */
-.dmz-pads{display:flex;gap:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin-top:10px;}
+.dmz-pads{display:flex;gap:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin-top:10px;
+  position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,#fffbeaf2,#f4f0fff8);padding:6px 0 2px;}
 .dmz-pads .dmz-pad{margin:0;}
 .dmz-pad-col{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;}
 .dmz-pad-t{font-size:14px;font-weight:900;color:#8b7bb0;}
@@ -130,6 +134,12 @@ const CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .dmz-key:active,.dmz-mode:active,.dmz-btn:active{transform:none;}
+}
+@media (max-height:500px) and (min-width:700px){
+  .dmz-playfield{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+  .dmz-pad,.dmz-pads{margin-top:0;position:static;background:transparent;padding:0;}
+  .dmz-pads{flex-direction:column;}
+  .dmz-note{margin-top:0;}
 }
 `;
 
@@ -228,9 +238,13 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       <span class="dmz-chip dmz-left">🫐 0</span>
       <span class="dmz-chip dmz-extra">${opts.label}</span>
     </div>
-    <canvas class="dmz-canvas"></canvas>
-    <div class="dmz-note"></div>
-    ${padSection}`;
+    <div class="dmz-playfield">
+      <canvas class="dmz-canvas"></canvas>
+      <div class="dmz-side">
+        <div class="dmz-note"></div>
+        ${padSection}
+      </div>
+    </div>`;
   host.appendChild(wrap);
 
   const canvas = wrap.querySelector(".dmz-canvas") as HTMLCanvasElement;

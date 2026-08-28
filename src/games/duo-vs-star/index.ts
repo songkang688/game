@@ -194,7 +194,8 @@ const CSS = `
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .dvs-back{border:none;border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
-  background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
+  background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;
+  min-height:40px;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
 .dvs-arena{border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
@@ -214,7 +215,8 @@ const CSS = `
 .dvs-card-foot .vg b{font-variant-numeric:tabular-nums;}
 .dvs-hint{text-align:center;font-size:12.5px;font-weight:700;color:#8a7aa6;padding:0 8px 8px;min-height:18px;}
 
-.dvs-pads{display:flex;justify-content:space-between;gap:8px;padding:0 8px 10px;}
+.dvs-pads{display:flex;justify-content:space-between;gap:8px;padding:0 8px 10px;
+  position:sticky;bottom:0;z-index:4;background:linear-gradient(180deg,#fff8fcf0,#ffffffea);}
 .dvs-pad{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 .dvs-pad button{border:none;border-radius:14px;min-width:46px;min-height:46px;font-size:18px;font-weight:900;
   font-family:inherit;background:#ffffffe6;color:#6b5a90;box-shadow:0 3px 0 rgba(120,90,160,.22);cursor:pointer;
@@ -265,6 +267,19 @@ const CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .dvs-meter i{transition:none;}
+}
+@media (max-height:500px) and (min-width:700px){
+  .dvs-arena{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;
+    grid-template-areas:"bar bar bar" "padl canvas padr" "cards cards cards" "hint hint hint";}
+  .dvs-bar{grid-area:bar;}
+  .dvs-canvas{grid-area:canvas;width:100%;}
+  .dvs-cards{grid-area:cards;}
+  .dvs-hint{grid-area:hint;}
+  .dvs-pads{display:contents;position:static;background:none;padding:0;}
+  .dvs-pad{flex-direction:column;max-width:52px;flex-wrap:nowrap;}
+  .dvs-pad:first-child{grid-area:padl;}
+  .dvs-pad:last-child{grid-area:padr;}
+  .dvs-pad:only-child{grid-area:padr;}
 }
 `;
 

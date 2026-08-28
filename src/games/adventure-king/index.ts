@@ -161,6 +161,7 @@ const CSS = `
 /* 1.2 探索层:无尽古堡的俯视房间(advk- 前缀,和上面的横版走廊分开) */
 .advk-room{display:grid;gap:2px;background:#e9dfcf;border-radius:14px;padding:6px;margin:0 auto;
   max-width:420px;width:100%;}
+.advk-playfield{display:flex;flex-direction:column;min-width:0;}
 .advk-cell{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;
   font-size:15px;line-height:1;background:#fffaf0;}
 .advk-cell svg{width:88%;height:88%;display:block;}
@@ -179,7 +180,8 @@ const CSS = `
   color:#6b4a2a;line-height:1.5;}
 .advk-hud span{background:rgba(255,255,255,.72);border:1.5px solid rgba(122,82,48,.28);border-radius:12px;
   padding:4px 10px;box-shadow:0 2px 5px rgba(170,140,110,.18);}
-.advk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.advk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;position:sticky;top:0;z-index:4;
+  padding:6px 0;background:linear-gradient(180deg,#f6efe8,#f6efe8f0);}
 .advk-tool{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);}
 .advk-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,110,.3);}
@@ -208,6 +210,10 @@ const CSS = `
 .advk-case-lock .advk-case-name{color:#a99e8c;}
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
+@media (max-height:500px) and (min-width:700px){
+  .advk-playfield{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+  .advk-pad2{margin-top:0;}
+}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
 ${touchUpliftCss([".ak-open"])}
 ${bodyFontUpliftCss([".ak-tip"])}
@@ -873,6 +879,12 @@ export function endlessLine(floor: number, best: number): string {
   return `这次下到第 ${floor} 层,最深纪录是第 ${best} 层。💗 剩一半就先绕开怪、找补给,再来一趟就能刷新它!`;
 }
 
+/** 古堡房间格显示边长上限(px)。生成格子数/钥匙判定不动,只钳 DOM 网格。 */
+export function castleBoardCapPx(availH: number, max = 420, min = 140): number {
+  if (!Number.isFinite(availH) || availH <= 0) return max;
+  return Math.max(min, Math.min(max, Math.floor(availH)));
+}
+
 // ---------------------------------------------------------------------------
 // 无尽遗迹
 // ---------------------------------------------------------------------------
@@ -1057,7 +1069,10 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   album.className = "advk-album";
   const pad = document.createElement("div");
   pad.className = "advk-pad2";
-  wrap.append(head, hud, board, mini, say, tools, pad, album);
+  const playfield = document.createElement("div");
+  playfield.className = "advk-playfield";
+  playfield.append(board, pad);
+  wrap.append(head, tools, hud, playfield, mini, say, album);
   host.appendChild(wrap);
 
   let rooms = 0;
@@ -1135,6 +1150,22 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
       `<span>${focus ? `${focus.emoji} ${focus.tip}` : "🚪 找到出口就进下一间"}</span>`;
   }
 
+  function fitCastleBoard(): void {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    let avail = Number.NaN;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        avail = node.clientHeight || node.getBoundingClientRect().height;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    const extras = (head.offsetHeight || 0) + (tools.offsetHeight || 0) + (hud.offsetHeight || 0) + 24;
+    const cap = castleBoardCapPx((Number.isFinite(avail) ? avail : 420) - extras);
+    board.style.maxWidth = `${cap}px`;
+    board.style.maxHeight = `${cap}px`;
+  }
+
   function renderBoard(): void {
     board.style.gridTemplateColumns = `repeat(${state.w},1fr)`;
     board.setAttribute("aria-label", `${current.template.name}:朵朵在房间里找出口,已探索 ${Math.round(exploredRatio(state) * 100)}%`);
@@ -1150,6 +1181,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
     }
     if (miniOpen) mini.textContent = miniMapRows(state).join("\n");
     renderHud();
+    fitCastleBoard();
   }
 
   function nextRoom(): void {
