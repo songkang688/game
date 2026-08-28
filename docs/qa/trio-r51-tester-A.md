@@ -21,3 +21,5 @@
 水果叠叠 `.fs-back` 已有 44，闸按文件排除钓鱼、仍扫叠叠。不改 `fishing-star` / `orb-arena`。
 
 闸：`src/games/lobbyBack.n205.test.ts`。
+
+N-215 大厅 `*-open` 见 `trio-r52-tester-A.md`。不回退本闸。
