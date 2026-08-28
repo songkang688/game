@@ -319,6 +319,8 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
       ${touchUpliftCss([".ba-btn", ".bba-mode", ".bba-swap"], { minWidth: true })}
       ${bodyFontUpliftCss([".ba-msg"])}
+      /* N-29 尾款:关内/无尽工具排(回地图/换弹/🔄)从 kit 的 40px 抬到 44px 热区线 */
+      .ba-btn, .bba-mode, .bba-swap { min-height: 44px; min-width: 44px; }
     </style>
     <div class="ba-top">
       <button class="ba-btn ba-back" type="button" title="回地图" aria-label="回地图">🗺️</button>

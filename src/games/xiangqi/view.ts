@@ -176,6 +176,15 @@ export const CSS = `
   .xq-wrap{max-width:248px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
   .xq-wrap{max-width:min(248px,52dvh);max-height:100%;overflow:hidden;}
+  /* N-95:自由对战设置屏在 248px 窄列里摞成一长条,「开始下棋」701 线下且 overflow:hidden 滚不到。
+     设置屏(带 .xq-panel 的 wrap)单独放宽成 2~3 栏、自己开卷轴,CTA sticky 钉在卷轴底;
+     对局中的棋盘 wrap 不带 .xq-panel,一条都不吃,残局学堂零触碰。 */
+  .xq-wrap:has(>.xq-panel){max-width:min(94vw,660px);max-height:calc(100dvh - 96px);overflow-y:auto;}
+  .xq-panel{gap:8px;padding:6px 2px;}
+  .xq-panel .xq-seg button{padding:8px 6px;min-height:44px;}
+  .xq-panel .xq-start{padding:10px;font-size:17px;}
+  .xq-panel>button.xq-start:first-of-type{position:sticky;bottom:0;z-index:3;
+    box-shadow:0 -8px 14px rgba(255,249,240,.95),0 5px 0 #E890B2;}
 }
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}

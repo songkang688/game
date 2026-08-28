@@ -146,6 +146,8 @@ const CSS = `
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
 .bc-bar[hidden],.bc-picks[hidden]{display:none;}
 .bc-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
+  /* N-102:模式入口 34px → 44px 热区线 */
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#e07aa8,#c8558a);box-shadow:0 4px 0 #a03f6d;}
 .bc-open:active{transform:translateY(2px);box-shadow:0 2px 0 #a03f6d;}
 .bc-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -153,6 +155,8 @@ const CSS = `
 .bc-open--en{background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
 .bc-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
 .bc-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
+  /* N-102:对手档位芯片 32px → 44px 热区线 */
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffe0;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.35);}
 .bc-pick[aria-pressed="true"]{background:linear-gradient(180deg,#e07aa8,#c8558a);color:#fff;box-shadow:0 3px 0 #a03f6d;}
 .bc-pick:active{transform:translateY(2px);}
@@ -178,6 +182,18 @@ const CSS = `
 }
 @media (max-height:500px) and (min-width:640px){
   .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
+  /* N-102:矮横屏画布 140×140 太小——提示/图例让位,双人摇杆列挪到场地两侧,
+     场地按「可用高 − HUD」放大(layout() 同步按侧栏布局取余量)。 */
+  .bc-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:8px;row-gap:4px;
+    grid-template-areas:"hud hud hud" "padl arena padr";}
+  .bc-hud{grid-area:hud;}
+  .bc-arena{grid-area:arena;justify-self:center;}
+  .bc-tip,.bpc-legend{display:none;}
+  .bc-pads{display:contents;position:static;background:none;}
+  .bc-padwrap:first-child{grid-area:padl;}
+  .bc-padwrap:last-child{grid-area:padr;}
+  .bc-padwrap:only-child{grid-area:padr;}
+  .bc-padwrap{flex-direction:column;gap:6px;}
 }
 @media (prefers-reduced-motion:reduce){
   .bc-btn:active,.bc-acts button:active,.bc-pick:active{transform:none;}
@@ -559,16 +575,26 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   let scale = 4;
 
   function layout(): void {
-    const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 700;
+    // N-102:矮横屏摇杆列在场地两侧(CSS grid),提示/图例隐藏——余量别再把它们扣一遍,
+    // 宽度给两条侧栏让位;场地按「可用高 − HUD」放大,不再缩成 140×140。
+    const sidePads = vh <= 500 && vw >= 640;
+    const avail = sidePads
+      ? Math.max(220, Math.min((host.clientWidth || 360) - 330, 720))
+      : Math.max(240, Math.min(host.clientWidth || 360, 720));
     // 场地上下压着标题栏、HUD、提示语和摇杆。矮屏按舞台剩余高度缩，不再猜 innerHeight-320。
-    const guessed = Math.max(200, (window.innerHeight || 700) - 320);
+    const guessed = Math.max(200, vh - 320);
     const stageH = Math.max(200, stagePlayRoom(host, { w: avail, h: guessed }).h);
-    const below = Math.max(
-      118,
-      (tip.offsetHeight || 0) + (pads.offsetHeight || 0) + (legend.offsetHeight || 0) + 10,
-    );
+    const below = sidePads
+      ? 10
+      : Math.max(118, (tip.offsetHeight || 0) + (pads.offsetHeight || 0) + (legend.offsetHeight || 0) + 10);
     const hudH = Math.max(36, hud.offsetHeight || 0);
-    const roomH = Math.max(140, stageH - hudH - below);
+    // N-102 附带修 1024×768 刹车切 17px:场地显示高再按「视口底 − 场地顶」的实测余量封顶,
+    // 模式头/标题条这些没进估算的杂项都被真实 top 吃进来了。量不到(测试桩)就不封。
+    const arenaTop = Math.round(arena.getBoundingClientRect?.()?.top ?? 0);
+    const visCap = arenaTop > 0 && vh > 0 ? vh - arenaTop - (sidePads ? 8 : below) : Infinity;
+    const roomH = Math.max(140, Math.min(stageH - hudH - below, visCap));
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);

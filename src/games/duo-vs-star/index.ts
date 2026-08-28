@@ -185,6 +185,8 @@ const CSS = `
 .dvs-keys b{color:#b0538c;}
 .dvs-pickrow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0 2px;}
 .dvs-pick{border:none;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:800;cursor:pointer;
+  /* N-94:角色/场地芯片 30px → 44px 热区线 */
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 2px 5px rgba(140,120,190,.2);}
 .dvs-pick.on{outline:3px solid #ff9ec4;color:#b0538c;}
 .dvs-picklabel{text-align:center;font-size:12.5px;font-weight:800;color:#8a7aa6;margin-top:8px;}
@@ -193,7 +195,8 @@ const CSS = `
   font-weight:900;color:#fff;cursor:pointer;font-family:inherit;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
-.dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:40px;font-size:13.5px;font-weight:900;cursor:pointer;
+.dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:13.5px;font-weight:900;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
@@ -272,12 +275,23 @@ const CSS = `
   }
   .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
   .dvs-canvas{grid-column:2;max-width:100%;}
+  /* N-101:上面那套 grid-row 键柱在 .l99-host(overflow:hidden)壳里整排 400~746 线下,
+     触屏两人没法打。改 fixed 钉视口底:两组各 7 键横排分居左右,44px 底线,
+     346×2=692 连 667 宽的横屏都装得下。battle.ts 状态机/键盘映射零触碰。 */
   .dvs-pads{
-    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
-    pointer-events:none;padding:0 2px 6px;background:transparent;
+    position:fixed;left:6px;right:6px;bottom:4px;z-index:25;grid-row:auto;grid-column:auto;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    pointer-events:none;padding:0;background:transparent;
   }
-  .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
-  .dvs-pad .dvs-padname{width:auto;}
+  .dvs-pad{pointer-events:auto;flex-direction:row;flex-wrap:nowrap;max-width:none;gap:3px;}
+  .dvs-pad button{min-width:44px;min-height:44px;font-size:16px;}
+  .dvs-pad .dvs-padname{display:none;}
+  .dvs-arena{padding-bottom:54px;}
+  /* N-94:选人屏唯一 CTA「开打 ▶」439 线下——钉视口底,菜单尾部让出高度 */
+  .dvs-menu{padding-bottom:62px;}
+  .dvs-menu .dvs-go{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:30;
+    width:min(480px,92vw);margin-top:0;box-shadow:0 3px 0 #8f2c5c,0 -8px 16px rgba(255,242,248,.9);}
+  .dvs-menu .dvs-go:active{transform:translateX(-50%) translateY(2px);}
 }
 `;
 

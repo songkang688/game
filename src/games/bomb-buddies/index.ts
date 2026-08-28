@@ -809,11 +809,16 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     cell = boardCellSize(board.w, board.h, avail, maxH);
     const cssW = cell * board.w;
     const cssH = cell * board.h;
+    // N-96:24px 格底线的 13 行棋盘(312px)比 915×412 的真实余量(约 220px)还高,
+    // 底排 63px 切出屏。真余量装不下时整块按比例缩「显示」——cell、坐标、判定全不动,
+    // 摇杆/键盘不走画布坐标,缩显示零副作用。量不到余量(测试桩)时 shrink=1 原样。
+    const room = roomForBoard(guessed);
+    const shrink = Number.isFinite(room) && room > 80 && cssH > room ? room / cssH : 1;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
-    canvas.style.width = `${cssW}px`;
-    canvas.style.height = `${cssH}px`;
+    canvas.style.width = `${Math.round(cssW * shrink)}px`;
+    canvas.style.height = `${Math.round(cssH * shrink)}px`;
     g?.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   layout();

@@ -155,6 +155,17 @@ const CSS = `
 .mp-over-t { font-size: 22px; font-weight: 900; color: #6F8C42; margin-bottom: 8px; }
 .mp-over-s { font-size: 15px; font-weight: 700; color: #8A7A3E; line-height: 1.6; margin-bottom: 14px; }
 @media (max-width: 380px) { .mp-board { gap: 12px; } .mp-badge { font-size: 14px; padding: 4px 8px; } }
+/* C-5:915×412 九洞 250~894(root×167 更差),洞径被 3 列全宽驱动撑到 207px。
+   矮横屏改两栏:徽章/算式/进度条挪左栏,九洞盘上顶,盘宽按「视口高 − 盘顶那摞」反推——
+   洞径 ≈ (盘宽 − 2×gap) ÷ 3 ≥ 44px。390×844 竖屏不吃这一档,谱面/判定零触碰。 */
+@media (max-height:500px) and (min-width:640px) {
+  .mp-wrap { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 10px; align-items: start; padding: 10px; }
+  .mp-wrap > :not(.mp-scene):not(.mp-board) { grid-column: 1; }
+  .mp-board { grid-column: 2; grid-row: 1 / span 6; gap: 8px; width: clamp(148px, calc(100dvh - 142px), 320px); }
+  .mp-hole { min-width: 44px; min-height: 44px; font-size: clamp(24px, 8dvh, 44px); }
+  .mp-top { margin-bottom: 6px; }
+  .mp-msg { text-align: left; }
+}
 @media (prefers-reduced-motion: reduce) {
   .mp-hole .mp-face { animation: none; }
   .mp-hole.mp-sink { transform: none; }
@@ -258,6 +269,24 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
   // 每个洞六层装饰(暗部→后沿土堆→地鼠层→装备层→前沿土堆→反馈层),
   // 全部 pointer-events:none;按钮本体就是热区,几何与 1.2 完全一致。
+  // C-5:矮横屏九洞盘的「盘顶那摞」(壳头 + 徽章 + 算式)高度随 root 直达工具行浮动,
+  // CSS 常量猜不准(root×167 更差)。按盘顶实测 top 反推盘宽:宽 = 视口高 − top − 8,
+  // 三行洞(min 44px)整盘进屏;竖屏/量不到 top(测试桩)时清空交回 CSS 档,谱面判定零触碰。
+  function fitBoard(): void {
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    if (!(vh > 0 && vh <= 500 && vw >= 640)) {
+      boardEl.style.width = "";
+      return;
+    }
+    const top = Math.round(boardEl.getBoundingClientRect?.()?.top ?? 0);
+    if (top <= 0) return;
+    boardEl.style.width = `${Math.max(148, Math.min(320, vh - top - 8))}px`;
+  }
+  fitBoard();
+  later(fitBoard, 60);
+  window.addEventListener("resize", fitBoard);
+
   const holeEls: HTMLButtonElement[] = [];
   const liftEls: HTMLElement[] = [];
   const gearEls: HTMLElement[] = [];
@@ -554,6 +583,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     destroy() {
       destroyed = true;
       ended = true;
+      window.removeEventListener("resize", fitBoard);
       bag.clearAll();
       wrap.remove();
     },

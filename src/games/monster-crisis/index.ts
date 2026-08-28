@@ -185,6 +185,16 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+/* N-106:双人合作双摇杆 370~462 / 甩弹 379~453 被排到 412 线下(裁切壳 overflow:hidden)。
+   矮横屏两组操控 fixed 钉视口左右下角:画布(154~360)两侧全是空地,盖不到战场;
+   摇杆判定走自身 rect,fixed 后照常。技能三卡 .mcr-cards 一条不动。 */
+@media (max-height:500px) and (min-width:640px){
+  .mcr-pads{position:fixed;left:12px;right:12px;bottom:8px;z-index:25;min-height:0;pointer-events:none;}
+  .mcr-pad{pointer-events:auto;}
+  .mcr-stick{width:84px;height:84px;}
+  .mcr-fire{width:64px;height:64px;font-size:24px;}
+  .mcr-tip{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .mcr-fire:active,.mcr-btn:active,.mcr-card:active,.mcr-back:active,.mcr-hudbtn:active{transform:none;}
 }

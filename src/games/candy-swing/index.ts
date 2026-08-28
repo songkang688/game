@@ -475,6 +475,13 @@ export function mount(api: GameApi): CandySwingHandle {
         .cs-wrap.cs-view-map .cs-grid { grid-template-columns: repeat(8, 1fr); }
         .cs-wrap.cs-view-map .cds-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
       }
+      /* N-29 尾款:915×412 关内画布 166~660 出屏 248(3:4 定比被 400px 宽驱动)。
+         矮横屏按余量钳「显示高」,宽度让 auto 保持长宽比居中;指针按 rect 换算,物理零触碰。 */
+      @media (max-height:500px) and (min-width:640px) {
+        .cs-canvas { width: auto; max-width: 100%; max-height: max(150px, calc(100dvh - 178px)); margin: 0 auto; }
+        .cs-wrap { padding: 8px 12px; }
+        .cs-msg { margin-top: 4px; min-height: 0; }
+      }
     </style>
     <div class="cs-map">
       <div class="cs-map-title">🍬 糖果秋千</div>

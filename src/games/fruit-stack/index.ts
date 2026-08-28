@@ -144,6 +144,18 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+/* N-107:双人同屏六键 .fs-key 522~566 整排被 .l99-host(overflow:hidden)排线下。
+   矮横屏键排 fixed 钉视口底(44px 底线),提示条让位,双盆画布在 layout() 里按实测余量让高。
+   合成判定/先赢局数零触碰。 */
+@media (max-height:500px) and (min-width:640px){
+  .fs-tip{display:none;}
+  .fs-wrap{padding-bottom:60px;}
+  /* 外层键排整条钉底;每座位的内层 .fs-pad 分组留在流里横排 */
+  .fs-wrap>.fs-pad{position:fixed;left:10px;right:10px;bottom:6px;z-index:25;
+    background:linear-gradient(180deg,rgba(255,244,248,0),rgba(255,244,248,.92) 10px,#fff4f8);
+    padding:4px 2px 2px;border-radius:0 0 14px 14px;}
+  .fs-wrap>.fs-pad .fs-pad{position:static;background:none;padding:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}
 }
@@ -879,7 +891,16 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
       92,
       (hud.offsetHeight || 0) + (tip.offsetHeight || 0) + (pad.offsetHeight || 0) + 12,
     );
-    const roomH = Math.max(140, stageH - chrome);
+    let roomH = Math.max(140, stageH - chrome);
+    // N-107:矮横屏键排 fixed 钉底(CSS 同名媒体档),果盆显示高按「键排顶 − 果盆顶」的
+    // 实测余量重钳,双盆让高、键排不再盖住果堆。物理世界与合成判定一个数不动。
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    if (vh > 0 && vh <= 500 && vw >= 640) {
+      const top = Math.round(bowlRow.getBoundingClientRect?.()?.top ?? 0);
+      const padBudget = 56;
+      if (top > 0) roomH = Math.max(110, Math.min(roomH, vh - padBudget - top - 34));
+    }
     const byH = (roomH / lv.box.h) * lv.box.w;
     const widthPx = Math.max(120, Math.min(per, byH));
     for (const b of bowls) b.layout(widthPx);

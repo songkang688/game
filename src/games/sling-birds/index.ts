@@ -249,6 +249,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       .slb-map-tip { text-align: center; color: #5E6880; font-weight: 700; font-size: 14px; margin-top: 12px; }
       .slb-crew { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
       .slb-crew span { background: #fff; border-radius: 12px; padding: 5px 9px; font-size: 12px; font-weight: 700; color: #56637F; box-shadow: 0 2px 5px rgba(120,160,220,.2); }
+      /* N-29 尾款:915×412「↺ 重来 / 🗺️ 选关」368~416 只差 4px——矮横屏这一档
+         按钮收到 44px 底线、行距/教练卡各收一口,整排回进 412。 */
+      @media (max-height:500px) and (min-width:640px) {
+        .slb-wrap { padding: 8px 12px; }
+        .slb-play { gap: 5px; }
+        .slb-btn { min-height: 44px; padding: 9px 20px; }
+        .slb-coach { padding: 5px 10px; }
+        .slb-say { width: 44px; height: 44px; }
+      }
     </style>
     <div class="slb-map">
       <div class="slb-map-head">

@@ -318,6 +318,13 @@ const CSS = `
   .hh-btns{position:sticky;bottom:0;z-index:5;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(246,242,255,.25),#f6f2ff 40%);}
   .hh-hidden{min-height:48px;}
+  /* N-98:对战/无尽壳里裁切祖先 .l99-host(overflow:hidden 668/334)令上面的 sticky 失效,
+     三键 422~466 线下。把 .hh-wrap 自己收成滚动容器,sticky 就有了正经的钉底面;
+     模式壳(.hh-mode)头上还有「回选关」一行,预算再让一档。牌序/规则/动画零触碰。 */
+  .hh-wrap{max-height:calc(100dvh - 88px);overflow-y:auto;}
+  .hh-mode .hh-wrap{max-height:calc(100dvh - 146px);}
+  /* 「就一张」钮原是 absolute 钉 wrap 右下,wrap 变滚动层后会跟内容跑,改钉视口 */
+  .hh-one{position:fixed;right:22px;bottom:64px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hh-fly{display:none;}

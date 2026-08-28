@@ -255,6 +255,14 @@ const CSS = `
   .iff-board{grid-column:1;min-width:0;}
   .iff-tip{grid-column:1;}
   .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
+  /* N-103:root×188 的双 pad「向下」行切 25(直达工具行把 pad 顶压到 276)——热区收到
+     44 底线不再降,名牌 17px 与行距各让一档:pad 列 3×44+2×2=136,276+136=412 贴线回屏,
+     再从 wrap 行距抠 2px 留余量。名牌只藏显示,键上 aria-label 带着英雄名,浅关同规格。 */
+  .iff-wrap{--iff-hit:44px;gap:4px;}
+  .iff-pad{gap:2px;}
+  .iff-padwrap{gap:0;}
+  .iff-padname{display:none;}
+  .iff-swap{min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .iff-btn:active,.iff-pad button:active,.iff-swap:active{transform:none;}
@@ -964,7 +972,16 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
   function layout(): void {
     const availW = Math.max(200, (stage.clientWidth || 340) - 8);
-    const budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
+    let budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
+    // N-103:矮横屏画布 bottom 不许越过视口(L1 切 59、root×188 连工具行一起切 103)。
+    // 预算再按「视口高 − 画布实际 top」封一刀——root 深关那行直达票工具行占掉的高度
+    // 会体现在真实 top 里,深关/浅关一个公式全兜住。世界格子与判定零触碰,矮了走摄像机跟随。
+    const vh = window.innerHeight || 0;
+    const vw = window.innerWidth || 0;
+    if (vh > 0 && vh <= 520 && vw >= 640) {
+      const top = Math.round(canvas.getBoundingClientRect?.()?.top ?? 0);
+      if (top > 0) budgetH = Math.max(110, Math.min(budgetH, vh - top - 8));
+    }
     const fit = Math.min(availW / level.w, budgetH / level.h);
     // 小于 MIN_CELL 就不再压缩,改由摄像机跟随 —— 贴边看不清前方比看不见全图更难受
     baseCell = Math.max(MIN_CELL, Math.min(fit, MAX_CELL));

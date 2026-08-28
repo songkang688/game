@@ -79,7 +79,7 @@ const CSS = `
 .pz-preview { display: grid; gap: 2px; background: #fff; padding: 5px; border-radius: 10px; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-preview i { width: 16px; height: 16px; border-radius: 4px; font-style: normal; font-size: 11px; display: flex; align-items: center; justify-content: center; }
 .pz-preview.pz-hidden i { background: #E8E6F5 !important; color: transparent; }
-.pz-hint { border: none; border-radius: 14px; padding: 8px 14px; font-weight: 800; background: #D5C8F8; color: #5D48A0; cursor: pointer; box-shadow: 0 3px 0 #B7A3E8; font-size: 15px; font-family: inherit; }
+.pz-hint { border: none; border-radius: 14px; padding: 8px 14px; min-height: 44px; font-weight: 800; background: #D5C8F8; color: #5D48A0; cursor: pointer; box-shadow: 0 3px 0 #B7A3E8; font-size: 15px; font-family: inherit; }
 .pz-hint:active { transform: translateY(2px); box-shadow: 0 1px 0 #B7A3E8; }
 .pz-hint:disabled { opacity: .5; }
 .pz-board { display: grid; gap: 8px; position: relative; }
@@ -103,11 +103,11 @@ const CSS = `
 .pz-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .pz-bar-modes[hidden] { display: none; }
-.pz-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8E86E0, #6E64C8); box-shadow: 0 4px 0 #544BA4; }
+.pz-open { border: none; border-radius: 999px; padding: 9px 18px; min-height: 44px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8E86E0, #6E64C8); box-shadow: 0 4px 0 #544BA4; }
 .pz-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #544BA4; }
 .pz-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .pz-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.pz-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); }
+.pz-back { border: none; border-radius: 999px; padding: 7px 13px; min-height: 44px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); }
 .pz-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,100,200,.3); }
 .pz-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(130,130,210,.25); }
@@ -116,7 +116,7 @@ const CSS = `
 
 /* ---- 1.2 新增（全部 pzt- 前缀，不改上面 1.0/1.1 的规则） ---- */
 .pzt-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
+.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; min-height: 44px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pzt-eye:active, .pzt-undo:active { transform: translateY(1px); }
 .pzt-undo:disabled { opacity: .45; cursor: default; }
 /* 整图半透明底图：铺在画板上当参照，不吃点击 */
@@ -137,6 +137,15 @@ const CSS = `
   .pz-tray { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; -webkit-overflow-scrolling: touch; }
   .pz-piece { flex: 0 0 auto; width: 40px; height: 40px; font-size: 21px; }
   .pz-badge, .pzt-eye, .pzt-undo { font-size: 14px; }
+}
+/* N-108:无尽画廊 3×3 拼块在 915×412 一块 213px,第 2/3 排被 .l99-host(overflow:hidden)吃掉滚不到。
+   矮横屏按余量反推拼块边长——盘宽钳成「视口高 − 盘上方那摞(壳标题+模式头+徽章+工具排)」,
+   三排整盘进可视区;打乱 seed / 判定 / 格逻辑零触碰。闯关大画板走 .l99-wrap 可滚,不吃这一档。 */
+@media (max-height:500px) and (min-width:640px) {
+  .pz-mode .pz-mhead { margin-bottom: 4px; }
+  .pz-mode .pz-wrap { padding: 8px; }
+  .pz-mode .pz-board { max-width: max(148px, calc(100dvh - 238px)); margin-left: auto; margin-right: auto; }
+  .pz-mode .pz-msg { margin-top: 4px; min-height: 0; }
 }
 ${PT_CSS}`;
 
