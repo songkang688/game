@@ -80,6 +80,16 @@ const CSS = `
 .bbp-over-s { font-size: 15px; font-weight: 700; color: #4FA3C7; line-height: 1.6; margin-bottom: 14px; }
 .bbp-line { height: 4px; background: repeating-linear-gradient(90deg, #FF9EC8 0 10px, transparent 10px 20px); border-radius: 2px; margin: 0 0 4px; }
 @media (max-width: 380px) { .bp-badge { font-size: 14px; } .bp-board { gap: 5px; } .bbp-chip { font-size: 14px; } }
+/* 矮横屏(915×412 一类):泡泡海「盘左、抬头右」。12 行×44px 泡径必然高过视口,
+   故盘面限宽保 44px 热区、盘内滚动:涨潮虚线钉滚动视口顶、消息条钉底、开局停在海面 */
+@media (min-width:640px) and (max-height:500px){
+  .bbp-mode{max-width:none;display:grid;grid-template-columns:412px 212px;column-gap:12px;justify-content:center;align-items:start;}
+  .bbp-stage{grid-column:1;grid-row:1;min-width:0;}
+  .bbp-mhead{grid-column:2;grid-row:1;flex-direction:column;align-items:stretch;margin-bottom:0;}
+  .bbp-mode .bp-wrap{max-height:calc(100dvh - 100px);overflow-y:auto;overscroll-behavior:contain;padding:8px;}
+  .bbp-mode .bbp-line{position:sticky;top:0;z-index:3;}
+  .bbp-mode .bp-msg{position:sticky;bottom:0;z-index:3;background:#ffffffe6;border-radius:10px;padding:4px 8px;margin-top:6px;}
+}
 @media (prefers-reduced-motion: reduce) {
   .bbp-pop { animation-duration: 16ms; }
   .bbp-ripple { animation: none; }
@@ -693,6 +703,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   chip.className = "bbp-chip";
   head.append(back, chip);
   const stage = document.createElement("div");
+  stage.className = "bbp-stage";
   wrap.append(head, stage);
   host.appendChild(wrap);
 
@@ -899,6 +910,8 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       }
     }
     render();
+    // 矮横屏盘内滚动时,开局先停在海面(下 5 行才有泡泡);竖屏盘不滚,这句是空操作
+    panel.scrollTop = panel.scrollHeight;
     scheduleTide();
   }
 
