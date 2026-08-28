@@ -1,5 +1,5 @@
 /**
- * trio-r40 A：平板 1024×768 / 768×1024 选关地图 CSS 微调。
+ * trio-r40 A：平板 wrap 760、N-182 *-softbtn 闸。
  * 不改 mapColumns 断点、.l99-tabs overflow-x、玩法。N-105 无新版本。
  */
 import { readFileSync } from "node:fs";

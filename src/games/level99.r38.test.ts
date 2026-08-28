@@ -1,6 +1,7 @@
 /**
- * trio-r38/r39 A：N-176 *-pick、N-179 *-lessonbtn。
- * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123。B 热区文件白名单（N-174/169/94/102/177）。
+ * trio-r38…r40 A：N-176 *-pick、N-179 *-lessonbtn、N-182 *-softbtn。
+ * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760。
+ * B 热区文件白名单（N-174/169/94/102/177/181）。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -15,8 +16,9 @@ const PS = readFileSync(fileURLToPath(new URL("./pool-stars/index.ts", import.me
 const BL = readFileSync(fileURLToPath(new URL("./bowling-lane/index.ts", import.meta.url)), "utf8");
 const CLF = readFileSync(fileURLToPath(new URL("./color-fun/ui.ts", import.meta.url)), "utf8");
 const DVS = readFileSync(fileURLToPath(new URL("./duo-vs-star/index.ts", import.meta.url)), "utf8");
+const DR = readFileSync(fileURLToPath(new URL("./duo-rush/index.ts", import.meta.url)), "utf8");
 
-/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn */
+/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn、N-181 softbtn */
 const B_ALLOW_FILE =
   /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king)\//;
 
@@ -69,9 +71,10 @@ function classSuffix(sel: string, suffix: string): boolean {
 }
 
 describe("已做号不回退", () => {
-  it("N-119 金边、N-123 平板档、CTA 回卷、消消乐钳高仍在", () => {
+  it("N-119 金边、N-123 平板档、CTA 回卷、消消乐钳高、平板 wrap 760 仍在", () => {
     expect(L99).toContain("scrollAdjustToRevealCta");
     expect(L99).toContain("0 0 0 3px #F2C14A");
+    expect(L99).toMatch(/@media \(min-width:760px\) and \(min-height:600px\)\{\.l99-wrap\{max-width:760px;\}/);
     expect(STYLES).toMatch(/@media \(min-width: 980px\) and \(min-height: 600px\)/);
     expect(MST).toContain("boardBoxMaxPx");
     expect(MST).toContain("@media (max-height:500px)");
@@ -122,6 +125,33 @@ describe("N-179 *-lessonbtn", () => {
       for (const r of rulesOf(src)) {
         if (/\.dvs-mode\b/.test(r.sel)) continue;
         if (!classSuffix(r.sel, "lessonbtn")) continue;
+        if (!clickable(r.sel, r.body)) continue;
+        if (tallEnough(r.body)) continue;
+        hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
+      }
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+});
+
+describe("N-182 *-softbtn", () => {
+  it("族存在于 duo-rush；不扫 .dr-start；不替代 N-87/181", () => {
+    expect(DR).toContain(".dr-softbtn {");
+    expect(DR).toContain(".dr-start {");
+    expect(DR).toContain(".dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start");
+    expect(DR).toMatch(/\.dr-menu-cta \{[^}]*position:\s*sticky/);
+  });
+
+  it("可点 *-softbtn 须 ≥44 或 TOUCH 插值（B 的 .dr-softbtn 走文件白名单）", () => {
+    const hits: string[] = [];
+    for (const file of walkSrc(GAMES)) {
+      const rel = file.slice(GAMES.length).replace(/\\/g, "/");
+      if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (/\.test\.(ts|css)$/.test(rel)) continue;
+      const src = readFileSync(file, "utf8");
+      for (const r of rulesOf(src)) {
+        if (/\.dr-start\b/.test(r.sel)) continue;
+        if (!classSuffix(r.sel, "softbtn")) continue;
         if (!clickable(r.sel, r.body)) continue;
         if (tallEnough(r.body)) continue;
         hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
