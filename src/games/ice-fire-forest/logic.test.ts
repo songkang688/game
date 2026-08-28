@@ -547,6 +547,13 @@ describe("棋盘高度预算", () => {
     expect(boardHeightBudget(320, 400)).toBeGreaterThanOrEqual(150);
   });
 
+  it("915×412 矮横屏把双垫挪到棋盘旁,预算按短边加宽比", () => {
+    const short = boardHeightBudget(915, 412);
+    expect(short).toBeGreaterThanOrEqual(120);
+    expect(short).toBeLessThanOrEqual(412 * 0.62);
+    expect(short).toBeGreaterThan(boardHeightBudget(375, 412));
+  });
+
   it("拿不到视口尺寸时给个稳妥的默认值,不会算出 0", () => {
     expect(boardHeightBudget(375, 0)).toBeGreaterThanOrEqual(150);
   });

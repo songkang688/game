@@ -288,6 +288,9 @@ const CSS = `
   .dua-start:active,.dua-pad button:active{transform:none;}
   .dua-splash .big{animation:none;}
 }
+@media (max-height:500px){
+  .dua-start{position:sticky;bottom:0;z-index:3;}
+}
 `;
 
 export function mount(api: GameApi): { destroy: () => void } {
