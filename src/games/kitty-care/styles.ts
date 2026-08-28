@@ -212,21 +212,6 @@ export const KTC_CSS = `
 .ktc-card.ktc-locked .ktc-thumb{filter:grayscale(1);opacity:.45;}
 .ktc-cardname{font-size:13px;font-weight:900;color:#7a5320;}
 .ktc-cardnote{font-size:12px;font-weight:700;color:#8a7a6a;line-height:1.4;}
-/* N-77:915×412 竖卡把第一排「换回来」顶到 375 切底。只收小屋相册,
-   诊所护理钮 / 马拉松场地零改。矮宽横屏改横条,首屏至少一排可点。 */
-@media (max-height:430px) and (min-width:800px){
-  .ktc-album{padding:4px 8px;}
-  .ktc-album .ktc-albumhead{margin-bottom:4px;}
-  .ktc-album .ktc-tools{margin:0 0 4px;gap:6px;}
-  .ktc-album>.ktc-msg{margin-top:2px;font-size:12px;line-height:1.3;min-height:0;}
-  .ktc-album .ktc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
-  .ktc-album .ktc-card{flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:flex-start;
-    min-height:52px;padding:4px 8px;gap:8px;text-align:left;}
-  .ktc-album .ktc-card .ktc-thumb{width:44px;min-width:44px;min-height:44px;flex:0 0 44px;font-size:26px;}
-  .ktc-album .ktc-cardname{flex:1 1 auto;min-width:0;}
-  .ktc-album .ktc-cardnote{display:none;}
-  .ktc-album .ktc-card>.ktc-mini{flex:0 0 auto;margin-left:auto;}
-}
 
 @media (max-width:420px){
   .ktc-bubble{font-size:17px;padding:7px 12px;}
@@ -362,5 +347,22 @@ export const KTC_CSS = `
   .ktc-kitty-in .ktc-kitty-svg,.ktc-kitty-sway,.ktc-kitty-roll .ktc-kitty-svg,
   .ktc-step-now,.ktc-stamp,.ktc-fly,.ktc-meow,.ktc-purr{animation:none;}
   .ktc-heartbubble,.ktc-confetti{display:none;}
+}
+
+/* N-77:915×412 竖卡把第一排「换回来」顶到 375 切底。只收小屋相册,
+   诊所护理钮 / 马拉松场地零改。矮宽横屏改横条,首屏至少一排可点。
+   挂在表尾,避免 1.3 皮肤段排在 media 后面把横条冲掉。 */
+@media (max-height:500px) and (min-width:640px){
+  .ktc-album{padding:4px 8px;}
+  .ktc-album .ktc-albumhead{margin-bottom:4px;}
+  .ktc-album .ktc-tools{margin:0 0 4px;gap:6px;}
+  .ktc-album>.ktc-msg{margin-top:2px;font-size:12px;line-height:1.3;min-height:0;}
+  .ktc-album .ktc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  .ktc-album .ktc-card{flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:flex-start;
+    min-height:52px;padding:4px 8px;gap:8px;text-align:left;}
+  .ktc-album .ktc-card .ktc-thumb{width:44px;min-width:44px;min-height:44px;flex:0 0 44px;font-size:26px;}
+  .ktc-album .ktc-cardname{flex:1 1 auto;min-width:0;}
+  .ktc-album .ktc-cardnote{display:none;}
+  .ktc-album .ktc-card>.ktc-mini{flex:0 0 auto;margin-left:auto;}
 }
 `;

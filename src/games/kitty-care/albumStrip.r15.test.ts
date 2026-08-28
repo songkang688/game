@@ -24,7 +24,7 @@ function mediaBlock(css: string, query: string): string {
 
 describe("N-77 小屋相册矮横屏横条", () => {
   it("只收 .ktc-album,诊所/马拉松选择器不进这条 media", () => {
-    const block = mediaBlock(KTC_CSS, "(max-height:430px) and (min-width:800px)");
+    const block = mediaBlock(KTC_CSS, "(max-height:500px) and (min-width:640px)");
     expect(block).toContain(".ktc-album .ktc-card{flex-direction:row");
     expect(block).toContain(".ktc-album .ktc-card .ktc-thumb{width:44px;min-width:44px;min-height:44px");
     expect(block).toContain(".ktc-album .ktc-card>.ktc-mini{flex:0 0 auto");

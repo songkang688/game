@@ -141,7 +141,7 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
 ${bhVisualCss()}
 /* N-47 残留:kit 触区 40,撤销/重来/提示/回关卡抬到 44。不改编棋格、方向键、胜负。 */
-.bh-btn,.bh-mode{min-height:44px;}
+.bh-wrap .bh-btn,.bh-wrap .bh-mode{min-height:44px;}
 `;
 
 function el<K extends keyof HTMLElementTagNameMap>(

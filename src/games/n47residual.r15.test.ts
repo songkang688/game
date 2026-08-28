@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 describe("N-47 r15 残留芯片 ≥44", () => {
   it("box-hamster .bh-btn/.bh-mode 盖过 kit 40", () => {
     const src = readFileSync(new URL("./box-hamster/index.ts", import.meta.url), "utf8");
-    expect(src).toMatch(/\.bh-btn,\.bh-mode\{min-height:44px;\}/);
+    expect(src).toMatch(/\.bh-wrap \.bh-btn,\.bh-wrap \.bh-mode\{min-height:44px;\}/);
   });
 
   it("alien-seek .as-open 仍 44(r13 已合,本轮回归)", () => {
