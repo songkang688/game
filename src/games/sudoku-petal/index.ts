@@ -420,6 +420,7 @@ export const SP_CSS = `
 .sp-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .sp-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.sp-modebar[hidden]{display:none;}
 .sp-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#5f4a8a;text-align:center;overflow-wrap:anywhere;}
 .sp-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;min-height:44px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8E6BD0,#7554B8);box-shadow:0 4px 0 #5B3F93;}

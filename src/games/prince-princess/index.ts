@@ -238,6 +238,7 @@ export const CSS = `
 .pcp-key-swap{background:#DFF0FF;color:#3F72A8;}
 .pcp-tip{margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#96658C;line-height:1.5;}
 .pcp-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.pcp-modebar[hidden]{display:none;}
 .pcp-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;}
 .pcp-mode.pcp-mode-duo{background:linear-gradient(180deg,#9BC7F2,#6E9FD4);box-shadow:0 4px 0 #55799F;}
