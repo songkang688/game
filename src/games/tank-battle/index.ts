@@ -225,6 +225,17 @@ const CSS = `
     background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
   .tkb-acts{position:sticky;bottom:0;z-index:6;}
 }
+/* N-84:915×412 闯关(单人)▲💥464/方向 513 全在舞台裁切线(322px)外。
+   矮横屏单人档改「战场左、暂停+摇杆+提示右」两列;双人档(.tkb-wrap-two)不动 N-53 */
+@media (min-width:640px) and (max-height:500px){
+  .tkb-wrap:not(.tkb-wrap-two){display:grid;grid-template-columns:minmax(0,1fr) auto;
+    column-gap:12px;align-items:start;justify-items:center;}
+  .tkb-wrap:not(.tkb-wrap-two) .tkb-hud{grid-column:1 / -1;grid-row:1;}
+  .tkb-wrap:not(.tkb-wrap-two) .tkb-board{grid-column:1;grid-row:2 / span 3;}
+  .tkb-wrap:not(.tkb-wrap-two) .tkb-acts{grid-column:2;grid-row:2;position:static;}
+  .tkb-wrap:not(.tkb-wrap-two) .tkb-pads{grid-column:2;grid-row:3;width:auto;}
+  .tkb-wrap:not(.tkb-wrap-two) .tkb-tip{grid-column:2;grid-row:4;max-width:260px;}
+}
 @media (prefers-reduced-motion:reduce){.tkb-key:active{transform:none;}}
 `;
 
@@ -893,7 +904,8 @@ function prefersReducedMotion(): boolean {
 function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptions): Runner {
   const w = opts.world;
   const wrap = document.createElement("div");
-  wrap.className = "tkb-wrap";
+  // N-84:矮横屏单人档要「战场左、摇杆右」;双人档保持 N-53 的双垫并排钉底,拿类名区分
+  wrap.className = `tkb-wrap${opts.players === 2 ? " tkb-wrap-two" : ""}`;
 
   const hud = document.createElement("div");
   hud.className = "tkb-hud";
