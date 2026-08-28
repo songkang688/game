@@ -80,6 +80,10 @@ export const MTF_CSS = `
   .mtf-vert-rule { min-width: 84px; }
   .mtf-word { font-size: 17px; max-height: 28vh; }
 }
+@media (max-height: 500px) {
+  .mtf-vert-row { font-size: ${MIN_VERT_PX}px; letter-spacing: 2px; }
+  .mtf-vert-rule { margin: 2px 0 1px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .mtf-hint { animation: none; }
   .mtf-step { animation: none; text-decoration: underline; }

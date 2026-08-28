@@ -344,6 +344,14 @@ export const FARM_CSS = `
   .mtf-plot { width: 22px; height: 26px; }
   .mtf-plot svg { width: 18px; height: 18px; }
 }
+/* N-44:矮横屏竖式作物卡把 L-1 紧凑预算吃光,三枚答案钮整排线下。
+   只钳插图高与木牌下限(仍 ≥44px);题目数据 / 对错零触碰。竖屏高屏零变化。 */
+@media (max-height: 500px) {
+  .mtf-illus { max-height: 56px; overflow: hidden; padding: 2px 6px; gap: 2px 4px; }
+  .mtf-illus-unit { width: ${MIN_CROP_PX}px; height: ${MIN_CROP_PX}px; }
+  .mtf-quizhost .qz-prompt { margin-top: 4px; }
+  .mtf-quizhost .qz-choice { min-height: 46px; }
+}
 
 /* ---- reduced：风车 / 云 / 蜜蜂 / 成长 / 收获动画全停，静态阶段图与反馈色保留 ---- */
 @media (prefers-reduced-motion: reduce) {
