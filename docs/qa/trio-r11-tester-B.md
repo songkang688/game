@@ -6,7 +6,7 @@
 **未重做** N-25/26/27/29/23/1/32、N-31 关内 `.fk-train-shell`、N-45 `gdh-veil--shop`（主干已有）。
 N-40 `.dr-btns` 矮屏 sticky 已在主干，本轮跳过。
 
-进场 `npm test` 水位：全库偶发超时（`bomb-buddies/ai.test.ts`、`snake-snack/qaC1.test.ts`、xiangqi 搜索档）与玩法无关，只复跑不改绿。
+交卷 `npm test`：1138 files / 19395 tests 全绿（偶发 `fatal: invalid object name 'origin/game-1.1'` 与玩法无关）。`npm run build` 通过。
 
 ## 本轮已关
 
