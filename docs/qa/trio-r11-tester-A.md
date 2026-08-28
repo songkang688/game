@@ -60,4 +60,4 @@ N-39 聚焦、N-16 走廊三态、L-3 贴纸、C-6 推理关：用户本轮优�
 | N-45 | ⬜ B 范围，未碰 |
 | N-40 | ⬜ duo-rush，不是 color-fun |
 
-水位：见交卷 `npm test` / `npm run build`。
+水位：`npm test` **1128** files / **19369** tests 全绿；`npm run build` 全绿（tsc + vite）。本环境无 915×412 真机 CDP，七关矩阵以源码守门为准。
