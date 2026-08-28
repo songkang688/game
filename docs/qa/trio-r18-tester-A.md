@@ -20,6 +20,15 @@
 | **N-97** | math-farm root×188 关选项 **394~440** 全在舞台裁切线(342)下:关内被地图档 276px 钳位截走 62px + root「直达这题」行 44px 插在题面上方 | ① l99 `max-height:500px` 档 `.l99-wrap:has(.l99-stage-wrap){max-height:none}`(地图档钳位原样);② quiz99 同档 `.qz-jump{order:9}` 排到答题区后(DOM 顺序/热区 44 不动) | 选项 **344~390 IN** 且可点(实测答对进第 2 题);390 L1 不回退 |
 | R18-8 | (复证 N-97 时顺带)农场四层 absolute 定位祖先落在 `.l99-wrap`,天空把「🗺️ 选关/跳过」标题条**全视口整条盖住**,只能盲点 | FARM_CSS 契约禁写 l99 选择器 → farmLayer 运行时给舞台 `position:relative`,destroy 原样放回 | 915/390 标题条可见且 elementFromPoint 实点中 `.l99-back`;visual13 CSS 契约测试全绿 |
 
+## N-100 扩面验收(r19 playbook 17 款口径,修 level99.ts 一处全愈)
+
+915×412 进场 `.l99-continue` top(全部 ≥0)+ 当前关整格在 `.l99-view` 内(全部 in):
+word-garden 72 / ice-fire-forest 72 / xiangqi 126 / landlord-cards 124 / bumper-cars 145 /
+puzzle-tiles 120 / brick-break 122 / red-blue-tap 126 / lianliankan 126 / dot-maze 126(选「🚩 闯关」模式后) /
+fishing-star 123 / poop-hero 126 / puff-bros 126 / red-blue-race 126 / red-blue-tug 126 / mine-garden 170。
+root 态走 UI 密码门(kangkang→永久→打开,未种 storage):root×pinyin-train 直达 **122~166** /
+root×fishing-star 直达 **173~217** / root×bowling-lane(带模式芯片行)CTA **177~221**、直达 **227~271**,全部 IN、当前关在屏。
+
 ## 测过的面(390×844 为主)
 
 - **壳层**:首页滚到底(12860px 全程无横溢)、分类/玩法/设备筛选、搜索(中文+拼音首字母)、收藏心形、最近玩过、收藏册(N-77:人物/宠物/装备页签)、暂停面板、攻略抽屉、家长算术门(2 题/45 秒)、kangkang 1 小时+永久、管理员解锁全章节并直进第 172 关。
