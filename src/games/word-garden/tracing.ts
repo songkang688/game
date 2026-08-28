@@ -21,7 +21,7 @@ import { shadeFlower } from "./flowerShade";
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
-import { fitQuizHost } from "./fit";
+import { fitQuizHost, stickyTailPx } from "./fit";
 import {
   ARROW_POINTS,
   easeInOutQuad,
@@ -48,6 +48,28 @@ import {
 
 /** 手机 360px 上描红区的最小边长（规格底线） */
 export const MIN_PAD_PX = 240;
+
+/**
+ * 描红面按可视余量钳边长（N-36）。
+ *
+ * `.wgd-pad` 写着 `touch-action:none`——落在格子上的手指只描红、不带着壳一起滚，
+ * 所以格子出屏就等于「下半个字描不了」，连「滚一下再描」这条逃生门都没有。
+ * 原先尺寸只看宽（`min(72vw,300px)`），412 高的横屏上 72vw=659 被 300 顶住仍旧太高。
+ *
+ * 这里补上那把高度尺：比可视段高出多少就收多少，收到规格下限为止；
+ * 下限之下不再收（格子小过 240 就描不动了），剩下的交给宿主滚动兜底。
+ * 本来就比下限小的格子（360px 窄屏那档）原样返回，只收不放。
+ */
+export function padSizePx(
+  naturalPx: number,
+  overflowPx: number,
+  minPx: number = MIN_PAD_PX
+): number {
+  if (!Number.isFinite(naturalPx) || naturalPx <= 0) return 0;
+  if (!Number.isFinite(overflowPx) || overflowPx <= 0) return Math.round(naturalPx);
+  const floor = Math.min(naturalPx, minPx);
+  return Math.round(Math.max(floor, naturalPx - overflowPx));
+}
 
 export const TRACE_INTRO = "米字格里按顺序描一描，描错顺序也没关系，我们再来一次～";
 
@@ -114,6 +136,23 @@ export const WGD_CSS = `
 @media (max-width:400px){
   .wgd-pad{width:min(86vw,300px);}
   .wgd-peek{font-size:16px;}
+}
+/* N-36(trio-r9):矮横屏(915×412 一族)米字格底部出屏 50px、宿主自滚 279。
+   描红面是 touch-action:none 的手势面 —— 手指落在格子上只描红、不带着壳一起滚,
+   连「滚一下再描」都做不到,所以它比同裁切量的普通盘面重一档,必须整格首屏可见。
+   竖排时格子底下还压着花园与提示行,可视段 254px 装不下 324px 的格子那一列;
+   915 宽横向余量足,改成「格子在左、字卡/花园/提示在右」的双栏(纯 CSS grid 分区,
+   DOM 顺序与读屏次序一个字不动),格子独占一列的高度,再由 padSizePx 按余量钳边长。 */
+@media (max-height:500px){
+  .wgd-trace{padding:6px 8px;gap:8px;display:grid;align-content:start;
+    grid-template-columns:auto minmax(0,1fr);
+    grid-template-areas:"pad top" "pad card" "pad garden" "pad msg";}
+  .wgd-padwrap{grid-area:pad;align-self:start;}
+  .wgd-top{grid-area:top;}
+  .wgd-card{grid-area:card;}
+  .wgd-garden{grid-area:garden;max-height:none;}
+  .wgd-msg{grid-area:msg;}
+  .wgd-desk{padding:6px;}
 }
 @media (prefers-reduced-motion:reduce){
   .wgd-next,.wgd-startdot,.wgd-bloom,.wgd-fall,.wgd-ink-oops{animation:none;}
@@ -233,6 +272,48 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   const gardenCardEl = wrap.querySelector(".wgd-gardencard") as HTMLElement;
   const msgEl = wrap.querySelector(".wgd-msg") as HTMLElement;
   const sayBtn = wrap.querySelector(".wgd-say") as HTMLButtonElement;
+
+  /**
+   * 钳位 + 按余量收格子（N-36）。
+   *
+   * 先把上一次写死的宽度还回去再量，不然量到的是收完的高度、越量越小（`fitQuizHost` 同款纪律）。
+   * 钳完还溢出多少就从格子边长上收多少，`padSizePx` 保住 `MIN_PAD_PX` 下限。
+   * 判定轨迹点集、容差与 `padPoint` 的热区换算都按格子实际尺寸取比例，收边长不影响判定。
+   */
+  function fitPad(): void {
+    if (typeof pad.getBoundingClientRect !== "function") {
+      fit.relayout();
+      return;
+    }
+    pad.style.width = "";
+    fit.relayout();
+    // 收一次之后 `fitQuizHost` 会重新钳位、重新把格子送进眼里,位置跟着变,
+    // 所以量—收—再量,最多三轮:要么不再溢出,要么已经顶到 MIN_PAD_PX 下限。
+    for (let i = 0; i < 3; i++) {
+      // 量的是「格子自己探出可视段多少」,不是宿主一共溢出多少 ——
+      // 格子整格看得见、只是底下的花园与提示行要滚,那不归这把尺子管
+      // (360×640 竖屏就是这一档:格子 300px 完整可见,收它反而白白变小)。
+      const over = padOverflowPx();
+      if (over <= 0) return;
+      const natural = pad.getBoundingClientRect().width;
+      const next = padSizePx(natural, over);
+      if (!(next > 0) || next >= natural) return;
+      pad.style.width = `${next}px`;
+      fit.relayout();
+    }
+  }
+
+  /** 格子底沿探出宿主可视段(再减掉粘在下沿那句提示)多少像素 */
+  function padOverflowPx(): number {
+    const client = wrap.clientHeight;
+    if (!(client > 0)) return 0;
+    const visibleBottom =
+      wrap.getBoundingClientRect().top + wrap.clientTop + client - stickyTailPx(wrap);
+    return pad.getBoundingClientRect().bottom - visibleBottom;
+  }
+
+  const view = doc.defaultView;
+  view?.addEventListener("resize", fitPad);
 
   /** 没有中文语音包时按钮一直藏着，做题一点不受影响 */
   const unwatchSpeech = whenSpeechReady(() => {
@@ -399,7 +480,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
     pad.innerHTML = parts.join("");
     playPreview(c);
     renderGarden(false);
-    fit.relayout();
+    fitPad();
   }
 
   function padPoint(ev: PointerEvent): Point {
@@ -519,6 +600,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       previewRaf = 0;
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      view?.removeEventListener("resize", fitPad);
       fit.dispose();
       wrap.remove();
     },
