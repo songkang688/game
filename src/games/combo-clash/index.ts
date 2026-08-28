@@ -203,7 +203,8 @@ export const CSS = `
   .cc-btn{min-width:48px;min-height:48px;font-size:14px;}
   .cc-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;flex:0 0 auto;
     background:linear-gradient(180deg,rgba(255,242,248,0),#FFF2F8 14px);padding-top:4px;}
-  .cc-info{max-height:52px;overflow:auto;margin-top:4px;font-size:14px;flex:0 0 auto;}
+  /* N-105:正文 360px ≥16px 守门,矮横屏只收高度(52px 内自滚),字号不许再压 */
+  .cc-info{max-height:52px;overflow:auto;margin-top:4px;font-size:16px;flex:0 0 auto;}
 }
 @media (prefers-reduced-motion:reduce){
   .cc-bar>i{transition:none;}
