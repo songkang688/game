@@ -97,6 +97,22 @@ const CSS = `
   .pk-chips{grid-column:2;grid-row:5;}
   .pk-bottom{grid-column:2;grid-row:6;}
 }
+/* N-35 续:双栏之后 915×412 还剩裁 67,「✅ 就挑这些」漏出裁切线 17px。
+   跟拼写关同一个原因:右栏一列叠了标题 + 提示 + 票排 + 交卷区,四层还是超。
+   跟拼写关同一套修法:矮横屏宽档收起装饰用的火车画面,票排独占宽栏,
+   标题 / 提示 / 交卷区收进右侧固定栏。窄一点的矮横屏还是走上面那套。 */
+@media (max-height:500px) and (min-width:760px){
+  .pk-wrap{
+    grid-template-columns:minmax(0,1fr) minmax(232px,300px);
+    grid-template-rows:auto auto auto auto 1fr;
+  }
+  .pk-wrap>.pyt-scene{display:none;}
+  .pk-chips{grid-column:1;grid-row:2 / -1;max-height:calc(100dvh - 200px);min-height:64px;overflow-y:auto;}
+  .pk-title{grid-column:2;grid-row:2;}
+  .pk-hint{grid-column:2;grid-row:3;}
+  .pk-say-row{grid-column:2;grid-row:4;}
+  .pk-bottom{grid-column:2;grid-row:5;align-self:start;}
+}
 `;
 
 export function runPickAll(opts: PickAllOptions): PlayHandle {

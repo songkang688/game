@@ -237,6 +237,24 @@ const CSS = `
   .pyt-yard{grid-column:2;grid-row:6;}
   .pyt-bottom{grid-column:2;grid-row:7;}
 }
+/* N-34 续:上面那套双栏在 915×412 上仍裁 198 —— 四枚声调票和「🚂 发车」都掉到裁切线以下。
+   右栏一列要竖着叠车厢 66 + 拼音 36 + 票排 + 发车区 108,四层加起来就超,
+   而 .pyt-go 的 sticky 钉在 .l99-stage{overflow:hidden} 的下沿上,一样不管用。
+   把左栏让给票排:矮横屏宽档收起装饰用的火车画面,票排独占宽栏、竖着也吃满整格,
+   车厢 / 拼音 / 发车区收进右侧固定栏。字号、热区、题库、判定一个都不动。
+   窄一点的矮横屏(<760)还是走上面那套画面在左的双栏。 */
+@media (max-height:500px) and (min-width:760px){
+  .pyt-spell{
+    grid-template-columns:minmax(0,1fr) minmax(232px,300px);
+    grid-template-rows:auto auto auto auto 1fr;
+  }
+  .pyt-spell>.pyt-scene{display:none;}
+  .pyt-yard{grid-column:1;grid-row:2 / -1;max-height:calc(100dvh - 200px);min-height:64px;}
+  .pyt-slots{grid-column:2;grid-row:2;}
+  .pyt-view{grid-column:2;grid-row:3;}
+  .pyt-say-row{grid-column:2;grid-row:4;}
+  .pyt-bottom{grid-column:2;grid-row:5;align-self:start;}
+}
 `;
 
 export interface SpellOptions {
