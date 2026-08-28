@@ -32,3 +32,7 @@ snow-fight / shoot-range / puzzle-tiles / balloon-pop 菜单开跑；N-15 bomb-b
 ## 红线
 
 不改存档 key、题库、判定、kit。测试只增。`match.ts` 零触碰。
+
+## 水位
+
+`npm test` **1123 文件 / 19361 用例**全绿（进场基线 r9 playbook 记 1095/19288）。`npm run build` 见交卷前跑次。
