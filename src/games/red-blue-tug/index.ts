@@ -411,15 +411,35 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
   const btnR = makeButton("R");
   ctrlEl.append(btnL, btnR);
 
-  // 转屏 / 改窗口大小时重算两侧按钮,窄屏上也保证 ≥72px 与中间的隔离带
-  gone.listen(globalThis as unknown as { addEventListener?: never }, "resize", () => {
-    const next = sideLayout(viewportWidth());
+  /**
+   * 两侧按钮的排布宽:量 .rbg-ctrl 的真实宽度。平板/桌面上关卡容器(l99 680px)
+   * 比视口窄得多,按视口算的话隔离带会把两颗「拉绳」顶出 overflow:hidden 的
+   * 舞台外,只剩一条边露着;量不到(测试桩/还没上屏)退回视口口径。
+   */
+  function ctrlWidthPx(): number {
+    const r = ctrlEl.getBoundingClientRect?.();
+    const w = r && Number.isFinite(r.width) ? r.width : 0;
+    return w > 0 ? Math.min(w, viewportWidth()) : viewportWidth();
+  }
+
+  function applySideLayout(): void {
+    const next = sideLayout(ctrlWidthPx());
     for (const btn of [btnL, btnR]) {
       btn.style.width = `${next.width}px`;
       btn.style.height = `${next.height}px`;
     }
     btnR.style.marginLeft = `${next.gap}px`;
-  });
+  }
+
+  // 挂载那一刻容器可能还没上屏(量出 0),下一帧按真实容器宽再校一次
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      if (!gone.disposed && !ended) applySideLayout();
+    });
+  }
+
+  // 转屏 / 改窗口大小时重算两侧按钮,窄屏上也保证 ≥72px 与中间的隔离带
+  gone.listen(globalThis as unknown as { addEventListener?: never }, "resize", applySideLayout);
 
   function setDown(hand: "L" | "R", on: boolean): void {
     if (ended) return;
