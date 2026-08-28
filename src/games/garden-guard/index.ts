@@ -1870,7 +1870,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = "#7a6a52";
     ctx.fillText("在格子上种下小塔,别让小怪走到花朵那儿", w / 2, 70);
 
-    const bw2 = Math.min(300, w - 48);
+    // r18 B:平板横屏画布 900px+ 宽时,300px 的入口卡浮在大片渐变里显得空。放宽到 420
+    // 更压得住场;命中判定和绘制共用同一 Rect,热区跟着一起变,窄屏还是 300。
+    const bw2 = Math.min(w >= 720 ? 420 : 300, w - 48);
     const bh2 = Math.min(120, (h - 130) / 2.4);
     const gap = 18;
     const y0 = Math.max(96, h / 2 - bh2 - gap / 2);
