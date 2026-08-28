@@ -153,7 +153,8 @@ export const SWAP_HINT_TEXT = "连着几场没赢下来啦，上面那排换个�
 
 const CSS = `
 .fk-root{--fk-ink:#4a3a68;--fk-soft:#7b6aa0;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  max-width:760px;margin:0 auto;color:var(--fk-ink);user-select:none;-webkit-user-select:none;}
+  max-width:760px;margin:0 auto;color:var(--fk-ink);user-select:none;-webkit-user-select:none;
+  width:100%;min-height:0;box-sizing:border-box;}
 .fk-root *{box-sizing:border-box;}
 .fk-card{background:linear-gradient(180deg,#fffdff,#f5f0ff);border-radius:20px;padding:14px;
   box-shadow:0 4px 14px rgba(140,120,190,.16);margin-bottom:12px;}
@@ -180,7 +181,7 @@ const CSS = `
 @media (max-width:520px){.fk-picks{grid-template-columns:1fr;}}
 .fk-pick{background:#fff;border-radius:16px;padding:10px;box-shadow:0 3px 10px rgba(140,120,190,.14);}
 .fk-pick-t{font-size:14px;font-weight:900;margin-bottom:6px;}
-.fk-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.fk-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
 .fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}

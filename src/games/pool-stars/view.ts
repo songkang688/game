@@ -14,6 +14,7 @@
  * 力度条与击球钮都不小于 44px，字号不小于 13px。
  */
 import type { SoundName } from "../level99";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import {
   GOLD,
   ballIconSvg,
@@ -67,14 +68,20 @@ export const MIN_BALL_PX = 14;
 /** 力度条与击球钮的最小热区 */
 export const MIN_TOUCH_PX = 44;
 
-export function tableLayout(viewportWidth: number): Layout {
+export function tableLayout(viewportWidth: number, availHeight: number = MAX_VERTICAL_PX): Layout {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 480;
   const avail = clamp(w - 16, 260, 760);
+  const capH =
+    Number.isFinite(availHeight) && availHeight > 0
+      ? Math.min(MAX_VERTICAL_PX, availHeight)
+      : MAX_VERTICAL_PX;
   const vertical = w < 560;
   let scale: number;
   if (vertical) {
-    scale = Math.min(avail / TABLE.h, MAX_VERTICAL_PX / TABLE.w);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+    const fit = Math.min(avail / TABLE.h, capH / TABLE.w);
+    const minScale = MIN_BALL_PX / (2 * TABLE.r);
+    // 剩余高度不够时优先整桌进屏，不靠 MIN_BALL 把桌子再撑出舞台
+    scale = fit < minScale ? Math.max(fit, 0.01) : fit;
   } else {
     scale = Math.min(avail / TABLE.w, 3.4);
     scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
@@ -522,7 +529,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   }
 
   function resize(): void {
-    lay = tableLayout(viewportWidth());
+    const room = stagePlayRoom(wrap, {
+      w: viewportWidth(),
+      h: MAX_VERTICAL_PX,
+    });
+    lay = tableLayout(viewportWidth(), room.h);
     canvas.width = Math.round(lay.cssW);
     canvas.height = Math.round(lay.cssH);
     canvas.style.width = `${lay.cssW}px`;
