@@ -969,6 +969,13 @@ button {
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
+  /* N-33:矮横屏结算内容高于 86dvh 可视段时，必点钮不能跟着文案滚走 */
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #ffffff;
+  padding: 10px 4px 2px;
+  box-shadow: 0 -10px 14px #ffffff;
 }
 
 /* 结算弹窗 */

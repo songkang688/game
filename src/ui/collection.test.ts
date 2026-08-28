@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import type { StorageLike } from "../engine/save";
 import type { Bonus, Loadout, Wallet } from "../engine/collection";
 import {
@@ -697,5 +698,18 @@ describe("样式自带,不动公共 styles.css", () => {
     expect(css).not.toContain("url(");
     expect(css).not.toContain(".png");
     expect(css).not.toContain(".svg");
+  });
+});
+
+describe("收藏册热区 44px 红线（N-33 同批）", () => {
+  it(".collection-close 与 .card-btn 热区 ≥44px", () => {
+    const src = readFileSync(new URL("./collection.ts", import.meta.url), "utf8");
+    const close = /collection-close\{[^}]*width:(\d+)px;height:(\d+)px/.exec(src);
+    expect(close).not.toBeNull();
+    expect(Number(close![1])).toBeGreaterThanOrEqual(44);
+    expect(Number(close![2])).toBeGreaterThanOrEqual(44);
+    const btn = /card-btn\{[^}]*min-height:(\d+)px/.exec(src);
+    expect(btn).not.toBeNull();
+    expect(Number(btn![1])).toBeGreaterThanOrEqual(44);
   });
 });

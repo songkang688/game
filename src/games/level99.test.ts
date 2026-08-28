@@ -566,6 +566,15 @@ describe("level99 直达第 N 关（管理员权限）", () => {
     expect(note.toLowerCase()).not.toContain("root");
   });
 
+  it("N-38 永久态关内小字是「已永久开启」，不报远未来剩余分钟", () => {
+    writeRootSession(9_999_999_999_000, null, "permanent");
+    const huge = 4193047370 * 60_000;
+    expect(rootJumpNote(huge, NOW)).toBe("管理员权限已永久开启");
+    expect(rootJumpNote(huge, NOW)).not.toMatch(/\d+\s*分钟/);
+    clearRootSession(null);
+    expect(rootJumpNote(43 * 60_000, NOW)).toBe("管理员权限还剩 43 分钟");
+  });
+
   it("加了直达之后总关数仍旧是 188，存档 key 语义没变", () => {
     expect(TOTAL_LEVELS).toBe(188);
     const store = memStorage();

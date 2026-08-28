@@ -45,3 +45,15 @@ describe("S-2 星级 SVG", () => {
     expect(Number(m![1])).toBeGreaterThanOrEqual(44);
   });
 });
+
+describe("N-37 关内管理员抬头矮横屏收紧", () => {
+  it("max-height:500px 档把关内跳过/直达收成一行，小字不占竖向空间", () => {
+    const start = SRC.indexOf("@media (max-height:500px)");
+    expect(start).toBeGreaterThan(0);
+    const block = SRC.slice(start, start + 1400);
+    expect(block).toContain(".l99-stagebar .l99-tools{flex-wrap:nowrap");
+    expect(block).toContain(".l99-stagebar .l99-jump{flex-wrap:nowrap");
+    expect(block).toContain(".l99-stagebar .l99-jump-note");
+    expect(block).toContain("clip:rect(0 0 0 0)");
+  });
+});

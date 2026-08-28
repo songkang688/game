@@ -49,6 +49,61 @@ import {
 /** 手机 360px 上描红区的最小边长（规格底线） */
 export const MIN_PAD_PX = 240;
 
+/** CSS 宽尺上限（与 `.wgd-pad{width:min(...,300px)}` 对齐） */
+export const PAD_MAX_PX = 300;
+
+/** 窄屏走 86vw（max-width:400px），其余 72vw */
+export const PAD_VW_WIDE = 0.72;
+export const PAD_VW_NARROW = 0.86;
+export const PAD_NARROW_MAX_PX = 400;
+
+/**
+ * 矮横屏硬底：低于此描红热区太小。
+ * `touch-action:none` 没有滚动逃生门，宁可略小于 MIN_PAD 也要整格进屏。
+ */
+export const PAD_FIT_FLOOR_PX = 168;
+
+/** 窄屏用 86vw，宽屏用 72vw（与 tracing.css 两档一致） */
+export function padVwRatio(viewportWidthPx: number): number {
+  return viewportWidthPx <= PAD_NARROW_MAX_PX ? PAD_VW_NARROW : PAD_VW_WIDE;
+}
+
+/**
+ * 米字格边长：宽尺 min(vw×比例, 300) 与高度余量取更小。
+ * 余量 ≥ MIN_PAD 按余量；不够则收到 max(floor, room)，低于下限才让滚动兜底。
+ */
+export function tracePadSidePx(viewportWidthPx: number, heightRoomPx: number): number {
+  const vw = Number.isFinite(viewportWidthPx) && viewportWidthPx > 0 ? viewportWidthPx : PAD_MAX_PX;
+  const byWidth = Math.min(vw * padVwRatio(vw), PAD_MAX_PX);
+  const room = Number.isFinite(heightRoomPx) ? heightRoomPx : byWidth;
+  const wanted = Math.min(byWidth, Math.max(0, room));
+  if (wanted >= MIN_PAD_PX) return Math.floor(wanted);
+  if (wanted <= 0) return Math.floor(byWidth);
+  return Math.max(PAD_FIT_FLOOR_PX, Math.floor(wanted));
+}
+
+/** 描红台除格子外的竖向铬（顶栏+字卡+花园+提示+间隙+内边距+书桌垫） */
+export function tracePadChromePx(parts: {
+  topH: number;
+  cardH: number;
+  gardenH: number;
+  msgH: number;
+  deskPadV: number;
+  wrapGap: number;
+  wrapPadV: number;
+}): number {
+  const gapCount = 4;
+  return (
+    Math.max(0, parts.topH) +
+    Math.max(0, parts.cardH) +
+    Math.max(0, parts.gardenH) +
+    Math.max(0, parts.msgH) +
+    Math.max(0, parts.deskPadV) +
+    Math.max(0, parts.wrapGap) * gapCount +
+    Math.max(0, parts.wrapPadV)
+  );
+}
+
 export const TRACE_INTRO = "米字格里按顺序描一描，描错顺序也没关系，我们再来一次～";
 
 /** 预演箭头走完一遍的时长（纯视觉） */
@@ -60,7 +115,8 @@ export const FALL_MS = 400;
 
 export const WGD_CSS = `
 .wgd-trace{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:16px;padding:14px;
-  display:flex;flex-direction:column;gap:10px;min-height:380px;user-select:none;-webkit-user-select:none;}
+  display:flex;flex-direction:column;gap:10px;min-height:380px;user-select:none;-webkit-user-select:none;
+  --wgd-pad-side:${PAD_MAX_PX}px;}
 .wgd-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
 .wgd-badge{background:#ffffffd9;border-radius:999px;padding:5px 12px;font-weight:800;font-size:14px;
   box-shadow:0 2px 6px rgba(120,120,160,.2);}
@@ -72,7 +128,7 @@ export const WGD_CSS = `
 .wgd-desk{padding:10px 14px 14px;border-radius:16px;
   background:linear-gradient(#e8bd85,#d9a066 60%,#c98f55);
   box-shadow:inset 0 2px 5px rgba(255,255,255,.35),0 4px 12px rgba(120,90,50,.28);}
-.wgd-pad{width:min(72vw,300px);min-width:${MIN_PAD_PX}px;height:auto;touch-action:none;border-radius:12px;
+.wgd-pad{width:min(72vw,${PAD_MAX_PX}px,var(--wgd-pad-side,${PAD_MAX_PX}px));min-width:${MIN_PAD_PX}px;height:auto;touch-action:none;border-radius:12px;
   display:block;box-shadow:0 3px 10px rgba(120,100,70,.25);}
 .wgd-fiber{stroke:rgba(190,158,110,.18);stroke-width:.8;fill:none;}
 .wgd-grid-edge{stroke:#d94f4f;stroke-width:2;fill:none;}
@@ -112,8 +168,14 @@ export const WGD_CSS = `
   box-shadow:0 3px 8px rgba(140,110,60,.25);}
 .wgd-pad:focus-visible,.wgd-say:focus-visible,.wgd-garden-flower:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (max-width:400px){
-  .wgd-pad{width:min(86vw,300px);}
+  .wgd-pad{width:min(86vw,${PAD_MAX_PX}px,var(--wgd-pad-side,${PAD_MAX_PX}px));}
   .wgd-peek{font-size:16px;}
+}
+@media (max-height:500px){
+  .wgd-trace{min-height:0;padding:6px 8px;gap:4px;}
+  .wgd-desk{padding:4px;}
+  .wgd-garden{min-height:28px;max-height:12vh;padding:2px 8px;}
+  .wgd-pad{min-width:0;}
 }
 @media (prefers-reduced-motion:reduce){
   .wgd-next,.wgd-startdot,.wgd-bloom,.wgd-fall,.wgd-ink-oops{animation:none;}
@@ -233,6 +295,49 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   const gardenCardEl = wrap.querySelector(".wgd-gardencard") as HTMLElement;
   const msgEl = wrap.querySelector(".wgd-msg") as HTMLElement;
   const sayBtn = wrap.querySelector(".wgd-say") as HTMLButtonElement;
+  const padWrap = wrap.querySelector(".wgd-padwrap") as HTMLElement;
+  const desk = wrap.querySelector(".wgd-desk") as HTMLElement;
+  const topEl = wrap.querySelector(".wgd-top") as HTMLElement;
+  const cardEl = wrap.querySelector(".wgd-card") as HTMLElement;
+
+  /** N-36:按宿主真实余量钳米字格边长，整格进屏后手指才能一笔描到底。 */
+  function sizePad(): void {
+    const hostH = wrap.clientHeight;
+    if (!(hostH > 0)) return;
+    const cs = typeof getComputedStyle === "function" ? getComputedStyle(wrap) : undefined;
+    const gap = cs ? Number.parseFloat(cs.rowGap || cs.gap || "0") || 0 : 0;
+    const padV =
+      (cs ? Number.parseFloat(cs.paddingTop || "0") || 0 : 0) +
+      (cs ? Number.parseFloat(cs.paddingBottom || "0") || 0 : 0);
+    const deskCs = desk && typeof getComputedStyle === "function" ? getComputedStyle(desk) : undefined;
+    const deskPadV = deskCs
+      ? (Number.parseFloat(deskCs.paddingTop || "0") || 0) + (Number.parseFloat(deskCs.paddingBottom || "0") || 0)
+      : 0;
+    const chrome = tracePadChromePx({
+      topH: topEl?.offsetHeight ?? 0,
+      cardH: cardEl?.offsetHeight ?? 0,
+      gardenH: gardenEl?.offsetHeight ?? 0,
+      msgH: msgEl?.offsetHeight ?? 0,
+      deskPadV,
+      wrapGap: gap,
+      wrapPadV: padV
+    });
+    const vw =
+      typeof innerWidth === "number" && innerWidth > 0
+        ? innerWidth
+        : wrap.getBoundingClientRect?.().width || PAD_MAX_PX;
+    const side = tracePadSidePx(vw, hostH - chrome);
+    wrap.style.setProperty("--wgd-pad-side", `${side}px`);
+    if (padWrap) padWrap.style.flex = "0 0 auto";
+  }
+  sizePad();
+  fit.relayout();
+  sizePad();
+  const onPadResize = (): void => {
+    fit.relayout();
+    sizePad();
+  };
+  (globalThis as { addEventListener?: typeof addEventListener }).addEventListener?.("resize", onPadResize);
 
   /** 没有中文语音包时按钮一直藏着，做题一点不受影响 */
   const unwatchSpeech = whenSpeechReady(() => {
@@ -520,6 +625,10 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       fit.dispose();
+      (globalThis as { removeEventListener?: typeof removeEventListener }).removeEventListener?.(
+        "resize",
+        onPadResize
+      );
       wrap.remove();
     },
   };

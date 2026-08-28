@@ -204,4 +204,9 @@ describe("quiz99 横屏矮屏紧凑档(三办 R5-A L-1)", () => {
   it("正文红线不动:.qz-ask 的 17px 基准字号还在(紧凑档只收 min-height)", () => {
     expect(src).toContain(".qz-ask { text-align: center; font-size: 17px;");
   });
+
+  it("N-37:管理员题号直达输入框热区 ≥44px，矮屏档不压穿", () => {
+    expect(src).toMatch(/\.qz-jump-input \{[^}]*min-height: 44px/);
+    expect(block).toMatch(/\.qz-jump-input \{ min-height: 44px/);
+  });
 });

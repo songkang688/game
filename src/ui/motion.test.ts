@@ -625,4 +625,12 @@ describe("styles.css:热区、胶囊与位移的显式尺寸", () => {
     expect(hit, ".tabs 找不到渐隐 mask").not.toBe("");
     expect(hit).toMatch(/padding-inline-end/);
   });
+
+  it("N-33:结算按钮列 sticky 贴弹窗底，矮横屏不滚也能点再玩一次/回首页", () => {
+    const body = ruleBody(".dialog-buttons");
+    expect(body).toMatch(/position:\s*sticky/);
+    expect(body).toMatch(/bottom:\s*0/);
+    expect(body).toMatch(/background:\s*#fff/);
+    expect(body).toMatch(/box-shadow:/);
+  });
 });
