@@ -1676,6 +1676,8 @@ button {
 html {
   max-width: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .screen,
@@ -1683,6 +1685,10 @@ html {
 .home-screen {
   width: 100%;
   max-width: min(1080px, 100%);
+}
+
+.home-screen {
+  touch-action: pan-y;
 }
 
 .game-topbar,

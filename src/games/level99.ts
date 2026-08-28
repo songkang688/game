@@ -490,6 +490,13 @@ export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewp
     && viewportH > 0 && rect.bottom > rect.top && rect.top >= 0 && rect.bottom <= viewportH;
 }
 
+/** N-100 续：scrollIntoView(center) 后若「继续」在滚动盒上方，把 scrollTop 拉回到 CTA 贴顶。 */
+export function scrollAdjustToRevealCta(viewTop: number, ctaTop: number, scrollTop: number): number {
+  if (!Number.isFinite(viewTop) || !Number.isFinite(ctaTop) || !Number.isFinite(scrollTop)) return scrollTop;
+  if (ctaTop >= viewTop) return scrollTop;
+  return Math.max(0, scrollTop + (ctaTop - viewTop));
+}
+
 /**
  * 没有专属攻略数据时，按章节自动拼一份「只讲方法、不给答案」的攻略。
  * 纯函数便于测试；具体游戏的细则由后续步骤补 `guide` 字段覆盖。
@@ -1054,6 +1061,16 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
       const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;
       if (stageEl) stageEl.scrollTop = 0;
+      // N-100：居中当前关后，「继续」可能飞到 .l99-view 裁切线以上（915×412 实测 top=-27）。
+      // 不改 block:center / 四处 showMap(true)；只把滚动盒拉到 CTA 贴顶。
+      const ctaBox = view.querySelector(".l99-continue") as {
+        getBoundingClientRect?: () => { top: number };
+      } | null;
+      const vr = view.getBoundingClientRect?.();
+      const cr = ctaBox?.getBoundingClientRect?.();
+      if (vr && cr && typeof view.scrollTop === "number") {
+        view.scrollTop = scrollAdjustToRevealCta(vr.top, cr.top, view.scrollTop);
+      }
     }
   }
 
