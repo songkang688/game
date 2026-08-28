@@ -43,6 +43,7 @@ import {
   panelCellForRoom,
   panelCellForRoomRow,
   panelsSideBySide,
+  tripleLandscape,
   regrowCellPx,
   stageRoomPx,
   openLevelOnMap,
@@ -151,6 +152,12 @@ const CSS = `
 /* 工具行挪进顶排后不再是 .fdf-desk 的直系子节点,z-index 垫层补回来 */
 .fdf-rowmode .fdf-top .fdf-tools{position:relative;z-index:1;}
 .fdf-row{display:flex;gap:6px;flex-wrap:nowrap;justify-content:center;}
+/* N-68:三图关矮横屏单独一条。参考图挤在左侧一组,可点的下图独占右侧可视高。
+   不加在 L-1 的 .fdf-panels-row 上,第 1 关双图并排零回归。 */
+.fdf-panels-triple.fdf-panels-row{align-items:stretch;}
+.fdf-panels-triple .fdf-row{flex:0 1 auto;max-width:46%;min-width:0;}
+.fdf-panels-triple .fdf-row .fdf-panel{min-width:0;}
+.fdf-panels-triple > .fdf-panel{flex:1 1 auto;min-width:0;}
 .fdf-panel{background:#ffffffec;border-radius:14px;padding:6px;box-shadow:0 3px 10px rgba(120,120,160,.18);}
 .fdf-split{width:86%;height:3px;border-radius:3px;background:linear-gradient(90deg,#ffd8e6,#c5b3f0,#ffd8e6);}
 .fdf-label{text-align:center;font-size:12px;font-weight:800;color:#8a7aa8;margin-bottom:3px;}
@@ -278,11 +285,14 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   const view = globalThis as { innerHeight?: number; innerWidth?: number };
   const triple = scene.second !== null;
-  // L-1(trio-r5):真横屏(915×412 一族)竖排装不下(数学账见 runtime.panelsSideBySide),
-  // 两图改并排,一张图独享可视高;三图模式保持原布局(上排两张参考图本来就并排)
-  const rowLayout = !triple && panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640);
+  const wideShort = panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640);
+  // L-1(trio-r5):真横屏两图并排,一张图独享可视高。三图故意不走这条
+  // (上排两张参考图本来就并排);N-68 另开 tripleRow,可点区吃满可视高。
+  const rowLayout = !triple && wideShort;
+  const tripleRow = triple && tripleLandscape(view.innerWidth ?? 360, view.innerHeight ?? 640);
+  const playUsesRowPx = rowLayout || tripleRow;
   // 竖屏上下两图各占约 40% 高度，中间留 UI 条：格子按屏高摊，两张图始终同时可见
-  let playPx = rowLayout
+  let playPx = playUsesRowPx
     ? panelCellPxRow(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX)
     : panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
   const miniPx = triple ? miniCellPx(scene.cols, view.innerWidth ?? 360) : playPx;
@@ -318,7 +328,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   // 屏高只是上限，真正能用的是舞台裁切线以内那一段——两者取小的那个
   playPx = Math.min(
     playPx,
-    (rowLayout ? panelCellForRoomRow : panelCellForRoom)(scene.rows, stageRoomPx(root), PLAY_CELL_PX)
+    (playUsesRowPx ? panelCellForRoomRow : panelCellForRoom)(scene.rows, stageRoomPx(root), PLAY_CELL_PX)
   );
 
   const countEl = root.querySelector(".fdf-count") as HTMLElement;
@@ -372,9 +382,10 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const refCells: HTMLElement[][] = [];
   let playCells: HTMLButtonElement[] = [];
 
-  if (rowLayout) {
+  if (rowLayout || tripleRow) {
     panelsEl.classList.add("fdf-panels-row");
     root.classList.add("fdf-rowmode");
+    if (tripleRow) panelsEl.classList.add("fdf-panels-triple");
     // 工具行(提示键 + 放大滑杆)挪进顶排与徽章同行:横屏矮屏寸土寸金,
     // 省出的整行高度还给两张图;915px 宽放得下,放不下 flex-wrap 自己折行
     (root.querySelector(".fdf-top") as HTMLElement).appendChild(toolsEl);
@@ -405,7 +416,10 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   split.classList.add("fdf-seam", `fdf-seam-${seam}`);
   split.innerHTML = seamHTML(seam);
   panelsEl.appendChild(split);
-  const play = makePanel(rowLayout ? opts.playLabel.replace(/下图/g, "右图") : opts.playLabel, playPx);
+  const play = makePanel(
+    rowLayout || tripleRow ? opts.playLabel.replace(/下图/g, "右图") : opts.playLabel,
+    playPx,
+  );
   panelsEl.appendChild(play.panel);
   const playGrid = play.grid;
 
@@ -798,7 +812,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       if (!liveFit) return;
       // 挂载那一刻面板还空着,随内容长高的裁切祖先量出的余量偏小,格子被
       // 冤枉地钳到 26px;真实布局出来后按同一套公式复算,只放大不缩小
-      const grown = regrowCellPx(playPx, scene.rows, view.innerHeight ?? 640, stageRoomPx(root), PLAY_CELL_PX, rowLayout);
+      const grown = regrowCellPx(playPx, scene.rows, view.innerHeight ?? 640, stageRoomPx(root), PLAY_CELL_PX, playUsesRowPx);
       if (grown !== null && foundSet.size === 0) {
         playPx = grown;
         // 格子盒子的尺寸在 grid 模板上,重填内容前得把模板一起改大
@@ -818,7 +832,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   /** 并排布局时把提示文案里的方位词换成左右(只改显示,MODE_HINTS 数据零触碰) */
   function orientText(text: string): string {
-    if (!rowLayout) return text;
+    if (!rowLayout && !tripleRow) return text;
     return text.replace(/上图/g, "左图").replace(/下图/g, "右图").replace(/上下对照/g, "左右对照");
   }
 
