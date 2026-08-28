@@ -6,6 +6,7 @@ export { meta };
 // 守卫用回旋镖敲晕,集齐日纹石 / 月纹石 / 星纹石三件神器才推得开尽头的首领之门。
 // 三种玩法:188 关八大遗迹战役、无尽遗迹(一层比一层深)、计时速通(每章记录最好时间)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { corridorCanvasCssH, corridorWantH, measureClipRoomPx } from "./corridorFit";
 import { save } from "../../engine/save";
 import {
   ARTIFACT_EMOJI,
@@ -121,6 +122,13 @@ const CSS = `
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
 .ak-canvas{width:100%;display:block;border-radius:16px;background:#f6f0ff;touch-action:none;}
 .ak-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+/* N-16:矮横屏把触控键钉在画布下沿;提示行收掉。古堡走 advk- 前缀,吃不到这段。 */
+@media (max-height:500px){
+  .ak-wrap{gap:4px;max-height:100%;min-height:0;}
+  .ak-pad{position:sticky;bottom:0;z-index:2;padding:4px 0 2px;
+    background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
+  .ak-tip{display:none;}
+}
 .ak-btn{border:none;border-radius:16px;min-width:56px;min-height:52px;padding:6px 12px;font-size:20px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#6b4a2a;background:#fff3dd;
   box-shadow:0 4px 0 rgba(180,140,90,.45);}
@@ -311,7 +319,10 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
 
   function syncSize(): void {
     cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
-    cssH = clamp(Math.round(cssW * 0.9), 250, 430);
+    const want = corridorWantH(cssW);
+    const room = measureClipRoomPx(host);
+    const below = (pad.offsetHeight || 0) + (tip.offsetHeight || 0) + 16;
+    cssH = corridorCanvasCssH(want, room, below);
     scale = cssH / VIEW_H;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     const bw = Math.max(1, Math.round(cssW * dpr));

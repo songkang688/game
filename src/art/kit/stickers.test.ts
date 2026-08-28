@@ -98,10 +98,10 @@ describe("贴纸是纯函数", () => {
   });
 
   it("查不到返回 null，不抛错", () => {
-    expect(sticker("🚀")).toBeNull();
+    expect(sticker("🤷")).toBeNull();
     expect(sticker("")).toBeNull();
-    expect(hasSticker("🚀")).toBe(false);
-    expect(stickerName("🚀")).toBeNull();
+    expect(hasSticker("🤷")).toBe(false);
+    expect(stickerName("🤷")).toBeNull();
   });
 
   it("VS16 变体符归一：带不带 ️ 查到同一张", () => {

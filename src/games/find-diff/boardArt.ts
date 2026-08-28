@@ -13,8 +13,7 @@
  * 可点的格子自己的「第 x 行第 y 个」标签不受影响。
  *
  * 红线：不碰 diffIdx / sameCell 判定、不碰 26px 热区、不开计时器、不加动画。
- * 第 1–3 章（水果 / 萌宠 / 海底）本轮已配齐图集；第 4–10 章贴纸挂第 3 轮，
- * 配齐一章亮一章，这个文件一行都不用再改。
+ * 第 1–10 章图集已配齐；整关门控仍按「差一张整关回退 emoji」，本文件一行都不用为门控再改。
  */
 import { hasSticker, sticker } from "../../art/kit/stickers";
 import type { CellView, Scene } from "./scene12";
