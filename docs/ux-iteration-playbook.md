@@ -81,6 +81,7 @@
 - **根因**：`star-estate/index.ts` 的 N-3 配方 E（`.se-pad` sticky 钉底 + `.se-board-wrap` 钳 `min(200px,42dvh)`）只写在 `@media (max-height:500px)`；默认布局总高 ≈866px，而 l99 单关 `.l99-stage` overflow:hidden。
 - **修法**：在该游戏内联 CSS **新增一档** `@media (max-height:900px)`（或拆 `(max-height:900px) and (min-width:700px)` + `(max-width:480px)` 两档）套用同款配方：`.se-pad{position:sticky;bottom:0}` + `.se-board-wrap{max-height:min(280px,52dvh)}`（数值按视口余高调，board 别小于现有 500 档的 156px 口径）。**勿动** 500 档现值与 `stickyPad.r10.test.ts`、`viewportCap.r14.test.ts` 守门；地格 26px 维持棋盘观察豁免，只放大当前格预览（N-3 口径）。
 - **验收**：四视口掷骰/购买/结束回合 bottom ≤ 舞台底；500 档回归数字不变。
+- **第 2 轮对账修订**：竖屏 390×844 与 915×412 部分与旧号 **N-3 撞号**（r18 playbook 已按 N-3 派给 B，数字一致：掷骰/购买 808–854）。以 N-3 为准；**U-1 收窄为「平板横屏 1024×768 / 1180×820 两档」的增量视口义务**——B 修 N-3 时把媒体档开到能覆盖这两档，四视口一起验收即可一票结案。
 
 ### U-2 模式条/菜单按钮热区 <44px（跨游戏通病）🔧【P1 · B 为主】
 
@@ -176,8 +177,110 @@
 
 ---
 
-## 附：本轮环境水位
+## 附：第 1 轮环境水位
 
 - `npm run build` ✅（vite + PWA precache 200 entries）。
 - `npm test`（基线 `e58ccceb`，本轮零改 src）：**1193 文件 / 19489 用例，其中 2 文件 5 例既有失败**（即 U-6：combo-clash/mahjong-bloom 14px 正文），其余 19484 全绿。下一轮以「U-6 修复后全绿」为交卷水位。
 - 预览：`npx vite preview --port 4173`；Chrome：`/usr/local/bin/google-chrome`；puppeteer-core 临时安装（`--no-save`，不进 package.json）。
+
+---
+
+# 第 2 轮增补（学习优化-C · 监督轮次第 2 轮）
+
+> 基线：`game-1.3 = 8b23ab11`（已含 r18 学习笔记 + playbook，N 系列用到 **N-99**）。本轮 `src/**` 仍零改动。
+> 抽测范围：第 1 轮未覆盖的 20 款（闯关 l99 / 双人对战 / 画布 / 棋牌 sticky）× **5 视口**（四视口 + 915×412），共 190 条测量；对出屏控件另做「可滚祖先链」复核（工装 `/tmp/ux-c-r2.mjs`、`/tmp/ux-c-verify.mjs` 不进库）。
+> **与 r18 对账**：N-94…N-99 已被 wave1 学习员占用并派发（xiangqi / duo-vs-star / bomb-buddies / math-farm / hue-hand / sudoku-petal），本文不重复；本轮新伤继续用 **U-7 起**。U-7…U-11 的对象目录均**不在 r18 A/B 独占清单内**，可安全并行；唯 U-9 动 `src/styles.css`（A 独占）。
+
+## 八、结构性根因（本轮最重要的发现，写给所有后续轮次）
+
+**`level99.ts` 的 `pinL99Host()` 会给「游戏自带滚动容器」打上 `.l99-host` 类，而 `.l99-host` 是 `overflow:hidden`。**
+
+实证：tank-battle 自带 `.tkb-root{height:100%;overflow-y:auto}`（index.ts:116），挂进关卡后 DOM 上是 `.tkb-root.l99-host`，实测 `overflow-y:hidden`、sh 798 > ch 730——自带滚动被框架打死。r18 的 N-98（hue-hand）、N-75（麻将手牌）与本轮 U-7/U-8 全是同族病。
+
+**由此固化一条军规**：l99 闯关游戏关内的一切超高救济，**只有两条合法路径**——
+1. **钳内容高**（画布/棋盘按余量收，参照 `canvasDisplayCapPx` / `fitPanesToStage`）；
+2. **`position:fixed` 钉视口底**（参照 N-75 手牌配方，补左右定位与背景垫）。
+`position:sticky` 与「自身 overflow-y:auto」在 `.l99-host`/`.l99-stage{overflow:hidden}` 链里**一律失效**，写了等于没写；review 时看到 l99 游戏里新增 sticky 底键直接打回。
+
+## 九、第 2 轮新伤（U-7…U-12）
+
+### U-7 tank-battle 双人对战操控键不可达 🔧【P0 · B】
+
+- **实测**（点「⚔️ 双人对战」后）：390×844 双方 D-pad+武器键 12 枚 @795–888 出屏；1024×768 15 枚 @739–907；1180×820 15 枚 @778–946；915×412 16 枚（小地图 @395–439、暂停 @453–497、方向 @424–519）。五视口仅 768×1024 幸免。祖先链全是 `overflow:hidden`（`.tkb-root.l99-host` sh798/ch730；915 还叠 `.tkb-wrap` sh404/ch304）——**滚不动，双人根本没法打**。
+- **根因**：`src/games/tank-battle/index.ts` 的 sticky/钳高救济只在 `@media (max-height:500px)` 档（223–231 行），且该档的 sticky 在 `.l99-host` 链里本就失效（第八节）；对战画布高未按余量预留双 D-pad。
+- **修法**：照 N-75 配方把 `.tkb-pads-two`（+ `.tkb-acts`）改 **fixed 钉视口底**（媒体档扩到覆盖 844/768/820 高），并在 JS 画布高预算里减去双垫高度（223 行注释说明 N-53 时已有此机制，扩档即可）；或按第八节路径 1 钳 `.tkb-canvas` 显示高。**勿动** `campaignPad.r15.test.ts` / `shortLandscape.r11.test.ts` 守门与闯关单人档。
+- **验收**：五视口双人对战两套方向键+武器键 bottom ≤ 视口底、热区 ≥44；闯关模式回归数字不变。
+
+### U-8 mole-pop 关内洞格出屏滚不动 🔧【P0 · B】
+
+- **实测**：915×412 九宫洞下两排 @469–894 出屏（`.mp-wrap` sh754/ch208 `overflow:hidden`）——**9 洞只能看到第一排，玩不了**；1024×768 / 1180×820 末排 @724–928 出屏。390×844、768×1024 干净。
+- **根因**：`src/games/mole-pop/index.ts` `.mp-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}`（95 行）无任何钳宽/钳高档，洞格 `aspect-ratio:1` 随舞台宽等比放大（915 宽 → 单洞 206px 高 → 板高 ~650px）。
+- **修法**（第八节路径 1）：给 `.mp-board` 补 `max-width:min(100%, calc(100dvh - 240px));margin-inline:auto`（240 为壳+HUD 预算，量后调），必要时加 `(max-height:500px)` 档再收。**红线**：洞热区 ≥56px（74 行注释 + `visual.qa1.test.ts` 守门），390×844 已绿档零回退，勿改升降时序 `rhythm.ts`。
+- **验收**：五视口 9 洞全部 bottom ≤ 舞台可视底、单洞 ≥56px。
+
+### U-9 chess-garden 平板横屏「重摆题面」不可达 🔧【P1 · A】
+
+- **实测**：1024×768 与 1180×820 关内「♻️ 重摆题面」@816–860 出屏（`.l99-stage` sh710/ch590 hidden）；双人同屏态同炸。915×412 命中 N-66 档正常（末行棋盘格 30px 属观察豁免）。
+- **根因**：N-66 配方（`src/styles.css:3320` 起）媒体条件是 `(min-width:700px) and (max-height:500px)`，平板横屏不命中 → 8×8 棋盘全尺寸把工具行顶出裁切区。
+- **修法**：styles.css 该段**加一档** `(min-width:700px) and (max-height:840px)`：`.cg-wrap .cg-board{max-width:min(420px,60dvh)}` + `.cg-wrap .cg-tools` 同款 sticky（sticky 在此有效——`.cg-tools` 的滚动/裁切祖先正是 `.l99-stage`，sticky 相对裁切盒仍钉可视底；若实测不钉，退回钳 board 一条路）。**勿改** 500 档现值（N-66 守门 `duoFit.r14.test.ts`）。
+- **验收**：1024×768 / 1180×820 单人与双人同屏「重摆题面」bottom ≤ 舞台可视底；915×412 回归数字不变。
+
+### U-10 box-hamster 关内 D-pad 40px 高 🔧【P2 · B】
+
+- **实测**：915×412 关内 ⬆◀⬇▶ 四键 **56×40**（<44 红线）。390×844 等其余视口达标。
+- **根因**：`src/games/box-hamster/index.ts` `.bh-pad` 默认 `grid-auto-rows:52px`（117 行）、窄屏档 46px（137 行），但矮横屏某档把行高压到了 40（测试员先 `rg -n "40px|auto-rows" src/games/box-hamster/index.ts` 定位）。
+- **修法**：该档行高提到 44px 并给 `.bh-btn` 补 `min-height:44px`。若挤不下就收 `.bh-wrap` 别处（实测该档仅溢出 19px，余量足够）。
+- **验收**：915×412 四键 ≥44px 且整排在屏；对账 N-47（那是**菜单**芯片 40→44，已合勿动，本条是**关内 D-pad**，别并错账）。
+
+### U-11 brick-break 画布底切、挡板区不可见 🔧【P1 · B】
+
+- **实测**：1024×768 画布 bottom 838 / 舞台可视底 746（**切 92px**）；1180×820 切 92px；915×412 画布 bottom 440 / 396（切 44px）。左右控制键已 sticky 在屏（⬅️ 278–334 ✅）。挡板画在画布底部——**切掉的正是挡板与接球区**。
+- **根因**：`src/games/brick-break/index.ts:125` `.brk-canvas{max-height:calc(100dvh - 168px)}` 的 168px 预算只够壳顶栏，没算 l99 关内 stagebar/HUD/控制键（实际 chrome ≈260px）。
+- **修法**：预算改 `calc(100dvh - 260px)` 并按视口档微调；更稳做法照 fruit-catch `canvasDisplayCapPx()` 进关量 `.game-stage` 实际缺口钳显示高（第八节路径 1）。`object-fit:contain` 保留，`.brk-ctrl` sticky 勿动，物理/球速零触碰。
+- **验收**：五视口画布 bottom ≤ 舞台可视底（挡板全程可见）；对账旧号 **C-2**（r16 观察 crop 172，一并结案）。
+
+### U-12 snake-snack 关内画布底切 26px 👀【P3 · 观察，不立修】
+
+- 915×412 画布 bottom 422 / 舞台 396。操控键已进屏（N-61 已按 r18 结案，**禁止二套垫**）。只登记：若后续实测蛇的世界底行被裁影响判断，再立号走「钳显示高」路径，勿碰 `SR_SHORT_PANE_H=200`。
+
+### 旧号增补数字（不开新号，验收时引用）
+
+- **U-2 追加对象**：brick-break「♾️ 无尽砖塔」105×40（五视口同值）。r18 红线写「全库热区已达标」与实测不符——A/B 验收时以 `getBoundingClientRect` 实测为准。
+- **U-6 增补**：915×412 实况渲染 `mahjong-bloom .mj-goal` = **14px**、`combo-clash .cc-info` = **14px**（此前只有 360px 单测断言，现补矮横屏实测）；其余四视口均 16px。修法不变（提基档字号、去 nowrap）。
+- **N-55（r18 已派 B）**：本轮复测五视口，仅 915×412 中招（第二排 @382–428 切 16px），四视口全绿——修完只需回归 915。
+- **mahjong-bloom 手牌**：915×412 手牌 bottom 400 / 舞台 396，贴线 4px，噪声级不立号；修 U-6 时顺手确认。
+
+## 十、第 2 轮干净清单（五视口全测过，下轮不必重量）
+
+merge-2048 / orb-arena / gomoku / landlord-cards / duo-arena（开擂 CTA 344–400 在屏）/ fight-king 入口 / brave-path（N-86 大厅回归绿）/ garden-guard / fruit-slice / gold-hook / rainbow-run / snake-snack（除 U-12 观察）/ box-hamster 地图态 / mole-pop 地图态 / tank-battle 闯关态与地图态 / snow-fight 闯关态（对战即 N-55）——地图 `.l99-view` 可滚、锁定格在滚动流内、`.l99-node-cur` 全部在屏（N-39 口径五视口零违例）。
+第 1 轮已绿基线维持：balloon-pop / hop-pads / fruit-catch / tap-tiles 的地图与第 1 关。
+
+## 十一、第 2 轮给测试员 A/B 的任务单（精确路径 + 验收步骤）
+
+**共同准备**：`git fetch origin game-1.3` → rebase → `npm run build && npx vite preview --port 4173` → puppeteer-core + `/usr/local/bin/google-chrome`，每案独立 context；五视口 = 390×844 / 768×1024 / 1024×768 / 1180×820 / 915×412；每条修复留 top/bottom 前后数字 + 配套小测试；`npm test` 只增不减（进场水位 19484 绿 + U-6 的 5 红，修完 U-6 应全绿）。
+
+### A（壳层 + 闯关框架；独占 `src/styles.css`、`src/ui/**`、`src/games/level99*`）
+
+| 序 | 项 | 文件 | 步骤 |
+| --- | --- | --- | --- |
+| 1 | **U-9** chess-garden 平板横屏工具行 | `src/styles.css`（3320 行 N-66 段后追加新档） | ① 复现：1024×768 → `#/game/chess-garden` → 点 `.l99-continue` → 量「重摆题面」top/bottom；② 加 `(min-width:700px) and (max-height:840px)` 档钳 `.cg-board` + 工具钉底；③ 五视口验收 + 915 回归 N-66 数字；④ 补一条 styles.css 断言测试（存在新档、500 档原文未动） |
+| 2 | **U-4** 首页 hero 平板横屏收紧 | `src/styles.css`（S-1 段附近追加） | 见第四节 U-4；1024×768 首卡 top ≤500，480/500 档零回退 |
+| 3 | 第八节军规落地 | `docs/qa/`（文档）+ 可选 `src/games/level99.stars.test.ts` 同级新测试 | 把「l99 内 sticky/自滚失效」写进下一份 learn-notes；可选:加一条源码扫描测试,断言 l99 游戏内联 CSS 新增 `position:sticky.*bottom` 时必须带注释说明滚动祖先(轻量守门,拿不准就只写文档) |
+
+### B（休闲对战动手；独占 `src/games/**` 中下列目录，避开 r18 B 组的 12 个目录）
+
+| 序 | 项 | 文件 | 步骤 |
+| --- | --- | --- | --- |
+| 1 | **U-7** tank-battle 双人操控 | `src/games/tank-battle/index.ts`（116/143/223–231 行档位） | ① 复现：任一视口 → `#/game/tank-battle` → 点「⚔️ 双人对战」→ 量最底一排键；② `.tkb-pads-two`/`.tkb-acts` fixed 钉底 + 画布预算减双垫高（扩媒体档覆盖 844/768/820）；③ 五视口 + 闯关回归；④ 小测试断言新档存在且 `campaignPad.r15` 原断言不动 |
+| 2 | **U-8** mole-pop 洞格 | `src/games/mole-pop/index.ts`（95 行 `.mp-board`） | ① 复现：915×412 进第 1 关量第 2/3 排洞 top；② `.mp-board` 钳 `max-width:min(100%,calc(100dvh - 240px))` 居中；③ 五视口 9 洞在屏、洞 ≥56px（`visual.qa1.test.ts` 保绿）；④ 390/768 档零回退 |
+| 3 | **U-11** brick-break 画布/挡板 | `src/games/brick-break/index.ts`（125 行 `.brk-canvas`） | ① 复现：1024×768 进第 1 关量 canvas bottom vs `.game-stage` 可视底；② 预算 168→按实测 chrome（或抄 `canvasDisplayCapPx` 动态钳）；③ 五视口挡板可见；④ 结案 C-2 并留数字 |
+| 4 | **U-6** combo-clash / mahjong-bloom 正文 14px | `src/games/combo-clash/index.ts`（`.cc-info`）、`src/games/mahjong-bloom/index.ts`（`.mj-goal`） | ① 先跑 `npx vitest run src/ui/mobileText.test.ts src/games/window1-mobile-text.test.ts` 看 5 红；② 字号 14→16、`.mj-goal` 去 nowrap 补 `overflow-wrap:anywhere`；③ 两测试文件全绿 = 全库回绿；④ 390 与 915 实测渲染 ≥16px |
+| 5 | **U-2** 模式键 44px | `src/games/{fruit-catch,balloon-pop,brick-break}/index.ts`（duo-rush 归 r18 B 独占，留给他们） | ① 每款量 modebar 键 offsetHeight；② 补 `min-height:44px;box-sizing:border-box`；③ 先 `rg` 各款 visual/copy 测试有没有断言 padding 原文；④ 五视口复量 |
+| 6 | **U-10** box-hamster D-pad | `src/games/box-hamster/index.ts`（`.bh-pad` 矮屏档） | ① `rg -n "40px\|auto-rows" src/games/box-hamster/index.ts` 定位 40 来源；② 行高 ≥44 + `.bh-btn min-height:44px`；③ 915 验收整排在屏 |
+
+**优先顺序**：B 先 U-6（红灯挡交卷）→ U-7 → U-8 → U-11 → U-2 → U-10；A 先 U-9 → U-4。撞车规则不变：同一元素先合版为准；r18 在途的 N-94…N-99 与 N-3/N-12/N-55/C-8/N-10 **本任务单一律不碰**。
+
+## 附：第 2 轮环境水位
+
+- 环境曾在两轮之间重置（node_modules 清空），`npm ci` + `npm run build` 重建后全绿；本轮未重跑全量 vitest（零改 src，水位沿用第 1 轮：19484 绿 + U-6 5 红）。
+- 抽测统计：20 款 × 5 视口 × entry/level1/duo ≈ 190 条测量 + 9 条可滚祖先链复核，全部留档在本文件。
