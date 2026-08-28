@@ -310,6 +310,31 @@ interface Burst {
 /** 落地压扁演出多长（秒），只影响画法不影响判定 */
 const SQUASH_TIME = 0.15;
 
+/** 画布显示高的下限:比这更矮台子和四个人就看不清了,低于它宁可交给舞台滚动 */
+export const MIN_CANVAS_DISPLAY_PX = 150;
+
+/**
+ * 画布该「显示」多高(null = 原生高度就装得下,一个样式都不用写)。
+ *
+ * 画布是 `width:100%; height:auto` 的 16:9 replaced 元素——横屏 640×360 上
+ * 显示高 ~356px,而 `.game-stage` 的可视高只剩 ~280px:画布下半截连同
+ * 触屏按钮排(纯触屏唯一的输入)一起掉在裁切线以下。
+ * 量出真实余量后钳一条 `max-height`:浏览器按内在比例连宽一起等比收,不变形;
+ * 判定都在世界坐标里,显示缩放一个数都不碰。
+ */
+export function canvasDisplayCapPx(
+  nativeH: number,
+  roomPx: number,
+  min = MIN_CANVAS_DISPLAY_PX
+): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
 /** 出界演出的小星星：从出界那一点朝四周飞散开 */
 interface Spark {
   x: number;
@@ -661,8 +686,54 @@ function mountArena(opts: ArenaOptions): Arena {
   let cssW = 0;
   let cssH = 0;
 
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = root.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /** 画布显示高按可视余量钳一刀(见 canvasDisplayCapPx 的注释) */
+  function fitDisplay(): void {
+    if (!canvas.style) return;
+    if (typeof canvas.getBoundingClientRect !== "function" || typeof root.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    canvas.style.maxHeight = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    // 画布下面的家当(名牌 / 提示 / 触屏按钮排):高度不随画布显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(root.getBoundingClientRect()) - rectBottom(canvasRect));
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    if (px !== null) {
+      canvas.style.maxHeight = `${px}px`;
+      // 等比收窄后画布居中,别贴在左边
+      canvas.style.marginLeft = "auto";
+      canvas.style.marginRight = "auto";
+    }
+  }
+
   function resize(): void {
     if (!ctx) return;
+    // 先钳显示高,再按钳完的显示宽定 backing,比例才对得上
+    fitDisplay();
     const rect = canvas.getBoundingClientRect();
     const w = Math.max(240, rect.width || 320);
     const h = w * (WORLD_H / WORLD_W);
@@ -1006,6 +1077,8 @@ function mountArena(opts: ArenaOptions): Arena {
   const onResize = (): void => resize();
   window.addEventListener("resize", onResize);
   resize();
+  // 挂载那一刻可能还没排好版,量不准舞台余量;抽空补量一次
+  later(() => resize(), 0);
   raf = requestAnimationFrame(frame);
 
   return {
@@ -1016,7 +1089,8 @@ function mountArena(opts: ArenaOptions): Arena {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
-      for (const id of timers) clearTimeout(id);
+      // later() 排的是 window.setTimeout,清也要走 window 这本账(测试桩分开记)
+      for (const id of timers) window.clearTimeout(id);
       timers.clear();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
