@@ -62,6 +62,10 @@ export const STAGE_VISIBLE_AT_720_PX = 618;
 /** 「矮屏」的门槛 */
 export const SHORT_SCREEN_PX = 720;
 
+/** 简谱视奏矮横屏（N-73）：琴键是唯一输入，必须先于芯片进 412 */
+export const SCORE_LANDSCAPE_MAX_H = 500;
+export const SCORE_LANDSCAPE_MIN_W = 600;
+
 /** 触屏可点元素的最小边长 */
 export const CHIP_MIN_PX = 44;
 
@@ -408,6 +412,17 @@ export const MST_CSS = `
   .mst-bar{height:${SHORT_SIZES.bar}px;}
   .mst-bar-tick{top:8px;height:28px;}
   .mst-score{padding:${SHORT_SIZES.scorePad}px 12px;gap:8px;}
+}
+@media (max-height:${SCORE_LANDSCAPE_MAX_H}px) and (min-width:${SCORE_LANDSCAPE_MIN_W}px){
+  /* N-73：简谱视奏 915×412。竖排时星空+谱+芯片把「哆」顶到 404 切底。
+     只动 .mst-wrap-score（进阶视奏关），沙盒/跟弹/节奏鼓不走这条。
+     右栏挂键盘吃满可视高，左栏放谱；芯片可次级。热区 44 不动。 */
+  .mst-wrap.mst-wrap-score{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,46%);
+    grid-auto-flow:dense;align-items:start;min-height:0;gap:4px 10px;padding:6px 8px;}
+  .mst-wrap.mst-wrap-score > .mst-sky{grid-column:2;grid-row:1 / span 8;min-height:0;max-width:100%;
+    height:100%;align-self:stretch;display:flex;flex-direction:column;justify-content:flex-end;}
+  .mst-wrap.mst-wrap-score .mst-keys{min-height:0;}
+  .mst-wrap.mst-wrap-score .mst-msg{min-height:0;font-size:15px;}
 }
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}

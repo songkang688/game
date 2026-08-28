@@ -181,15 +181,19 @@ describe("找不同 · 真横屏两图并排(三办 R5-A L-1)", () => {
     expect(regrowCellPx(26, 3, 412, 260, 44, true)).toBe(27);
     // 竖排同余量不回涨(公式给 26,不比当前大)
     expect(regrowCellPx(26, 3, 412, 260, 44, false)).toBeNull();
+    // 只放大不缩小:当前已经 32,公式给 27,返回 null
+    expect(regrowCellPx(32, 3, 412, 260, 44, true)).toBeNull();
   });
 
   it("挂载代码接了并排:布局类、标题方位词、回涨口径都在", () => {
     expect(SRC).toContain("panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640)");
     expect(SRC).toContain('panelsEl.classList.add("fdf-panels-row")');
     expect(SRC).toContain('opts.playLabel.replace(/下图/g, "右图")');
-    expect(SRC).toContain("PLAY_CELL_PX, rowLayout)");
+    expect(SRC).toContain("PLAY_CELL_PX, playUsesRowPx)");
     // 中缝皮肤的 96% 宽必须被三层选择器压回,否则两图被挤到屏幕两端
     expect(SRC).toContain(".fdf-panels-row .fdf-split.fdf-seam");
+    // L-1 仍排除三图,N-68 另开 tripleRow
+    expect(SRC).toContain("const rowLayout = !triple && wideShort");
   });
 
   it("提示文案里的方位词只在显示层换向,MODE_HINTS 数据零触碰", () => {
