@@ -1913,6 +1913,23 @@ html {
 }
 
 @media (max-height: 500px) {
+  /* N-89:915×412 关内顶栏再收 ~28px 给 sticky 底键；热区仍 ≥44。勿改 orb/snake paneH=200 */
+  .game-screen .game-topbar {
+    padding: 0;
+    gap: 4px;
+  }
+
+  .game-screen .game-title {
+    min-height: 44px;
+    padding: 0 10px;
+    font-size: 16px;
+    border-width: 2px;
+  }
+
+  .game-screen .game-title-emoji {
+    display: none;
+  }
+
   .screen.home-screen {
     padding-top: max(8px, env(safe-area-inset-top, 0px));
   }

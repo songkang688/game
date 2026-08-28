@@ -203,6 +203,17 @@ export const CSS = `
   .shr-chip{padding:4px 7px;}
   .shr-pads{--k:44px;}
 }
+/* N-78:双人开火被舞台自滚卷走。先锁 wrap,再把画布按余高收、垫钉底。菜单芯片 40 归 N-47 勿动 */
+@media (max-height:500px){
+  .shr-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;}
+  .shr-bar{flex:0 0 auto;}
+  .shr-box{flex:1 1 auto;min-height:0;}
+  .shr-cv{height:min(140px,36dvh);}
+  .shr-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
+  .shr-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:2px;}
+}
 @media (prefers-reduced-motion:reduce){
   .shr-toast{transition:none;}
 }
@@ -1046,7 +1057,15 @@ function createField(opts: FieldOptions): FieldHandle {
 
   function resize(): void {
     const cssW = Math.max(240, box.clientWidth || wrap.clientWidth || 320);
-    const cssH = Math.min(320, Math.round((cssW / FIELD_W) * FIELD_H));
+    const ratioH = Math.round((cssW / FIELD_W) * FIELD_H);
+    const vh = globalThis.innerHeight || 800;
+    let cap = 320;
+    if (vh <= 500) {
+      const padH = typeof pads.getBoundingClientRect === "function" ? pads.getBoundingClientRect().height : 0;
+      const barH = typeof topbar.getBoundingClientRect === "function" ? topbar.getBoundingClientRect().height : 36;
+      cap = Math.max(96, Math.min(148, vh - 108 - barH - Math.max(padH, opts.players === 2 ? 120 : 88) - 18));
+    }
+    const cssH = Math.min(cap, ratioH);
     canvas.style.height = `${cssH}px`;
     const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
     canvas.width = Math.round(cssW * dpr);

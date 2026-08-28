@@ -176,6 +176,13 @@ export const CSS = `
   .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
   .gmk-panel .gmk-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
   .gmk-panel{gap:8px;}
+  /* N-83:闯关工具行。开始下棋仍只在 .gmk-panel 里,进局收盘+钉工具 */
+  .gmk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .gmk-top,.gmk-seats{flex:0 0 auto;}
+  .gmk-boardbox{flex:1 1 auto;min-height:0;display:flex;justify-content:center;align-items:center;}
+  .gmk-canvas{max-height:min(168px,42dvh);width:auto;max-width:100%;margin:0 auto;}
+  .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;flex:0 0 auto;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
 }
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
