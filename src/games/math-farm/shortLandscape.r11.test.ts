@@ -17,7 +17,7 @@ describe("N-44 math-farm 竖式插图矮横屏收高", () => {
     const block = QUIZ.slice(start, QUIZ.indexOf("`;", start));
     expect(block).toMatch(/\.qz-prompt svg, \.qz-prompt img \{ max-height: \d+px/);
     expect(block).toContain(".qz-prompt .mtf-vert");
-    expect(block).toContain(".qz-wrap > .mtf-illus");
+    expect(block).toContain(".qz-wrap > .mtf-illus:not(.mtf-illus-count)");
     expect(block).toMatch(/max-height: 64px/);
   });
 
@@ -26,10 +26,15 @@ describe("N-44 math-farm 竖式插图矮横屏收高", () => {
     const short = FARM_CSS.slice(FARM_CSS.indexOf("@media (max-height: 500px)"));
     const end = short.indexOf("@media", 10);
     const block = end < 0 ? short : short.slice(0, end);
-    expect(block).toContain(".mtf-illus { max-height: 56px;");
+    expect(block).toContain(".mtf-illus:not(.mtf-illus-count) { max-height: 56px;");
     expect(block).toContain(`width: ${MIN_CROP_PX}px; height: ${MIN_CROP_PX}px;`);
     expect(block).toContain(".mtf-quizhost .qz-choice { min-height: 46px; }");
     expect(MIN_CROP_PX).toBeGreaterThanOrEqual(16);
+  });
+
+  it("第 1 关数一数贴纸行不走竖式作物卡钳位", () => {
+    expect(FARM_CSS).toContain(".mtf-illus:not(.mtf-illus-count)");
+    expect(QUIZ).toContain(".qz-wrap > .mtf-illus:not(.mtf-illus-count)");
   });
 
   it("竖式字号紧凑档在 runner，出题函数零触碰", () => {
