@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/cover-card.jpg", "icons/icon-192.png", "icons/apple-touch-icon.png"],
+      includeAssets: ["icons/icon-192.png", "icons/apple-touch-icon.png"],
       manifest: {
         id: "/",
         name: "一朵一星",

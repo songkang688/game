@@ -90,18 +90,6 @@ async function openCollectionSafely(): Promise<void> {
   }
 }
 
-/** 1.3 统一封面:应用图标和每张游戏卡都用这一张 */
-const APP_COVER_SRC = "./icons/cover-card.jpg";
-
-function makeCoverImg(className: string): HTMLImageElement {
-  const img = document.createElement("img");
-  img.className = className;
-  img.src = APP_COVER_SRC;
-  img.alt = "";
-  img.draggable = false;
-  return img;
-}
-
 /** 1.1 新增控件的样式:styles.css 归别的窗口管,这里只补自己新加的那几个类 */
 const HOME_EXTRA_CSS = `
 .home-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 18px}
@@ -534,8 +522,10 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     card.style.setProperty("--card-color", meta.color);
     card.setAttribute("aria-label", `继续玩 ${meta.title}`);
 
-    const emoji = makeCoverImg("recent-cover");
+    const emoji = document.createElement("span");
+    emoji.className = "recent-emoji";
     emoji.setAttribute("aria-hidden", "true");
+    emoji.textContent = meta.emoji;
 
     const info = document.createElement("span");
     info.className = "recent-info";
@@ -631,11 +621,15 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     // 错峰浮现动画的序号(封顶,后面的卡片不再继续拖延)
     card.style.setProperty("--card-i", String(Math.min(index, 11)));
 
-    // ---- 第一层:统一封面(应用图标那张画) ----
+    // ---- 第一层:封面区(渐变 + 分类图形语言,表情贴纸骑在封面下沿) ----
     const cover = document.createElement("span");
-    cover.className = "card-cover";
+    cover.className = `card-cover card-cover--${meta.category}`;
     cover.setAttribute("aria-hidden", "true");
-    cover.appendChild(makeCoverImg("card-cover-img"));
+
+    const emoji = document.createElement("span");
+    emoji.className = "card-emoji";
+    emoji.textContent = meta.emoji;
+    cover.appendChild(emoji);
 
     // ---- 第二层:标题行(游戏名 + 一句话目标) ----
     const body = document.createElement("span");

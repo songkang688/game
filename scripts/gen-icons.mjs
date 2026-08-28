@@ -35,12 +35,6 @@ for (const { size, name } of plain) {
   await writePng(coverPath, size, path.join(iconsDir, name));
 }
 
-await sharp(coverPath)
-  .resize(512, 512, { fit: "cover" })
-  .jpeg({ quality: 86, mozjpeg: true })
-  .toFile(path.join(iconsDir, "cover-card.jpg"));
-console.log("生成 cover-card.jpg (512x512, 首页卡片)");
-
 // maskable: 图案缩到 78% 放在天空色底上,保证安全区
 const inner = Math.round(512 * 0.78);
 const pad = Math.round((512 - inner) / 2);
