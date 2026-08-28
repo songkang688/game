@@ -1,5 +1,5 @@
 /**
- * trio-r38…r45 A：N-176…194、N-196 `.l99-continue` 回归、N-197 `*-continue`。
+ * trio-r38…r46 A：N-176…197、N-198 `.l99-*` 壳层热区回归。
  * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760 / --vv-h。
  * B 热区文件白名单（N-189/190/192/193 等）。N-195 `.shr-back` 不扫、不改文件。
  */
@@ -296,6 +296,18 @@ describe("N-196 .l99-continue 已 ≥44", () => {
     expect(L99).toContain("scrollAdjustToRevealCta");
     expect(L99).toMatch(/\.l99-back\{[^}]*min-height:44px/);
     expect(L99).toMatch(/\.l99-tool\{[^}]*min-height:44px/);
+  });
+});
+
+describe("N-198 .l99-* 壳层热区", () => {
+  it("continue / back / tool / tab / ov-btn 均 ≥44；不改 node", () => {
+    expect(L99).toMatch(/\.l99-continue\{[^}]*min-height:44px/);
+    expect(L99).toMatch(/\.l99-back\{[^}]*min-height:44px/);
+    expect(L99).toMatch(/\.l99-tool\{[^}]*min-height:44px/);
+    expect(L99).toMatch(/\.l99-tab\{[^}]*min-height:44px/);
+    expect(L99).toMatch(/\.l99-ov-btn\{[^}]*min-height:44px/);
+    expect(STYLES).toMatch(/\.l99-ov-btn \{[^}]*min-height: 48px/);
+    expect(L99).not.toMatch(/\.l99-node\{[^}]*min-height:44px/);
   });
 });
 
