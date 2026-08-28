@@ -3298,3 +3298,22 @@ html {
   padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px))
     max(20px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
 }
+
+/* N-66 chess-garden 双人末行 379–435:矮宽屏把 8×8 收到 58dvh,工具钉底。单人/人机规则不动 */
+@media (min-width: 700px) and (max-height: 500px) {
+  .cg-wrap .cg-board {
+    max-width: min(248px, 58dvh);
+    margin-inline: auto;
+  }
+  .cg-wrap .cg-tools {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: 4px 0 2px;
+    background: linear-gradient(180deg, rgba(242, 247, 234, 0.35), #eaf3e4);
+  }
+  .cg-wrap .cg-log {
+    max-height: 2.4em;
+    overflow: hidden;
+  }
+}

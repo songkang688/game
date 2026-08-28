@@ -120,6 +120,11 @@ const CSS = `
 .llk-tool:disabled { opacity: .5; }
 .llk-boardbox { position: relative; }
 .llk-board { display: grid; gap: 3px; transition: transform .3s ease; }
+/* N-72:915 上按宽摊方格,4×4 一格 ~200 盘面 crop 496。收的是盘,洗牌/提示勿挤 */
+@media (max-height: 500px) {
+  .llk-board { max-width: min(420px, 78dvh); margin-inline: auto; width: 100%; }
+  .llk-msg { min-height: 0; margin-top: 4px; }
+}
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
 /* 麻将砖三层:顶面米白渐变(圆角 10px)+ 底部 3px 暖灰立面 + 1px 软影 */
 .llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; position: relative; background-color: var(--llk-tile-top); background-image: linear-gradient(160deg, var(--llk-tile-top), rgba(255,253,246,.24) 46%, rgba(216,203,180,.34) 100%); box-shadow: 0 3px 0 var(--llk-tile-side), 0 4px 5px rgba(140,105,66,.2); transition: transform var(--llk-ms-hover) ease-out, box-shadow var(--llk-ms-hover) ease-out, opacity .2s; }

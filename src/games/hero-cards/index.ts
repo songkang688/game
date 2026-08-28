@@ -222,6 +222,7 @@ export const HC_CSS = `
   .hc-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
   .hc-log{max-height:2em;}
   .hc-seats{margin-bottom:4px;}
+  .hc-wrap{max-height:calc(100dvh - 76px);}
 }
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
