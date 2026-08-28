@@ -608,7 +608,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     powerups: ["magnet", "jet", "board"],
     mission: { type: "coins", n: 999999 },
     feature: "endless",
-    hint: "一直跑一直跑!吃金币躲障碍,每 1600 米换一个世界,越跑越快!",
+    hint: "一直跑一直跑!吃糖果币躲障碍,每 1600 米换一个世界,越跑越快!",
   };
 
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
