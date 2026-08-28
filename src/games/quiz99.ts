@@ -171,6 +171,17 @@ const QUIZ_CSS = `
   .qz-say { min-height: 44px; padding: 6px 18px; }
   .qz-jump-go { min-height: 44px; padding: 8px 16px; }
   .qz-badge { padding: 3px 10px; }
+  /* N-97:root×深关(math-farm L188 一族)答题宿主被 fitIntoStage 钳成 ~164px 内滚,
+     选项排在题面之后初见掉出视口(915×412 实测 394~440,视口底 412)。选项是唯一 CTA,
+     钉在宿主可视底——滚动祖先就是 .mtf-quizhost 这类 overflow-y:auto 的宿主自身,
+     sticky 合法;宿主装得下(竖屏/平板)时 sticky 呆在流内原位,零变化。 */
+  .qz-choices { position: sticky; bottom: 0; z-index: 2; order: 99;
+    background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.96) 30%);
+    padding: 8px 4px 4px; margin: 0 -4px; border-radius: 12px 12px 0 0;
+    box-shadow: 0 -6px 10px -6px rgba(90,74,128,.28); }
+  /* 夸奖/提示(.qz-msg)本在选项之后,钉底后会被永久盖住:矮屏档用 order 挪到选项条上方,
+     其余元素相对顺序不变(qz-wrap 是 flex 列,order 只动视觉不动 DOM/读屏) */
+  .qz-msg { order: 98; }
 }
 `;
 

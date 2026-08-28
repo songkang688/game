@@ -105,6 +105,13 @@ export function createFarmLayer(
   }
 
   // ---- 样式与四层节点 -------------------------------------------------------
+  // PT-5:布景各层全是 position:absolute;inset:0,包含块必须是舞台自己。
+  // .l99-stage 本身没有定位,inset 会一路爬到 position:relative 的 .l99-wrap,
+  // 布景就把「🗺️ 选关/📖 攻略」那行 stagebar 整行盖住(390/915 实测按钮看不见但可点)。
+  // 挂载时补定位、卸载时还原,只动本款拿到的舞台元素,不碰壳文件。
+  const stageStyle = (stage as { style?: { position?: string } }).style;
+  const hadPosition = !!stageStyle?.position;
+  if (stageStyle && !hadPosition) stageStyle.position = "relative";
   const style = doc.createElement("style");
   style.textContent = FARM_CSS;
   stage.appendChild(style);
@@ -293,6 +300,7 @@ export function createFarmLayer(
       dead = true;
       timers.forEach((t) => clearTimeout(t));
       timers.clear();
+      if (stageStyle && !hadPosition && stageStyle.position === "relative") stageStyle.position = "";
       if (host instanceof HTMLElement) host.classList.remove("mtf-farm-host");
       if (prompt instanceof HTMLElement) prompt.classList.remove("mtf-count-sr");
       illus?.remove();
