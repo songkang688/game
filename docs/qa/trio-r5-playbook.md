@@ -1,6 +1,7 @@
 # 三人组第 5 轮 · 测试修复员 A/B 任务清单（playbook）
 
 > 依据：`trio-r5-learn-notes.md`（基线 `game-1.3 = 22a5be93`，全部条目带实测数字与截图核验）。
+> **r6 对账（基线 3c7fb691，B 的 r4 走查 4 修复合入后逐项核过源码+实测，全表见 `trio-r6-learn-notes.md` 第二节）**：N-23 之 bubble-aim「520px 定死」已改 clamp 🔶（矮横屏下限 420>412 死角 + focusCurrent 三款仍缺，转 r6 N-23 补充版）；其余 S/L/C/N 条目全部未动、原文继续有效。新发现 N-25…N-29（fight-king 塔/duo-vs-star 闯关/dot-maze/adventure-king 模式条/bubble-aim 关内）与配方 G/H 见 `trio-r6-playbook.md`。B 正在并行执行本清单，动手前先对最新 game-1.3。
 > 只列**仍未落地**的 🔧。r4 playbook 里已被 PR48–50 收掉的部分见 learn-notes 第二节对账表，r4 原编号（S-1…C-9）继续有效，本清单不重开新号、只写增量与新发现（N-x 编号见 learn-notes 第三节）。
 > 分工建议：**A = 壳层 + 闯关学习**，**B = 休闲对战动手**。B 的量最大：先做 C-1 收尾（半小时级）与 N-1（全场最重），再按配方分组打包啃。
 > 修补配方 A/B/C 见 r4 learn-notes 第六节，新配方 D/E/F 见 r5 learn-notes 第四节，条目里只写「走配方 X」。
@@ -64,7 +65,7 @@
 
 ## C 组 · 休闲对战动手（给 B）
 
-### C-1（收尾）modebar `[hidden]` 残余 3 款 + 全库守门测试 🔧（先做，半小时级）
+### C-1（收尾）modebar `[hidden]` 残余 3 款 + 全库守门测试 🔧（先做，半小时级）（r6 核对：三款原样未动，另抓漏网第 4 款 adventure-king `.ak-bar` 残留 88px，守门正则口径要加「被设过 hidden」条件防 4 条误报——扩容明细见 r6 playbook C-1）
 
 - **现象**：运行时实测进模式后残留条——box-hamster `.bh-modebar` 40px、prince-princess `.pcp-modebar` 82px（单人模式连 `bar.hidden` 都没设，顺手补上）、sudoku-petal `.sp-modebar` 154px（全场最高）。另 13 款新兜底没配蓝本测试（r4 验收线没走完）。
 - **视口**：任意，412×915 即可。
@@ -129,7 +130,7 @@
 
 - block-drop 915×412 仍裁 111（七键折叠线下）、combo-clash 仍裁 131（轻/重/必杀）。都是修过的款（`3978c344`/`62d90a4b`），钳制参数没吃到横屏矮档——复核 fit 计算里对 `.game-stage` 可视高的取数与下限值，往下再让一档。既有 fit 测试改参数要同步。
 
-### N-23 自绘选关地图三款接「滚到当前关」🔧（走配方 D）
+### N-23 自绘选关地图三款接「滚到当前关」🔧（走配方 D）（r6 核对 🔶：bubble-aim 520px 已改 `clamp(420px, 100dvh−150px, 960px)`（`0ebafb31`），390×844 白板已消；但 915×412 下限 420>视口 412 仍裁 150/内滚 3178，focusCurrent 三款零改动——按 r6 playbook N-23 补充版执行）
 
 - **现象**：bubble-aim `.ba-map` 固定 `max-height:520px` + 内滚 3096px（390×844），打开永远停第 1 关；candy-swing `.cs-map` 10 章纵铺（915×412 选关页裁 1879）无定位；sling-birds `.slb-map` 同族。
 - **改哪**：三款各自 `index.ts` 的地图渲染函数：渲染后当前关节点 `scrollIntoView({block:"center"})`（蓝本 `level99.ts:871`）；bubble-aim 的 520px 改按可视余量。解锁判定与存档 key 零触碰。
