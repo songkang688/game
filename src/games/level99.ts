@@ -643,11 +643,19 @@ const L99_CSS = `
   .l99-wrap{max-height:calc(100dvh - 136px);}
   .l99-view{overscroll-behavior:contain;}
   /* N-100(R-1):tab 折行款头部栈(章节页签折 2~4 行)超过矮横屏 276px 视高,
-     进场聚焦当前关时「继续 ▶」必然卷出顶(17 款实测 -154~-31)。头行钉 .l99-view 顶——
-     这里的滚动主就是 .l99-view(overflow-y:auto),sticky 合法;§八军规禁的是
-     l99-stage/l99-host overflow:hidden 链里的关内 sticky,别混。 */
+     进场聚焦当前关时「继续 ▶」必然卷出顶(17 款实测 -154~-31)。头行钉 .l99-view 顶,
+     CTA 全程可见——这里的滚动主就是 .l99-view(overflow-y:auto),sticky 合法;
+     §八军规禁的是 l99-stage/l99-host overflow:hidden 链里的关内 sticky,别混。
+     页签保持折行(window6.r3 守门:不许横滚),滚进头行下面的部分靠两招保命:
+     1) 头行自身点击穿透(pointer-events:none)、只留子元素热区——被压住的页签/
+        工具行照样点得到,不留幽灵热区(R-4 口径);
+     2) 背景 88% 实底渐变,压住的内容淡出可辨,提示「往上滚还有」。 */
   .l99-head{position:sticky;top:0;z-index:3;margin:0 -10px 6px;padding:4px 10px 8px;
-    background:linear-gradient(180deg,#fff7fb 82%,rgba(255,247,251,0));}
+    pointer-events:none;
+    background:linear-gradient(180deg,#fff7fb 88%,rgba(255,247,251,0));}
+  .l99-head>*{pointer-events:auto;}
+  /* 进度 chips 是纯展示 span,别让它挡住滚进头行下面的页签(R-4) */
+  .l99-head .l99-chip{pointer-events:none;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
