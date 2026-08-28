@@ -2501,6 +2501,165 @@ reg("🥁", "小鼓", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 7 章 三图侦探社（W8R1-04 余量 · FLIPPABLE ▲六张非对称剪影） ----
+
+reg("🔍", "放大镜", () => {
+  // FLIPPABLE ▲：手柄偏右下，剪影左右非对称
+  const ring = P.gold;
+  const glass = "#dff3fa";
+  return (
+    gs(24, 42, 12) +
+    `<path d="M25.5 25.5 L38.5 38.5" stroke="${o(P.wood)}" stroke-width="8" stroke-linecap="round"/>` +
+    `<path d="M25.5 25.5 L38.5 38.5" stroke="${P.wood}" stroke-width="5.2" stroke-linecap="round"/>` +
+    `<circle cx="18" cy="18" r="11.5" fill="${glass}" stroke="${o(ring)}" stroke-width="5.4"/>` +
+    `<circle cx="18" cy="18" r="11.5" fill="none" stroke="${ring}" stroke-width="3.2"/>` +
+    `<path d="M12 14.5 Q14.5 10.5 19 10.5" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>` +
+    `<path d="M22 23.5 Q19 24.8 15.5 24" fill="none" stroke="#a8ccd8" stroke-width="1.8" stroke-linecap="round" opacity=".7"/>`
+  );
+});
+
+reg("🧩", "拼图块", () => {
+  // FLIPPABLE ▲：凸耳只在上边与右边，剪影左右非对称
+  const c = P.teal;
+  const out = o(c);
+  return (
+    gs(24, 42.5, 13) +
+    `<path d="M11 15 L18.5 15 Q17 9.5 21 8 Q26 6.5 26.5 11 Q26.8 13.5 25 15 L34 15 Q36 15 36 17 L36 23.5 Q41.5 22 43 26 Q44.5 31 40 31.5 Q37.5 31.8 36 30 L36 37 Q36 39 34 39 L13 39 Q11 39 11 37 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M31 15.5 L34 15 Q36 15 36 17 L36 23.5 Q37.5 23 38.5 23.5 L38 30 L36 30 L36 37 Q36 39 34 39 L28.5 39 Q33 37.5 32.8 30 Q32.7 22 31 15.5 Z" fill="${shade(c, -14)}" opacity=".7"/>` +
+    `<circle cx="17.5" cy="22" r="1.6" fill="#ffffff" opacity=".65"/>` +
+    `<circle cx="22.5" cy="28.5" r="1.3" fill="#ffffff" opacity=".45"/>` +
+    hi(16, 18, 2.6, 1.6)
+  );
+});
+
+reg("🗝️", "老钥匙", () => {
+  // FLIPPABLE ▲：齿花全偏右侧，剪影左右非对称
+  const c = P.gold;
+  const out = o(c);
+  return (
+    gs(24, 42.5, 10) +
+    `<circle cx="20" cy="13.5" r="7.4" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<circle cx="20" cy="13.5" r="3.2" fill="#fdf6ee" stroke="${out}" stroke-width="1.6"/>` +
+    `<path d="M20 20.9 L20 40" stroke="${out}" stroke-width="5.6" stroke-linecap="round"/>` +
+    `<path d="M20 20.9 L20 40" stroke="${c}" stroke-width="3.4" stroke-linecap="round"/>` +
+    `<path d="M21.5 32 L28 32 Q29.5 32 29.5 33.5 Q29.5 35 28 35 L21.5 35 Z M21.5 37 L26 37 Q27.5 37 27.5 38.5 Q27.5 40 26 40 L21.5 40 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="1.7" stroke-linejoin="round"/>` +
+    `<path d="M24.5 8 Q27 9.5 27.2 12" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity=".7"/>`
+  );
+});
+
+reg("📜", "卷轴", () => {
+  // FLIPPABLE ▲：上下卷筒的卷芯都露在右端，剪影左右非对称
+  const paper = "#f6e8c8";
+  const out = o("#d8bc8a");
+  return (
+    gs(24, 42.5, 13) +
+    `<path d="M13.5 13.5 L34.5 13.5 L34.5 34.5 L13.5 34.5 Z" fill="${paper}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M30.5 13.5 L34.5 13.5 L34.5 34.5 L30.5 34.5 Q32 24 30.5 13.5 Z" fill="${shade(paper, -10)}" opacity=".75"/>` +
+    `<path d="M17.5 19.5 L30 19.5 M17.5 24 L30 24 M17.5 28.5 L26 28.5" stroke="${shade(paper, -34)}" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>` +
+    // 上卷筒：卷芯螺旋露在右端
+    `<rect x="10" y="8" width="26" height="6.5" rx="3.25" fill="${paper}" stroke="${out}" stroke-width="1.8"/>` +
+    `<circle cx="37.5" cy="11.2" r="3.6" fill="${shade(paper, -8)}" stroke="${out}" stroke-width="1.7"/>` +
+    `<circle cx="37.5" cy="11.2" r="1.3" fill="${shade(paper, -26)}"/>` +
+    // 下卷筒：同侧卷芯
+    `<rect x="10" y="33.5" width="26" height="6.5" rx="3.25" fill="${paper}" stroke="${out}" stroke-width="1.8"/>` +
+    `<circle cx="37.5" cy="36.7" r="3.6" fill="${shade(paper, -8)}" stroke="${out}" stroke-width="1.7"/>` +
+    `<circle cx="37.5" cy="36.7" r="1.3" fill="${shade(paper, -26)}"/>` +
+    hi(15.5, 10.5, 2.2, 1.2)
+  );
+});
+
+reg("🕯️", "小蜡烛", () => {
+  const wax = "#fff3df";
+  const out = o("#e8cf9e");
+  return (
+    gs(24, 43, 12) +
+    // 烛台碟与提环
+    `<ellipse cx="24" cy="40" rx="12.5" ry="3" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.8"/>` +
+    `<circle cx="37" cy="37.5" r="2.8" fill="none" stroke="${o(P.gold)}" stroke-width="2"/>` +
+    // 烛身与蜡泪
+    `<path d="M18.5 17 L29.5 17 L29.5 39 L18.5 39 Z" fill="${wax}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M26.5 17 L29.5 17 L29.5 39 L26.5 39 Q27.5 28 26.5 17 Z" fill="${shade(wax, -10)}" opacity=".8"/>` +
+    `<path d="M18.5 17 L29.5 17 L29.5 20 Q27.5 23.5 26 20.5 Q24.5 17.5 23 21 Q21.5 24.5 19.8 21 L18.5 20 Z" fill="#fffdf8" stroke="${out}" stroke-width="1.3" stroke-linejoin="round"/>` +
+    `<path d="M18.5 20.5 Q17 22.5 17.5 25 Q19 24.5 19 21.5 Z" fill="#fffdf8" stroke="${out}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    // 烛芯与火苗
+    `<path d="M24 14 L24 16.5" stroke="${INK}" stroke-width="1.4" stroke-linecap="round"/>` +
+    `<path d="M24 5.5 Q27.8 9.5 26.5 12.5 A3.4 3.4 0 0 1 20.5 11 Q20.8 8 24 5.5 Z" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    `<ellipse cx="23.8" cy="11" rx="1.4" ry="2" fill="${P.gold}"/>` +
+    hi(20.5, 24, 1.8, 1.2)
+  );
+});
+
+reg("🎩", "礼帽", () => {
+  const c = "#5f6678";
+  const out = o(c);
+  return (
+    gs(24, 42, 15) +
+    `<path d="M13.5 12 Q24 8.5 34.5 12 L34 32 L14 32 Z" fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M31 11.2 L34.5 12 L34 32 L30.5 32 Q31.5 21 31 11.2 Z" fill="${shade(c, -16)}" opacity=".8"/>` +
+    `<rect x="13.6" y="26" width="20.8" height="6" fill="${P.rose}" stroke="${o(P.rose)}" stroke-width="1.6"/>` +
+    `<path d="M8 32 Q24 29.5 40 32 Q41.5 32.5 41 34.5 Q40 37 36 36.5 Q24 34.5 12 36.5 Q8 37 7 34.5 Q6.5 32.5 8 32 Z" fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    hi(18, 14.5, 3, 1.8)
+  );
+});
+
+reg("🧭", "指南针", () => {
+  const rim = P.gold;
+  const face = "#fdf6ee";
+  return (
+    gs(24, 43, 13) +
+    `<circle cx="24" cy="14.5" r="2.6" fill="none" stroke="${o(rim)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="27" r="14" fill="${rim}" stroke="${o(rim)}" stroke-width="2"/>` +
+    `<path d="M24 41 a14 14 0 0 0 12.8 -19.5 a16.5 16.5 0 0 1 -12.8 19.5" fill="${shade(rim, -14)}" opacity=".75"/>` +
+    `<circle cx="24" cy="27" r="10.4" fill="${face}" stroke="${o(rim)}" stroke-width="1.6"/>` +
+    `<path d="M24 17.8 L24 20.6 M24 33.4 L24 36.2 M14.8 27 L17.6 27 M30.4 27 L33.2 27" stroke="${o(rim)}" stroke-width="1.5" stroke-linecap="round"/>` +
+    // 指针（红端指东北）
+    `<polygon points="30.5,20.5 25.8,28.8 22.2,25.2" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<polygon points="17.5,33.5 22.2,25.2 25.8,28.8" fill="#c8d4e0" stroke="${o("#c8d4e0")}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<circle cx="24" cy="27" r="1.9" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.2"/>` +
+    hi(18, 21, 2.4, 1.5)
+  );
+});
+
+reg("📒", "黄笔记本", () => {
+  // FLIPPABLE ▲；双胞胎 📒↔📕 的区分位：金黄封面 + 左侧线圈 + 右上角书签标签
+  const cover = P.gold;
+  const out = o(cover);
+  return (
+    gs(24, 42.5, 12) +
+    // 右上角书签标签（区分位）
+    `<path d="M29 6.5 L35 6.5 L35 14 L32 11.8 L29 14 Z" fill="${P.rose}" stroke="${o(P.rose)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    `<rect x="13" y="9.5" width="22" height="30" rx="2.5" fill="${cover}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M31 9.5 L35 9.5 L35 37 Q35 39.5 32.5 39.5 L29 39.5 Q32 38.5 31.8 34 Z" fill="${shade(cover, -13)}" opacity=".75"/>` +
+    // 左侧线圈（区分位）
+    `<path d="M13.5 14 L9.5 14 M13.5 20 L9.5 20 M13.5 26 L9.5 26 M13.5 32 L9.5 32 M13.5 38 L9.5 38" stroke="${o("#8fa2b8")}" stroke-width="2.2" stroke-linecap="round"/>` +
+    `<rect x="17.5" y="17" width="13" height="10" rx="1.6" fill="#fdf6ee" stroke="${out}" stroke-width="1.4"/>` +
+    `<path d="M19.5 20.5 L28.5 20.5 M19.5 23.5 L25.5 23.5" stroke="#c8b88a" stroke-width="1.3" stroke-linecap="round"/>` +
+    hi(17, 12.5, 2.4, 1.4)
+  );
+});
+
+reg("📕", "红课本", () => {
+  // FLIPPABLE ▲；双胞胎 📕↔📒 的区分位：正红封面 + 右侧白书页口 + 底部丝带书签
+  const cover = P.red;
+  const out = o(cover);
+  return (
+    gs(24, 43, 12) +
+    // 右侧书页口（区分位）
+    `<path d="M31 11.5 L37.5 11.5 Q39.5 11.5 39.5 13.5 L39.5 35.5 Q39.5 37.5 37.5 37.5 L31 37.5 Z" fill="#fdf6ee" stroke="${o("#d8ccb0")}" stroke-width="1.8"/>` +
+    `<path d="M35.4 14 L35.4 35 M37.6 14.5 L37.6 34.5" stroke="#d8ccb0" stroke-width="1" opacity=".8"/>` +
+    // 封面（书脊在左）
+    `<path d="M11 9.5 L30 9.5 Q33 9.5 33 12.5 L33 36.5 Q33 39.5 30 39.5 L11 39.5 Q8.5 39.5 8.5 37 L8.5 12 Q8.5 9.5 11 9.5 Z" fill="${cover}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M13 9.5 L13 39.5" stroke="${shade(cover, -20)}" stroke-width="2"/>` +
+    `<path d="M29 9.5 L30 9.5 Q33 9.5 33 12.5 L33 36.5 Q33 39.5 30 39.5 L26.5 39.5 Q29.5 38.5 29.4 34 Z" fill="${shade(cover, -14)}" opacity=".75"/>` +
+    `<circle cx="21.5" cy="19" r="4.2" fill="none" stroke="${P.gold}" stroke-width="1.8"/>` +
+    // 底部丝带书签（区分位）
+    `<path d="M24.5 39.5 L24.5 46 L27.5 43.6 L30.5 46 L30.5 39.5 Z" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    hi(15.5, 13.5, 2.2, 1.4)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------

@@ -11,19 +11,23 @@
  *      字号 / transform 与 emoji 档走同一份 style；
  *   4. 兜底：门控关掉或查不到贴纸时，输出与 1.2 的老写法逐字节一致；
  *   5. 贴纸两两不同：换装章节里「找不同」的差异点在贴纸上依然成立；
- *   6. 接线防拆：paintCell 走 glyphHTML，runner 用 sceneStickersReady 门控。
+ *   6. 接线防拆：paintCell 走 glyphHTML，runner 用 sceneStickersReady 门控；
+ *   7. FLIPPABLE 非对称契约（第 3 轮终验）：会被「换朝向」差异用到的图案，
+ *      贴纸剪影必须左右非对称——把 SVG 光栅化取 alpha 通道剪影，与 scaleX(-1)
+ *      镜像逐像素比对（正是玩家看到的口径），差异占比 ≥ 10% 才算翻过来看得出。
  */
 import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { hasSticker, sticker } from "../../art/kit/stickers";
 import { BOARD_ART_CSS, STICKER_FONT_RATIO, glyphHTML, sceneStickersReady } from "./boardArt";
-import { buildScene } from "./scene12";
+import { FLIPPABLE, buildScene } from "./scene12";
 import { CHAPTERS, LEVELS, THEME_POOLS } from "./levels";
 
 const PICTO = /\p{Extended_Pictographic}/u;
 
 /** 已配齐图集的主题（第 3 轮终验补齐第 4–10 章，配齐一章亮一章） */
-const READY_THEMES = [0, 1, 2, 3, 4, 5];
+const READY_THEMES = [0, 1, 2, 3, 4, 5, 6];
 
 /** 双胞胎替换表（LOOKALIKE 是题库私有常量，这里从源码现抓，谁改表这里跟着变） */
 function lookalikeTwins(pool: readonly string[]): string[] {
@@ -97,6 +101,47 @@ describe("W8R1-04 · glyphHTML 两档输出", () => {
 
   it("个别图案查不到贴纸：兜底与 1.2 老写法逐字节一致，绝不空格子", () => {
     expect(glyphHTML("🤷", 26, style)).toBe(`<span class="fdf-glyph" style="${style}">🤷</span>`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FLIPPABLE 非对称契约（第 3 轮终验 · 设计稿 4.3 的机器化钉子）
+// ---------------------------------------------------------------------------
+
+/** 剪影镜像差异占比：光栅化 alpha 通道，原图 vs 左右镜像逐像素比对（0–1） */
+async function silhouetteAsymmetry(svg: string): Promise<number> {
+  const SIZE = 64;
+  const alphaOf = async (flop: boolean): Promise<Buffer> => {
+    let img = sharp(Buffer.from(svg), { density: 96 }).resize(SIZE, SIZE);
+    if (flop) img = img.flop();
+    return img.ensureAlpha().extractChannel("alpha").raw().toBuffer();
+  };
+  const [a, b] = await Promise.all([alphaOf(false), alphaOf(true)]);
+  let diff = 0;
+  let union = 0;
+  for (let i = 0; i < a.length; i++) {
+    const av = a[i] > 128;
+    const bv = b[i] > 128;
+    if (av || bv) union++;
+    if (av !== bv) diff++;
+  }
+  return union ? diff / union : 0;
+}
+
+describe("W8R1-04 · FLIPPABLE 非对称契约", () => {
+  it("已配贴纸的 FLIPPABLE 图案，剪影与镜像的像素差异 ≥ 10%（换朝向翻得出来）", async () => {
+    const covered = [...FLIPPABLE].filter((e) => hasSticker(e));
+    expect(covered.length).toBeGreaterThan(0);
+    for (const e of covered) {
+      const score = await silhouetteAsymmetry(sticker(e, 48)!);
+      expect(score, `${e} 剪影不对称度 ${(score * 100).toFixed(1)}%`).toBeGreaterThanOrEqual(0.1);
+    }
+  });
+
+  it("指标对照组：对称造型（⭐ / 🔵）差异 < 5%，证明口径本身没失真", async () => {
+    for (const e of ["⭐", "🔵"]) {
+      expect(await silhouetteAsymmetry(sticker(e, 48)!), e).toBeLessThan(0.05);
+    }
   });
 });
 
