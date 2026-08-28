@@ -1,7 +1,7 @@
 /**
  * trio-r38…r45 A：N-176…194、N-196 `.l99-continue` 回归、N-197 `*-continue`。
  * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760 / --vv-h。
- * B 热区文件白名单（含 N-195 shoot-range `.shr-back` 不抢修）。
+ * B 热区文件白名单（N-189/190/192/193 等）。N-195 `.shr-back` 不扫、不改文件。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
