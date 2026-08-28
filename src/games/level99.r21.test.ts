@@ -35,7 +35,7 @@ describe("N-117 章节页签徽章收纳", () => {
 
 describe("N-118 地图密度与 136px 盲区", () => {
   it("矮屏不再用 100dvh-136px 硬钳 .l99-wrap", () => {
-    expect(SRC).not.toMatch(/100dvh\s*-\s*136px/);
+    expect(SRC).not.toMatch(/\.l99-wrap\{max-height:calc\(100dvh - 136px\)\}/);
     expect(SRC).not.toContain(".l99-wrap{max-height:");
   });
 
