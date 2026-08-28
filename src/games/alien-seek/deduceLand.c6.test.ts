@@ -27,6 +27,7 @@ describe("C-6 r15 · root×121 先灭舞台自滚", () => {
   });
 
   it("画布钳高给 root 抬头让位（148 > 旧 72）", () => {
-    expect(SRC).toContain("Math.min(vh - 148, hostH > 80 ? hostH : vh - 148)");
+    expect(SRC).toContain("wrap.style.maxHeight");
+    expect(SRC).toContain("vh - 96");
   });
 });

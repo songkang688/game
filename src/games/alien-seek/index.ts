@@ -189,7 +189,7 @@ const CSS = `
   overflow:hidden;box-sizing:border-box;}
 .as-wrap.as-land>style{grid-column:1/-1;height:0;margin:0;padding:0;border:0;overflow:hidden;}
 .as-wrap.as-land>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
-.as-wrap.as-land>.as-clues{grid-column:2;max-height:22dvh;overflow:auto;padding:4px 8px;gap:2px;}
+.as-wrap.as-land>.as-clues{grid-column:2;max-height:64px;overflow:auto;padding:4px 8px;gap:2px;}
 .as-wrap.as-land>.als-list{grid-column:2;max-height:44px;}
 .as-wrap.as-land>.als-tools{grid-column:2;}
 .as-wrap.as-land>.as-pads{grid-column:2;margin:0;align-self:end;}
@@ -1150,10 +1150,15 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (vh > 0 && vh <= 500 && vw >= 640) {
       wrap.classList.add("as-land");
       const hostH = host.clientHeight || 0;
-      const cap = Math.max(120, Math.round(Math.min(vh - 148, hostH > 80 ? hostH : vh - 148)));
+      const box = Math.max(160, Math.round(Math.min(vh - 96, hostH > 80 ? hostH : vh - 96)));
+      wrap.style.maxHeight = `${box}px`;
+      wrap.style.overflow = "hidden";
+      const cap = Math.max(120, Math.round(Math.min(vh - 148, box)));
       if (nextH > cap) nextH = cap;
     } else {
       wrap.classList.remove("as-land");
+      wrap.style.maxHeight = "";
+      wrap.style.overflow = "";
     }
     cssH = nextH;
     view = clampView(view, viewport());
