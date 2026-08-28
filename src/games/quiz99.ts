@@ -150,9 +150,8 @@ const QUIZ_CSS = `
 .qz-say { border: none; border-radius: 999px; background: #ffffffe6; cursor: pointer; font-family: inherit; font-weight: 900; font-size: 16px; padding: 10px 24px; min-height: 46px; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
 .qz-say:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,120,160,.3); }
 .qz-jump { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
-/* S-4 扩容(trio-r9):和 l99 的 .l99-jump-input 同族,热区一起抬到 44px */
 .qz-jump-input { width: 76px; min-height: 44px; border: 2px solid #e0d6f2; border-radius: 12px; padding: 0 8px; font-family: inherit; font-size: 15px; font-weight: 800; }
-.qz-jump-go { border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer; background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
+.qz-jump-go { border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer; background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); min-height: 44px; display: inline-flex; align-items: center; }
 .qz-jump-input:focus-visible, .qz-jump-go:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
 /* L-1(trio-r5):横屏矮屏(915×412 一族)答题器整块比舞台可视段还高,选项钮掉到折叠线下。
    只收空隙与展示字号:题面从 42px 收到 26px 仍旧醒目,选项与朗读钮热区保持 ≥44px,
@@ -162,12 +161,15 @@ const QUIZ_CSS = `
   .qz-prompt { font-size: 26px; min-height: 44px; padding: 6px 10px; }
   /* 题面插图(形状图/钟面这类 svg)按配方收高:选项行必须进屏,插图缩一点不影响认读 */
   .qz-prompt svg, .qz-prompt img { max-height: 64px; width: auto; }
+  /* N-44:农场竖式是 DOM(.mtf-vert)+题下作物卡(.mtf-illus),不是 svg,旧选择器漏了 */
+  .qz-prompt .mtf-vert, .qz-wrap > .mtf-illus:not(.mtf-illus-count) { max-height: 64px; overflow: hidden; }
   .qz-choices { gap: 8px; }
   .qz-choice { min-height: 46px; font-size: 22px; padding: 4px 12px; }
   .qz-choice.qz-big { min-width: 84px; min-height: 48px; font-size: 26px; }
   .qz-msg { min-height: 18px; }
   .qz-ask { min-height: 20px; }
   .qz-say { min-height: 44px; padding: 6px 18px; }
+  .qz-jump-go { min-height: 44px; padding: 8px 16px; }
   .qz-badge { padding: 3px 10px; }
 }
 `;

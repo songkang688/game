@@ -166,14 +166,16 @@ const CSS = `
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
 .bl-bar[hidden],.bl-picks[hidden]{display:none;}
 .bl-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 4px 0 #3f6da8;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 4px 0 #3f6da8;
+  min-height:44px;display:inline-flex;align-items:center;}
 .bl-open:active{transform:translateY(2px);box-shadow:0 2px 0 #3f6da8;}
 .bl-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-open--ai{background:linear-gradient(180deg,#6fbfa8,#4c9d86);box-shadow:0 4px 0 #3b7c69;}
 .bl-open--en{background:linear-gradient(180deg,#9a86e4,#7358cc);box-shadow:0 4px 0 #5b43a3;}
 .bl-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
 .bl-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffe0;color:#544d7d;box-shadow:0 3px 0 rgba(130,130,190,.35);}
+  font-family:inherit;background:#ffffffe0;color:#544d7d;box-shadow:0 3px 0 rgba(130,130,190,.35);
+  min-height:44px;display:inline-flex;align-items:center;}
 .bl-pick[aria-pressed="true"]{background:linear-gradient(180deg,#7aa8e0,#5585c8);color:#fff;box-shadow:0 3px 0 #3f6da8;}
 .bl-pick:active{transform:translateY(2px);}
 .bl-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}

@@ -240,7 +240,8 @@ export const CSS = `
 .pcp-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .pcp-modebar[hidden]{display:none;}
 .pcp-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;}
+  font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;
+  min-height:44px;display:inline-flex;align-items:center;}
 .pcp-mode.pcp-mode-duo{background:linear-gradient(180deg,#9BC7F2,#6E9FD4);box-shadow:0 4px 0 #55799F;}
 .pcp-mode.pcp-mode-tower{background:linear-gradient(180deg,#F0B45E,#D68F35);box-shadow:0 4px 0 #B0722A;}
 .pcp-mode.pcp-mode-off{background:linear-gradient(180deg,#D9CEDA,#BCAFBD);box-shadow:0 4px 0 #9C8E9D;}

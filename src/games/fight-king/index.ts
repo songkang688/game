@@ -147,19 +147,6 @@ export const SWAP_HINT_AFTER = 3;
 
 export const SWAP_HINT_TEXT = "连着几场没赢下来啦，上面那排换个小伙伴试试，换完还从这一关继续。";
 
-/**
- * 塔里的「出战角色」八宫格该不该折起来。
- *
- * 八宫格 + 卡片留白一共吃掉约 200px，矮横屏（915×412）上它一常驻，
- * 下面的对打画面与整排触屏按键就整块掉到裁切线以下——实时格斗滚一下等于漏一招。
- * 判据只看**舞台真的裁没裁**：装得下的档（412×915 / 1280×800）一个像素都不动，
- * 玩家自己点开过就永远听玩家的，绝不背着人再折回去。
- */
-export function shouldFoldHeroGrid(cropPx: number, userOpened: boolean): boolean {
-  if (userOpened) return false;
-  return Number.isFinite(cropPx) && cropPx > 8;
-}
-
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
 /* ------------------------------------------------------------------ */
@@ -184,11 +171,20 @@ const CSS = `
 .fk-mode-t{font-size:16px;font-weight:900;color:#5b4890;}
 .fk-mode-d{font-size:14px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
 .fk-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;}
+  font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;
+  min-height:44px;}
 .fk-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,95,170,.28);}
 .fk-btn[disabled]{opacity:.45;cursor:default;box-shadow:none;transform:none;}
 .fk-btn-go{background:linear-gradient(180deg,#e0679f,#c8497f);color:#fff;box-shadow:0 4px 0 #a33765;}
 .fk-btn-go:active{box-shadow:0 1px 0 #a33765;}
+/* N-57:训练场选人壳把假人钮和开打并排钉在标题下,不改关内 .fk-train-shell */
+.fk-dummy-go{align-items:center;}
+@media (max-height:500px){
+  .fk-pick-train .fk-dummy-go{
+    position:sticky;top:0;z-index:5;background:#fffdff;padding:6px 0;margin-bottom:8px;
+  }
+  .fk-pick-train .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
+}
 .fk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .fk-bar[hidden]{display:none;}
@@ -204,9 +200,17 @@ const CSS = `
 .fk-ch-n{font-size:14px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
 /* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
-.fk-towerhint{margin-bottom:8px;}
 .fk-swap{font-size:14px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
 .fk-swap:empty{display:none;}
+/* N-25:矮屏/窄屏把塔的出战八宫格收成一行,展开才铺开。人机/双人/无尽不走这套壳 */
+.fk-tower-compact{display:none;align-items:center;gap:8px;flex-wrap:wrap;}
+.fk-tower-now{font-size:14px;font-weight:900;color:#5b4890;}
+@media (max-height:640px),(max-width:430px){
+  .fk-tower-hero:not(.fk-tower-open) .fk-grid,
+  .fk-tower-hero:not(.fk-tower-open) .fk-pick-t{display:none;}
+  .fk-tower-hero .fk-tower-compact{display:flex;}
+  .fk-tower-hero{padding:10px;}
+}
 .fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
   box-shadow:0 4px 14px rgba(140,120,190,.2);}
@@ -244,7 +248,6 @@ const CSS = `
   align-items:center;justify-content:center;gap:10px;padding:16px;z-index:6;}
 .fk-pause-t{font-size:21px;font-weight:900;color:#8a5aa8;}
 .fk-pause-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.fk-stagecol{min-width:0;}
 .fk-pads{display:flex;gap:8px;margin-top:10px;}
 .fk-pad{flex:1;min-width:0;background:#fff8fc;border-radius:16px;padding:8px;display:flex;align-items:center;gap:8px;
   box-shadow:0 3px 10px rgba(140,120,190,.14);}
@@ -273,6 +276,18 @@ const CSS = `
 .fk-combo-r{text-align:right;}
 .fk-train-modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0;}
 .fk-train-hint{font-size:14px;font-weight:700;color:#8271ab;line-height:1.6;margin-bottom:4px;}
+/* N-31:教学表自滚,触屏键排与假人行常驻。FIGHT_MIN_H / 帧数表 / 判定零触碰 */
+.fk-train-shell .fk-scroll{max-height:min(220px,42dvh);overflow:auto;-webkit-overflow-scrolling:touch;}
+@media (max-height:640px){
+  .fk-train-shell .fk-pads{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;
+    background:linear-gradient(180deg,rgba(255,253,255,0),#fffdff 12px);
+    padding:8px 0 4px;
+  }
+  .fk-train-shell .fk-train-modes{
+    position:sticky;top:0;z-index:4;background:#fffdff;padding:4px 0;
+  }
+}
 .fk-live b{color:#c8497f;}
 .fk-hidden{display:none !important;}
 .fk-fd{width:100%;border-collapse:collapse;font-size:14px;}
@@ -302,30 +317,6 @@ const CSS = `
 @media (max-width:380px){
   .fk-hud{padding:6px 6px 0;}
   .fk-stick{width:66px;height:66px;}
-}
-/* 矮横屏（915×412 一族）：竖着堆的「画面 + 摇杆 + 教学面板」放不下，摇杆改挪到画面两侧。
-   横向有的是余量，画面高就不用再往滚动条里塞——实时格斗滚一下等于漏一招。 */
-@media (min-width:700px) and (max-height:560px){
-  .fk-fight{display:grid;column-gap:8px;align-items:start;
-    grid-template-columns:min-content minmax(0,1fr) min-content;
-    grid-template-areas:"bar bar bar" "padA stage padB" "padA train padB";}
-  .fk-fight>.fk-bar{grid-area:bar;margin-bottom:2px;}
-  /* 塔壳自己那两行(返回菜单条 + 对手提示)也各让出几个像素,画面才不用踩着 FIGHT_MIN_H 出屏 */
-  .fk-towerbar{margin-bottom:4px;}
-  .fk-towerhint{margin-bottom:4px;}
-  .fk-fight>.fk-stagecol{grid-area:stage;}
-  /* 摇杆容器让位，两块摇杆自己去当格子成员：一人一侧，单人局只留右侧那块 */
-  .fk-fight>.fk-pads{display:contents;}
-  .fk-fight>.fk-pads>.fk-pad{width:230px;margin:0;}
-  .fk-fight>.fk-pads>.fk-pad:first-child{grid-area:padA;}
-  .fk-fight>.fk-pads>.fk-pad:last-child{grid-area:padB;}
-  .fk-fight>.fk-pads>.fk-pad .fk-stick{width:74px;height:74px;}
-  .fk-fight>.fk-pads>.fk-pad .fk-stick-dot{width:28px;height:28px;margin:-14px 0 0 -14px;}
-  /* 训练场教学面板是「读」的，限高自滚；「假人：站立/蹲防/随机反击」是「按」的，钉在面板顶上 */
-  .fk-fight>.fk-card{grid-area:train;max-height:28dvh;overflow-y:auto;margin:8px 0 0;}
-  .fk-fight>.fk-card>.fk-h{display:none;}
-  .fk-fight>.fk-card>.fk-train-modes{position:sticky;top:0;z-index:1;margin:0 0 4px;
-    background:linear-gradient(180deg,#fffdff,#fffdffee);}
 }
 @media (prefers-reduced-motion:reduce){
   .fk-vig-in{transition:none;}
@@ -538,7 +529,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
   /* ---------------- DOM ---------------- */
 
-  const wrap = el("div", "fk-fight");
+  const wrap = el("div");
 
   const bar = el("div", "fk-bar");
   const titleChip = el("span", "fk-h", o.title);
@@ -556,12 +547,6 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   wrap.appendChild(bar);
 
   const stage = el("div", "fk-stage");
-  /**
-   * 画面盒子外面再套一层「画面这一栏」：`fitStage` 会把 `.fk-stage` 的宽钳窄，
-   * 钳过之后就再也量不出「这一栏本来有多宽」了。外层这个盒子不参与钳制，
-   * 于是它的宽永远是天然宽——矮横屏摇杆挪到两侧时，这个数才是画面能用的横向余量。
-   */
-  const stageCol = el("div", "fk-stagecol");
   const canvas = el("canvas", "fk-canvas");
   canvas.width = CANVAS_W;
   canvas.height = CANVAS_H_WIDE;
@@ -588,15 +573,10 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 
-  /**
-   * 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN。
-   *
-   * 上探层数要留够:塔模式里画面外面套着 stagecol → 对局壳 → 关内宿主 → l99 四层壳 → 塔壳,
-   * 一路数下来正好压在十层边上,少走一层就再也够不着 `.game-stage`,钳高整个静默失效。
-   */
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
   function stageClipBottom(): number {
     let node: HTMLElement | null = stage.parentElement ?? null;
-    for (let i = 0; node && i < 16; i++) {
+    for (let i = 0; node && i < 10; i++) {
       if (typeof node.className === "string" && node.className.includes("game-stage")) {
         if (typeof node.getBoundingClientRect !== "function") break;
         const r = node.getBoundingClientRect();
@@ -622,16 +602,12 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     if (typeof wrap.getBoundingClientRect !== "function") return;
     const clip = stageClipBottom();
     if (!Number.isFinite(clip)) return;
-    const colRect =
-      typeof stageCol.getBoundingClientRect === "function"
-        ? stageCol.getBoundingClientRect()
-        : stage.getBoundingClientRect();
-    if (!Number.isFinite(colRect.top)) return;
-    // 画面下面还有多高的家当(触屏摇杆两块 / 训练场教学面板):它们的高度不随画面高变,量一次就是稳的。
-    // 摇杆挪到画面两侧后它们不在「下面」了,量的是外层这一栏的下沿,侧栏再高也不会被算成占用。
-    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(colRect));
-    const room = clip - colRect.top - below;
-    const cssW = stageCol.clientWidth || wrap.clientWidth || 0;
+    const stageRect = stage.getBoundingClientRect();
+    if (!Number.isFinite(stageRect.top)) return;
+    // 画面下面还有多高的家当(触屏摇杆两块):它们的高度不随画面高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(stageRect));
+    const room = clip - stageRect.top - below;
+    const cssW = wrap.clientWidth || 0;
     const cap = stageMaxWidthPx(cssW, canvas.height / canvas.width, room);
     if (cap === null) {
       if (stage.style.maxWidth) {
@@ -714,8 +690,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   pausePanel.append(pauseTitle, pauseHint, pauseBtns);
   stage.appendChild(pausePanel);
 
-  stageCol.appendChild(stage);
-  wrap.appendChild(stageCol);
+  wrap.appendChild(stage);
 
   /* ---------------- 触屏摇杆 ---------------- */
 
@@ -856,7 +831,6 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     pads.appendChild(buildPad(1, characterById(o.p2).name));
   }
   if (!coarsePointer()) pads.classList.add("fk-hidden");
-  wrap.appendChild(pads);
 
   const padToggle = button("fk-btn", "📱 触屏按键", () => {
     pads.classList.toggle("fk-hidden");
@@ -870,11 +844,10 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   const trainLive = el("div", "fk-live");
   const dummyHint = el("div", "fk-train-hint");
   if (o.training) {
-    // 标题图标画制(visual-r2 修遗留#5):与菜单模式卡同一枚学士帽 SVG
+    wrap.classList.add("fk-train-shell");
     const h = el("div", "fk-h");
     h.innerHTML = `${modeIconSVG("training", 20)}<span> 训练场</span>`;
 
-    // 假人三选一：站立 / 蹲防 / 随机反击
     const modeRow = el("div", "fk-train-modes");
     modeRow.appendChild(el("span", "fk-sub", "假人："));
     const modeBtns: HTMLButtonElement[] = [];
@@ -894,8 +867,12 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
     const scroll = el("div", "fk-scroll");
     scroll.appendChild(frameTable(characterById(o.p1)));
-    trainPanel.append(h, modeRow, dummyHint, trainLive, scroll);
+    bar.appendChild(modeRow);
+    trainPanel.append(h, dummyHint, trainLive, scroll);
     wrap.appendChild(trainPanel);
+    wrap.appendChild(pads);
+  } else {
+    wrap.appendChild(pads);
   }
 
   host.appendChild(wrap);
@@ -1892,14 +1869,14 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 选人 ---------------- */
 
-  function showSelect(mode: Exclude<Mode, "tower">): void {
+    function showSelect(mode: Exclude<Mode, "tower">): void {
     clearScreen();
     let p1 = CHARACTERS[0].id;
     let p2 = CHARACTERS[1].id;
     let ai: AiLevel = 1;
     let dummy: DummyMode = "stand";
 
-    const card = el("div", "fk-card");
+    const card = el("div", mode === "training" ? "fk-card fk-pick-train" : "fk-card");
     const bar = el("div", "fk-bar");
     bar.appendChild(
       button("fk-btn", "◀ 返回", () => {
@@ -1913,6 +1890,34 @@ export function mount(api: GameApi): { destroy: () => void } {
     modeH.innerHTML = `${modeIconSVG(mode, 20)}<span> ${escapeHtml(modeCard?.title ?? "")}</span>`;
     bar.appendChild(modeH);
     card.appendChild(bar);
+
+    if (mode === "training") {
+      const row = el("div", "fk-bar fk-dummy-go");
+      row.style.marginTop = "4px";
+      row.appendChild(el("span", "fk-sub", "假人行为："));
+      const dummyBtns: HTMLButtonElement[] = [];
+      const dummyHint = el("div", "fk-sub", DUMMY_HINTS[dummy]);
+      DUMMY_MODES.forEach((m, i) => {
+        const b = button("fk-btn", DUMMY_LABELS[m], () => {
+          dummy = m;
+          sfx("tap");
+          dummyBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
+          dummyHint.textContent = DUMMY_HINTS[m];
+        });
+        b.setAttribute("aria-label", `假人行为 ${DUMMY_LABELS[m]}：${DUMMY_HINTS[m]}`);
+        dummyBtns.push(b);
+        row.appendChild(b);
+      });
+      dummyBtns[DUMMY_MODES.indexOf(dummy)].classList.add("fk-ch-on");
+      row.appendChild(
+        button("fk-btn fk-btn-go", "开打 ▶", () => {
+          sfx("jump");
+          startPlain(mode, p1, p2, ai, dummy);
+        })
+      );
+      card.appendChild(row);
+      card.appendChild(dummyHint);
+    }
 
     const picks = el("div", "fk-picks");
     const leftInfo = el("div", "fk-info");
@@ -2006,44 +2011,24 @@ export function mount(api: GameApi): { destroy: () => void } {
       card.appendChild(hint);
     }
 
-    if (mode === "training") {
-      const row = el("div", "fk-bar");
-      row.style.marginTop = "10px";
-      row.appendChild(el("span", "fk-sub", "假人行为："));
-      const btns: HTMLButtonElement[] = [];
-      DUMMY_MODES.forEach((m, i) => {
-        const b = button("fk-btn", DUMMY_LABELS[m], () => {
-          dummy = m;
-          sfx("tap");
-          btns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
-          hint.textContent = DUMMY_HINTS[m];
-        });
-        b.setAttribute("aria-label", `假人行为 ${DUMMY_LABELS[m]}：${DUMMY_HINTS[m]}`);
-        btns.push(b);
-        row.appendChild(b);
-      });
-      btns[DUMMY_MODES.indexOf(dummy)].classList.add("fk-ch-on");
-      const hint = el("div", "fk-sub", DUMMY_HINTS[dummy]);
-      card.appendChild(row);
-      card.appendChild(hint);
-    }
-
     if (mode === "endless") {
       const badge = el("div", "fk-sub", streakBadge(bestStreak()));
       badge.style.marginTop = "8px";
       card.appendChild(badge);
     }
 
-    const goRow = el("div", "fk-bar");
-    goRow.style.marginTop = "12px";
-    goRow.appendChild(
-      button("fk-btn fk-btn-go", "开打 ▶", () => {
-        sfx("jump");
-        if (mode === "endless") startEndless(p1, p2, ai, 0);
-        else startPlain(mode, p1, p2, ai, dummy);
-      })
-    );
-    card.appendChild(goRow);
+    if (mode !== "training") {
+      const goRow = el("div", "fk-bar");
+      goRow.style.marginTop = "12px";
+      goRow.appendChild(
+        button("fk-btn fk-btn-go", "开打 ▶", () => {
+          sfx("jump");
+          if (mode === "endless") startEndless(p1, p2, ai, 0);
+          else startPlain(mode, p1, p2, ai, dummy);
+        })
+      );
+      card.appendChild(goRow);
+    }
     view.appendChild(card);
   }
 
@@ -2185,7 +2170,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   /** `openAt` 是 0 基关号，给了就替玩家把那一层点开（锁着的层会停在能玩的最远那层） */
   function showTower(openAt = -1): void {
     clearScreen();
-    const bar = el("div", "fk-bar fk-towerbar");
+    const bar = el("div", "fk-bar");
     bar.appendChild(
       button("fk-btn", "◀ 返回菜单", () => {
         sfx("tap");
@@ -2200,8 +2185,20 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     // 塔里默认派 TOWER_HERO_ID 上场（见那条常量的注释）；上面这一排随时能换人
     let heroId: string = TOWER_HERO_ID;
-    const heroRow = el("div", "fk-card");
+    const heroRow = el("div", "fk-card fk-tower-hero");
     heroRow.appendChild(el("div", "fk-pick-t", "出战角色（随时可以换，换完从当前关继续）"));
+    const compact = el("div", "fk-tower-compact");
+    const compactNow = el("span", "fk-tower-now");
+    const refreshCompact = (): void => {
+      compactNow.textContent = `当前出战：${characterById(heroId).name}`;
+    };
+    const swapBtn = button("fk-btn", "换人 ▾", () => {
+      const open = heroRow.classList.toggle("fk-tower-open");
+      swapBtn.textContent = open ? "收起 ▴" : "换人 ▾";
+      sfx("tap");
+    });
+    compact.append(compactNow, swapBtn);
+    heroRow.appendChild(compact);
     const grid = el("div", "fk-grid");
     const heroBtns: HTMLButtonElement[] = [];
     CHARACTERS.forEach((ch, i) => {
@@ -2215,67 +2212,18 @@ export function mount(api: GameApi): { destroy: () => void } {
         sfx("pop");
         heroBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
         swapTip.textContent = "";
-        syncHeroToggle();
+        refreshCompact();
       });
       heroBtns.push(b);
       grid.appendChild(b);
     });
     heroBtns[Math.max(0, CHARACTERS.findIndex((c) => c.id === TOWER_HERO_ID))].classList.add("fk-ch-on");
+    refreshCompact();
     heroRow.appendChild(grid);
     // 连着几场没赢下来就在这儿提一句「换个小伙伴试试」，平时是空的
     const swapTip = el("div", "fk-swap");
     heroRow.appendChild(swapTip);
     view.insertBefore(heroRow, towerHost);
-
-    /* --- 八宫格折叠：矮横屏上它一常驻，对打画面与触屏按键整块掉到裁切线以下 --- */
-    let heroOpen = true;
-    /** 玩家自己点开过就永远听玩家的：自动折叠只在「从没被人碰过」时才动手 */
-    let heroUserOpened = false;
-    const heroToggle = button("fk-btn", "", () => {
-      if (!heroOpen) heroUserOpened = true;
-      sfx("tap");
-      setHeroOpen(!heroOpen);
-    });
-    bar.appendChild(heroToggle);
-
-    function syncHeroToggle(): void {
-      const name = characterById(heroId).name;
-      heroToggle.textContent = `🥊 出战：${name} ${heroOpen ? "▴" : "▾"}`;
-      heroToggle.setAttribute("aria-expanded", heroOpen ? "true" : "false");
-      heroToggle.setAttribute("aria-label", `出战角色 ${name}，${heroOpen ? "收起" : "展开"}换人格`);
-    }
-
-    function setHeroOpen(open: boolean): void {
-      heroOpen = open;
-      heroRow.hidden = !open;
-      syncHeroToggle();
-    }
-    setHeroOpen(true);
-
-    /** 往上找平台舞台，问它「这一屏裁了多少」 */
-    function stageCrop(): number {
-      let node: HTMLElement | null = view.parentElement ?? null;
-      for (let i = 0; node && i < 10; i++) {
-        if (typeof node.className === "string" && node.className.includes("game-stage")) {
-          return (node.scrollHeight || 0) - (node.clientHeight || 0);
-        }
-        node = node.parentElement ?? null;
-      }
-      return 0;
-    }
-
-    /** 只有真的在打的时候才折:选关地图是设计内的长滚页,它裁多少都不该牵连换人格 */
-    let inLevel = false;
-
-    function autoFold(): void {
-      if (!inLevel || !heroOpen) return;
-      if (shouldFoldHeroGrid(stageCrop(), heroUserOpened)) setHeroOpen(false);
-    }
-
-    const onResize = (): void => {
-      autoFold();
-    };
-    globalThis.addEventListener?.("resize", onResize);
 
     let currentFight: FightHandle | null = null;
     /** 同一关连着几场没赢下来 */
@@ -2293,14 +2241,12 @@ export function mount(api: GameApi): { destroy: () => void } {
         grandMessage: "188 关全部打完，格斗塔的塔顶归你啦！",
         playLevel: (stageEl: HTMLElement, ctx: PlayCtx) => {
           const stage = towerStage(ctx.level);
-          const hint = el("div", "fk-sub fk-towerhint");
+          const hint = el("div", "fk-sub");
+          hint.style.marginBottom = "8px";
           hint.textContent = `${stage.boss ? "👑 守擂者：" : "对手："}${characterById(stage.foeId).name} · ${AI_LABELS[stage.aiLevel]}档　${stage.hint}`;
           stageEl.appendChild(hint);
           const host = el("div");
           stageEl.appendChild(host);
-          // 进关那一刻布局才定下来:等画面铺完再问舞台裁没裁,该折的八宫格这时候折
-          inLevel = true;
-          globalThis.setTimeout?.(autoFold, 400);
           currentFight?.destroy();
           currentFight = createFight(host, {
             p1: heroId,
@@ -2328,9 +2274,6 @@ export function mount(api: GameApi): { destroy: () => void } {
               lossStreak += 1;
               if (lossStreak >= SWAP_HINT_AFTER) {
                 swapTip.textContent = SWAP_HINT_TEXT;
-                // 提示写在八宫格里,折着就等于没提:这一下把格子摊开,而且不许再自动折回去
-                heroUserOpened = true;
-                setHeroOpen(true);
                 ctx.lose(SWAP_HINT_TEXT);
                 return;
               }
@@ -2339,7 +2282,6 @@ export function mount(api: GameApi): { destroy: () => void } {
           });
           return {
             destroy: () => {
-              inLevel = false;
               currentFight?.destroy();
               currentFight = null;
             }
@@ -2349,7 +2291,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     );
 
     screenCleanup = () => {
-      globalThis.removeEventListener?.("resize", onResize);
       currentFight?.destroy();
       currentFight = null;
       tower.destroy();

@@ -122,7 +122,34 @@ export const OA_CSS = `
   .oa-board{max-width:52%;}
   .oa-btn{min-width:72px;font-size:14px;}
 }
+/* N-60:闯关技能键复用双人底栏;双人 paneH 仍 200,零回归 */
+@media (max-height:500px){
+  .oa-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(243,238,255,.2),#F3EEFF 40%);}
+  .oa-msg{min-height:0;max-height:1.5em;overflow:hidden;margin-top:4px;}
+  .oa-board{max-width:36%;}
+}
 `;
+
+/** 双人同屏画布逻辑高:915 横屏四键在屏,勿改 */
+export const OA_DUO_PANE_H = 200;
+/** 闯关默认画布逻辑高(高屏) */
+export const OA_SOLO_PANE_H = 360;
+/** 矮横屏闯关改走双人那档,技能键才能落在 412 内 */
+export const OA_SHORT_PANE_H = 200;
+
+function shortLandscapeH(): boolean {
+  try {
+    return Boolean(globalThis.matchMedia?.("(max-height: 500px)")?.matches);
+  } catch {
+    return false;
+  }
+}
+
+export function orbPaneH(humanCount: number, shortH = shortLandscapeH()): number {
+  if (humanCount > 1) return OA_DUO_PANE_H;
+  return shortH ? OA_SHORT_PANE_H : OA_SOLO_PANE_H;
+}
 
 export interface Owner {
   id: string;
@@ -265,7 +292,7 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
 
   const canvases: HTMLCanvasElement[] = [];
   const paneW = 640;
-  const paneH = humans.length > 1 ? 200 : 360;
+  const paneH = orbPaneH(humans.length);
   for (let i = 0; i < Math.max(1, humans.length); i++) {
     const c = document.createElement("canvas");
     c.className = "oa-canvas";

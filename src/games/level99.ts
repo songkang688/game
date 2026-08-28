@@ -19,15 +19,7 @@ import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
 import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
 // 契约文件只有常量与纯逻辑,没有弹窗 UI,静态 import 不会把 dialog 代码拖进游戏 chunk
-import {
-  clampJumpTarget,
-  isRootOpen,
-  isRootPermanent,
-  rootRemainMinutes,
-  rootRemainMs
-} from "../ui/root12Contract";
-// 只取一个字符串常量,rootUnlock 的 DOM 层不会被拖进游戏 chunk
-import { ROOT_PERMANENT_NOTE } from "../ui/rootUnlock";
+import { clampJumpTarget, isRootOpen, isRootPermanent, rootRemainMinutes, rootRemainMs, rootStatusLine } from "../ui/root12Contract";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -474,14 +466,12 @@ export function jumpTargetLevel(raw: string, total: number = TOTAL_LEVELS): numb
 }
 
 /**
- * 直达控件旁边那行小字。
- *
- * N-38:开「永久」时 `rootRemainMs()` 返回的是一个到远未来的巨大有限数,
- * 直接换算成分钟会写出「还剩 4193047370 分钟」。永久态改说地图侧同一句
- * `ROOT_PERMANENT_NOTE`,限时态照旧报剩余分钟。
+ * 直达控件旁边那行小字（N-38）。
+ * 永久开启走 rootStatusLine，不再把远未来时间戳换算成「4193047370 分钟」。
+ * 限时态仍报剩余分钟，文案格式与修前一致。
  */
-export function rootJumpNote(remainMs: number, permanent = false): string {
-  if (permanent) return ROOT_PERMANENT_NOTE;
+export function rootJumpNote(remainMs: number, nowMs: number = Date.now()): string {
+  if (isRootPermanent(nowMs)) return rootStatusLine(nowMs);
   return `管理员权限还剩 ${rootRemainMinutes(remainMs)} 分钟`;
 }
 
@@ -492,6 +482,12 @@ export function nodeAriaLabel(level: number, stars: number, state: "locked" | "s
   if (state === "skipped") return `第 ${n} 关，已跳过，可以回来挑战`;
   if (stars > 0) return `第 ${n} 关，已通关 ${stars} 星`;
   return `第 ${n} 关，还没通关`;
+}
+
+/** N-39：当前关格子是否整格落在视口内（top≥0 且 bottom≤视口高） */
+export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewportH: number): boolean {
+  return Number.isFinite(rect.top) && Number.isFinite(rect.bottom) && Number.isFinite(viewportH)
+    && viewportH > 0 && rect.bottom > rect.top && rect.top >= 0 && rect.bottom <= viewportH;
 }
 
 /**
@@ -590,6 +586,7 @@ const L99_CSS = `
 .l99-node-flag{font-size:15px;line-height:1;filter:grayscale(1);opacity:.75;}
 .l99-node:focus-visible,.l99-tab:focus-visible,.l99-tool:focus-visible,.l99-continue:focus-visible,
 .l99-back:focus-visible,.l99-ov-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.l99-admin-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;width:100%;}
 .l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
 .l99-jump-input{width:76px;min-height:44px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
   font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
@@ -637,6 +634,19 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
 }
+/* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
+   给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
+@media (max-height:500px){
+  .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
+  .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
+    overflow-x:auto;gap:6px;margin:0;}
+  .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
+  .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
+  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;}
+  /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
+  .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
+  .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
+}
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
@@ -677,8 +687,8 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
 
   const onResize = (): void => {
     const grid = view.querySelector(".l99-grid");
-    if (grid instanceof HTMLElement) {
-      grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    if (grid && typeof (grid as HTMLElement).style !== "undefined") {
+      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
     }
   };
   (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", onResize);
@@ -731,7 +741,8 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     go.textContent = "🎫 直达";
     const note = document.createElement("span");
     note.className = "l99-jump-note";
-    note.textContent = rootJumpNote(rootRemainMs(), isRootPermanent());
+    note.textContent = rootJumpNote(rootRemainMs());
+    input.title = note.textContent;
     const jump = (): void => {
       const target = jumpTargetLevel(input.value, total);
       if (target === null) return;
@@ -751,14 +762,21 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     host.appendChild(box);
   }
 
-  function attachSkip(host: HTMLElement, level: number, after: (level: number) => void): void {
+  function attachSkip(
+    host: HTMLElement,
+    level: number,
+    after: (level: number) => void,
+    compact = false
+  ): void {
     const request = getLevelExtras().requestSkip;
     const rootOn = !skipNeedsParentAuth();
     if ((!request && !rootOn) || level >= total) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "l99-tool l99-tool-skip";
-    btn.textContent = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    const full = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    btn.textContent = compact && rootOn ? "⏭️ 跳过" : full;
+    btn.setAttribute("aria-label", full);
     btn.title = rootOn ? "管理员权限开着,可以直接跳过这一关" : "需要家长确认才能跳过这一关";
     btn.addEventListener("click", () => {
       api.play("tap");
@@ -934,8 +952,12 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     view.appendChild(map);
 
     if (focusCurrent) {
-      const cur = grid.querySelector(".l99-node-cur");
-      if (cur instanceof HTMLElement) {
+      const cur = grid.querySelector(".l99-node-cur") as {
+        scrollIntoView?: (opts: { block: string }) => void;
+        focus?: () => void;
+      } | null;
+      // 认有没有 focus,不写 instanceof HTMLElement:node 单测环境没有这个全局,初次 showMap(true) 会整库红
+      if (cur) {
         try {
           cur.scrollIntoView?.({ block: "center" });
         } catch {
@@ -990,7 +1012,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       buttons.push({ label: "下一关 ▶", onClick: () => startLevel(level + 1) });
     }
     buttons.push({ label: "🔁 再玩一次", ghost: true, onClick: () => startLevel(level) });
-    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap() });
+    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) });
 
     const buddy = level % 2 === 0 ? AVATAR_URLS.duoduoCheer : AVATAR_URLS.xingxingRun;
     const buddyAlt = level % 2 === 0 ? "朵朵在为你庆祝" : "星星在为你欢呼";
@@ -1021,7 +1043,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
        <div class="l99-ov-sub">${word}</div>`,
       [
         { label: "🔁 再试本关", onClick: () => startLevel(level) },
-        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap() }
+        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) }
       ]
     );
     speak(settleSpeechLine("lose", level, word));
@@ -1050,7 +1072,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     back.textContent = "🗺️ 选关";
     back.addEventListener("click", () => {
       api.play("tap");
-      showMap();
+      showMap(true);
     });
     const title = document.createElement("div");
     title.className = "l99-stagetitle";
@@ -1064,11 +1086,19 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     barTools.className = "l99-tools";
     barTools.style.margin = "0";
     attachGuide(barTools, () => currentLevel + 1);
-    attachSkip(barTools, level, (skipped) => {
+    const afterSkip = (skipped: number): void => {
       if (skipped + 1 < total) startLevel(skipped + 1);
       else showMap(true);
-    });
-    attachRootJump(barTools, () => level);
+    };
+    if (rootJumpVisible()) {
+      const admin = document.createElement("div");
+      admin.className = "l99-admin-row";
+      attachSkip(admin, level, afterSkip, true);
+      attachRootJump(admin, () => level);
+      if (admin.childElementCount > 0) barTools.appendChild(admin);
+    } else {
+      attachSkip(barTools, level, afterSkip, false);
+    }
     if (barTools.childElementCount > 0) bar.appendChild(barTools);
     stageWrap.appendChild(bar);
 
@@ -1097,7 +1127,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     }
   }
 
-  showMap();
+  showMap(true);
 
   return {
     destroy() {

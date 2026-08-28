@@ -213,6 +213,14 @@ const CSS = `
 .bvp-log p:last-child{color:#3f2f66;}
 .bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 @media(min-width:480px){.bvp-acts{grid-template-columns:1fr 1fr 1fr;}}
+.bvp-endless-fight .bvp-acts{
+  position:sticky;bottom:0;z-index:6;padding:8px 0 4px;
+  background:linear-gradient(180deg,rgba(246,239,228,0),var(--bvp-floor) 12px);
+  box-shadow:0 -8px 14px rgba(75,58,110,.12);
+}
+@media (max-height:520px){
+  .bvp-endless-fight .bvp-log{max-height:72px;}
+}
 .bvp-act{border:none;border-radius:14px;padding:11px 8px;font-family:inherit;cursor:pointer;text-align:center;
   background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);position:relative;overflow:hidden;
   transition:transform .15s ease,box-shadow .15s ease;}
@@ -314,32 +322,6 @@ const CSS = `
 .bvp-conf-2{background:#f4a9c8;}
 @keyframes bvpConf{0%{opacity:0;transform:translateY(0) rotate(0deg);}15%{opacity:1;}
   100%{opacity:0;transform:translateY(72vh) rotate(300deg);}}
-/* 矮横屏（915×412 一族）· 战斗壳：
-   一场战斗竖着堆「回合条 → 对手牌 → 预判 → 战报 → 自己牌 → 提示 → 三个必点钮」，
-   412px 高只装得下前三样，👊 攻击 / 🛡️ 防御 / 🍓 莓果 整排掉在裁切线以下——
-   每回合都要滚一次才点得着，回合时长直接翻倍。横向余量足，改三栏：
-   对手牌和自己牌左右对望（敌我状态一眼看全），战报夹在中间限高自滚，
-   三个必点钮独占底下一整行；再给操作行 sticky 兜底，战报滚起来它也不走。 */
-@media (min-width:700px) and (max-height:560px){
-  .bvp-battle{display:grid;column-gap:8px;row-gap:2px;align-items:start;
-    grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr);
-    grid-template-areas:"bar bar bar" "foe log hero" "foe fore hero" "foe hint hero" "acts acts acts";}
-  .bvp-battle>.bvp-b-bar{grid-area:bar;padding:3px 10px;}
-  .bvp-battle>.bvp-b-foe{grid-area:foe;}
-  .bvp-battle>.bvp-b-hero{grid-area:hero;}
-  /* 两张牌收内边距和头像:字号一个不动,省下的高度全给战报和必点钮 */
-  .bvp-battle>.bvp-fighter{padding:6px 9px;margin-bottom:0;}
-  .bvp-battle>.bvp-fighter .bvp-fighter-top{margin-bottom:3px;}
-  .bvp-battle>.bvp-fighter .bvp-face{width:34px;height:34px;}
-  .bvp-battle>.bvp-b-fore{grid-area:fore;margin:0;min-height:0;line-height:1.3;}
-  .bvp-battle>.bvp-b-hint{grid-area:hint;margin:0;min-height:0;line-height:1.3;}
-  /* 战报限矮自滚：读得完最近两条就够，剩下的滚，别把必点钮顶下去 */
-  .bvp-battle>.bvp-b-log{grid-area:log;margin:0;min-height:40px;max-height:none;align-self:stretch;padding:6px 10px;}
-  .bvp-battle>.bvp-b-acts{grid-area:acts;position:sticky;bottom:0;z-index:2;
-    background:linear-gradient(180deg,rgba(255,251,255,.86),#fffbff 40%);
-    padding:3px 0 2px;box-shadow:0 -6px 10px -6px rgba(120,95,170,.4);}
-  .bvp-battle>.bvp-b-acts>.bvp-act{padding:6px 8px;}
-}
 @media (prefers-reduced-motion:reduce){
   .bvp-hpfill,.bvp-shfill,.bvp-fighter,.bvp-row,.bvp-act,.bvp-mz::after{transition:none;}
   .bvp-root{--bvp-t-fog:0ms;--bvp-t-float:0ms;--bvp-t-shake:0ms;--bvp-t-turn:0ms;}
@@ -701,15 +683,15 @@ const EVENT_STEP = 520;
 
 function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => void } {
   const cleanup = new Cleanup();
-  // 矮横屏要把这一场拆成三栏（见 CSS 里 .bvp-battle 那段），每块家当各认一个名字
-  const wrap = el("div", "bvp-battle");
+  const wrap = el("div");
+  if (opts.onFlee) wrap.className = "bvp-endless-fight";
   host.appendChild(wrap);
 
   let state: CombatState = startCombat(opts.hero, opts.foe);
   let busy = false;
   const fx = fxClassPlan(prefersReducedMotion());
 
-  const head = el("div", "bvp-bar bvp-hud bvp-b-bar");
+  const head = el("div", "bvp-bar bvp-hud");
   const title = el("span", "bvp-chip", opts.title);
   head.appendChild(title);
   const roundChip = el("span", "bvp-chip");
@@ -730,15 +712,13 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
   head.appendChild(foreChip);
 
   const foeCard = fighterCard(state.foe, false, "foe", opts.foeLevel);
-  foeCard.root.classList.add("bvp-b-foe");
-  const foreNote = el("div", "bvp-note bvp-b-fore", FORECAST_HINTS[guess]);
-  const logBox = el("div", "bvp-log bvp-b-log");
+  const foreNote = el("div", "bvp-note", FORECAST_HINTS[guess]);
+  const logBox = el("div", "bvp-log");
   logBox.setAttribute("role", "log");
   logBox.setAttribute("aria-live", "polite");
   const heroCard = fighterCard(state.hero, true, "hero");
-  heroCard.root.classList.add("bvp-b-hero");
-  const hint = el("div", "bvp-note bvp-b-hint");
-  const acts = el("div", "bvp-acts bvp-b-acts");
+  const hint = el("div", "bvp-note");
+  const acts = el("div", "bvp-acts");
 
   wrap.append(head, foeCard.root, foreNote, logBox, heroCard.root, hint, acts);
 

@@ -25,15 +25,7 @@ import {
   frightWarning,
   type Ghost,
 } from "./ghosts";
-import {
-  MAX_CELL_PX,
-  MIN_CANVAS_DISPLAY_PX,
-  MIN_CANVAS_DISPLAY_SHORT_PX,
-  canvasDisplayCapPx,
-  cellPxFor,
-  isShortLandscape,
-  maxCanvasWidth,
-} from "./layout";
+import { MAX_CELL_PX, canvasDisplayCapPx, cellPxFor, maxCanvasWidth } from "./layout";
 import { CHAPTERS, configFor, endlessConfig, planFor, rateLevel } from "./levels";
 import {
   DELTA,
@@ -136,29 +128,17 @@ const CSS = `
   .dmz-pads .dmz-pad{grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;}
   .dmz-pads .dmz-key{min-height:44px;font-size:17px;}
 }
-/* 矮横屏（915×412 一族）· 四个模式共用的键排：
-   一局竖着堆「HUD → 迷宫 → 提示 → 方向键」，412px 高只装得下前两样，
-   ⏸▲◀▼▶（双人是两套共九键）整排掉在裁切线以下——触屏一步都动不了。
-   横向余量足：迷宫一栏，方向键另起一栏；双人局两套键各占画面一侧，
-   谁的键在哪边和人坐哪边对得上。迷宫本身照旧由 canvasDisplayCapPx 钳高。 */
-@media (min-width:700px) and (max-height:560px){
-  .dmz-wrap.dmz-lay-solo{display:grid;align-content:start;column-gap:10px;
-    grid-template-columns:minmax(0,1fr) minmax(168px,232px);
-    grid-template-areas:"hud hud" "canvas pad" "canvas note";}
-  .dmz-wrap.dmz-lay-duo{display:grid;align-content:start;column-gap:10px;
-    grid-template-columns:minmax(168px,200px) minmax(0,1fr) minmax(168px,200px);
-    grid-template-areas:"padA hud padB" "padA canvas padB" "padA note padB";}
-  /* HUD 和提示行收内边距：矮屏上每一像素都是迷宫的。
-     字号一个都不动——14px 是 A 档 5-4 定下的红线（round1-fix / round3-final-verify 钉着） */
-  .dmz-chip{padding:3px 9px;}
-  .dmz-note{min-height:0;}
-  .dmz-wrap.dmz-lay-solo>.dmz-hud,.dmz-wrap.dmz-lay-duo>.dmz-hud{grid-area:hud;margin-bottom:4px;gap:5px;}
-  .dmz-wrap.dmz-lay-solo>.dmz-canvas,.dmz-wrap.dmz-lay-duo>.dmz-canvas{grid-area:canvas;justify-self:center;}
-  .dmz-wrap.dmz-lay-solo>.dmz-note,.dmz-wrap.dmz-lay-duo>.dmz-note{grid-area:note;margin-top:5px;}
-  .dmz-wrap.dmz-lay-solo>.dmz-pad{grid-area:pad;margin:0;align-self:center;}
-  .dmz-wrap.dmz-lay-duo>.dmz-pads{display:contents;}
-  .dmz-wrap.dmz-lay-duo>.dmz-pads>.dmz-pad-col:first-child{grid-area:padA;align-self:center;}
-  .dmz-wrap.dmz-lay-duo>.dmz-pads>.dmz-pad-col:last-child{grid-area:padB;align-self:center;}
+@media (max-height:520px) and (orientation:landscape){
+  .dmz-wrap:has(> .dmz-canvas){
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;align-items:center;
+  }
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-hud{grid-column:1 / -1;margin-bottom:4px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-canvas{grid-column:2;grid-row:2;width:100%;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-note{grid-column:1 / -1;grid-row:3;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pad{grid-column:3;grid-row:2;margin:0;max-width:168px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads{display:contents;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:first-child{grid-column:1;grid-row:2;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:last-child{grid-column:3;grid-row:2;}
 }
 @media (prefers-reduced-motion:reduce){
   .dmz-key:active,.dmz-mode:active,.dmz-btn:active{transform:none;}
@@ -220,8 +200,7 @@ interface StarEater {
 export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: () => void } {
   const soft = reducedMotion();
   const wrap = document.createElement("div");
-  // 矮横屏的键排分栏要知道这一局是一套键还是两套（CSS 里那段媒体查询认这个类）
-  wrap.className = `dmz-wrap ${opts.starRole === "none" ? "dmz-lay-solo" : "dmz-lay-duo"}`;
+  wrap.className = "dmz-wrap";
   const duoPad = `
     <div class="dmz-pad">
       <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
@@ -777,18 +756,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 
-  /**
-   * 往上找平台舞台(.game-stage,定高会裁内容):给出它的可视下沿,外加沿途滚了多远。
-   *
-   * 舞台被滚下去一截时画布的 rect.top 跟着往上跑,直接拿 `clip - rect.top` 当余量
-   * 会凭空多出一个 scrollTop——那一刀就钳松了,滚回顶部画布又压在裁切线上。
-   * 余量按「滚回顶部」算,和当前滚到哪儿无关。量不到 clip 就返回 NaN。
-   */
-  function stageBox(): { clip: number; scrolled: number } {
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
     let node: HTMLElement | null = wrap.parentElement ?? null;
-    let scrolled = 0;
     for (let i = 0; node && i < 10; i++) {
-      scrolled += typeof node.scrollTop === "number" ? node.scrollTop : 0;
       if (typeof node.className === "string" && node.className.includes("game-stage")) {
         if (typeof node.getBoundingClientRect !== "function") break;
         const r = node.getBoundingClientRect();
@@ -796,20 +767,18 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
           typeof node.clientHeight === "number" && node.clientHeight > 0
             ? (node.clientTop || 0) + node.clientHeight
             : r.height;
-        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) {
-          return { clip: r.top + inner, scrolled };
-        }
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
         break;
       }
       node = node.parentElement ?? null;
     }
-    return { clip: Number.NaN, scrolled };
+    return Number.NaN;
   }
 
   function fitCanvasDisplay(): void {
     if (destroyed || !canvas.style) return;
     if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
-    const { clip, scrolled } = stageBox();
+    const clip = stageClipBottom();
     if (!Number.isFinite(clip)) return;
     // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
     canvas.style.maxHeight = "";
@@ -817,23 +786,13 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     if (!Number.isFinite(canvasRect.top)) return;
     // 画布下面的家当(提示行 + 虚拟方向键):高度不随画布显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    const short = isShortLandscape(globalThis.innerWidth || 0, globalThis.innerHeight || 0);
-    // 留边:矮屏上外框内边距和提示行的行高抖动就值这么几像素,留窄了又会压出裁切线
-    const slack = short ? 12 : 4;
-    const px = canvasDisplayCapPx(
-      canvasRect.height,
-      clip - (canvasRect.top + scrolled) - below - slack,
-      short ? MIN_CANVAS_DISPLAY_SHORT_PX : MIN_CANVAS_DISPLAY_PX
-    );
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
     if (px !== null) canvas.style.maxHeight = `${px}px`;
   }
 
   fitCanvasDisplay();
-  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)。
-  // 壳层顶栏 / 关卡条 / 字体回流比这一跳还慢,所以隔一会儿再补一次:
-  // 量早了余量偏大,那一刀就钳松,方向键又会掉到裁切线以下。
+  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
   const fitTimer = setTimeout(fitCanvasDisplay, 0);
-  const fitTimerLate = setTimeout(fitCanvasDisplay, 320);
   window.addEventListener("resize", fitCanvasDisplay);
 
   renderPause();
@@ -846,7 +805,6 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       finished = true;
       stop();
       clearTimeout(fitTimer);
-      clearTimeout(fitTimerLate);
       window.removeEventListener("resize", fitCanvasDisplay);
       pauseBtn?.removeEventListener("click", onPauseClick);
       window.removeEventListener("keydown", onKey);

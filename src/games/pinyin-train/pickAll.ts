@@ -80,20 +80,22 @@ const CSS = `
   .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
   .pk-title{font-size:18px;}
 }
-/* 矮横屏（915×412 一族）：题头 + 火车画布带（132px）常驻，把全部选票和「就挑这些」
-   一起挤到裁切线以下——挑音节这件事没有一票是能滚着点的。横向余量足，改双栏：
-   左边是「读的」（题面 / 提示 / 火车），右边是「按的」（选票 + 提交），画布带同时缩高。 */
-@media (min-width:700px) and (max-height:560px){
-  .pk-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
-    grid-template-areas:"top chips" "title chips" "hint chips" "scene bottom" "say bottom";
-    column-gap:12px;row-gap:6px;align-items:start;min-height:0;padding:10px 12px;}
-  .pk-wrap>.pk-top{grid-area:top;}
-  .pk-wrap>.pk-title{grid-area:title;}
-  .pk-wrap>.pk-hint{grid-area:hint;}
-  .pk-wrap>.pk-say-row{grid-area:say;}
-  .pk-wrap>.pyt-scene{grid-area:scene;height:96px;}
-  .pk-wrap>.pk-chips{grid-area:chips;}
-  .pk-wrap>.pk-bottom{grid-area:bottom;}
+/* N-35 配方 G:矮横屏舞台左、选票右;380 下限在 412 高档会把票挤下线 */
+@media (max-height:500px){
+  .pk-wrap{min-height:0;padding:8px;gap:6px;}
+  .pk-title{font-size:17px;}
+  .pk-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .pk-wrap{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pk-top{grid-column:1/-1;grid-row:1;}
+  .pk-title{grid-column:2;grid-row:2;}
+  .pk-hint{grid-column:2;grid-row:3;}
+  .pk-say-row{grid-column:2;grid-row:4;position:static;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pk-chips{grid-column:2;grid-row:5;}
+  .pk-bottom{grid-column:2;grid-row:6;}
 }
 `;
 

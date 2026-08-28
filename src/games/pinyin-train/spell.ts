@@ -202,40 +202,40 @@ const CSS = `
   .pyt-slot{min-width:68px;}
   .pyt-view{font-size:${PINYIN_FONT_MIN + 8}px;}
 }
-/* 矮横屏（915×412 一族）：车头 + 火车画布带（132px）+ 三排车厢竖着堆，
-   三个车厢槽半截出屏、十张车票与「发车」全落在裁切线以下——拼读交互件一个都够不着。
-   横向有的是余量，改三栏：左栏读的（车头 / 火车 / 预览），中栏按的（车厢槽 + 车票排），
-   右栏发车与话。画布带同时缩高，让中栏那一列票排整排进首屏。 */
-@media (min-width:700px) and (max-height:560px){
-  .pyt-spell{display:grid;
-    grid-template-columns:minmax(0,0.8fr) minmax(300px,1.7fr) minmax(120px,0.7fr);
-    grid-template-areas:"loco slots top" "scene yard go" "view yard msg" "hint yard say";
-    column-gap:10px;row-gap:6px;align-items:start;min-height:0;padding:10px 12px;}
-  .pyt-spell>.pyt-top{grid-area:top;gap:4px;}
-  .pyt-spell>.pyt-loco{grid-area:loco;padding:6px 10px;}
-  .pyt-spell>.pyt-scene{grid-area:scene;height:76px;}
-  .pyt-spell>.pyt-slots{grid-area:slots;}
-  .pyt-spell>.pyt-view{grid-area:view;}
-  .pyt-spell>.pyt-say-row{grid-area:say;}
-  .pyt-spell>.pyt-yard{grid-area:yard;}
-  /* 发车钮 / 反馈 / 方法提示各自独立成格，才排得进右栏 */
-  .pyt-spell>.pyt-bottom{display:contents;}
-  .pyt-spell>.pyt-bottom>.pyt-go{grid-area:go;align-self:start;}
-  .pyt-spell>.pyt-bottom>.pyt-msg{grid-area:msg;}
-  .pyt-spell>.pyt-bottom>.pyt-hint{grid-area:hint;}
-  .pyt-loco-emoji{font-size:30px;}
-  .pyt-loco-word{font-size:32px;}
-  .pyt-view{font-size:${PINYIN_FONT_MIN + 6}px;min-height:30px;}
-  /* 热区下限（车厢 ${CHIP_MIN_PX}px / 拼音字号 ${PINYIN_FONT_MIN}px）一格都不让，让的是留白 */
-  .pyt-slot{min-height:${CHIP_MIN_PX}px;padding:4px 8px;}
-  .pyt-slot-val{font-size:${PINYIN_FONT_MIN + 2}px;min-height:20px;}
-  .pyt-yard{gap:4px;}
-  .pyt-chip{padding:6px 10px;}
-  .pyt-go{padding:11px 18px;}
+@media (max-height:500px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(150px,34%) minmax(0,1fr);grid-auto-rows:auto;
+    min-height:0;height:100%;padding:8px;gap:6px;align-items:stretch;}
+  .pyt-top{grid-column:1/-1;}
+  .pyt-loco{display:none;}
+  .pyt-scene{grid-column:1;grid-row:2/-1;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-slots,.pyt-view,.pyt-say-row,.pyt-yard,.pyt-bottom{grid-column:2;}
+  .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
+  .pyt-yard{min-height:0;overflow-y:auto;}
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
 }
 @media (prefers-reduced-motion:reduce){
   .pyt-wobble{animation:none;}
   .pyt-loco{transition:none;}
+}
+/* N-34 配方 G:矮横屏火车画布左、车厢+票排右;min-height:380 在 412 高档会把票挤下线 */
+@media (max-height:500px){
+  .pyt-spell{min-height:0;padding:8px;gap:6px;}
+  .pyt-loco{padding:6px 10px;gap:6px;}
+  .pyt-loco-emoji,.pyt-loco-word{font-size:26px;}
+  .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pyt-top{grid-column:1/-1;grid-row:1;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-loco{grid-column:2;grid-row:2;}
+  .pyt-slots{grid-column:2;grid-row:3;}
+  .pyt-view{grid-column:2;grid-row:4;}
+  .pyt-say-row{grid-column:2;grid-row:5;position:static;}
+  .pyt-yard{grid-column:2;grid-row:6;}
+  .pyt-bottom{grid-column:2;grid-row:7;}
 }
 `;
 
