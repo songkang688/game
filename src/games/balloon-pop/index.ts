@@ -193,6 +193,8 @@ const CSS = `
   .blp-gift-drop { animation-duration: .01s; }
 }
 ${touchUpliftCss([".blp-open", ".blp-back"])}
+/* N-121:模式键抬到 44;window6 守门仍消费 touchUpliftCss(=40),本条叠在后面 */
+.blp-open,.blp-back{min-height:44px;}
 `;
 
 function reducedMotion(): boolean {

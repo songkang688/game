@@ -214,6 +214,12 @@ export const CSS = `
     background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
   .shr-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:2px;}
 }
+/* N-124:1024×768 粗指针中间档;抬 toggle/回关/开火格,不改 500 档画布 140 钳 */
+@media (max-height:820px) and (pointer:coarse){
+  .shr-toggle,.shr-back,.shr-veil-btn,.shr-mode{min-height:44px;}
+  .shr-pads{--k:46px;}
+  .shr-key{min-height:44px;}
+}
 @media (prefers-reduced-motion:reduce){
   .shr-toast{transition:none;}
 }
