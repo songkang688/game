@@ -113,9 +113,13 @@ describe("shape-kingdom · 问答关城堡氛围帽（castleSvg(0) 静态复用�
     handle.destroy();
   });
 
-  it("矮屏沿作图关同一门槛整顶藏掉，竖向空间还给题面", () => {
+  it("矮屏两档退让：720 收一档不藏帽（360×640 验收屏看得见），≤480 真挤才整顶藏掉", () => {
     const { css, handle } = mountQuiz();
-    expect(css).toContain(`@media (max-height:${SHORT_SCREEN_PX}px){.shk-quiz-castle{display:none;}}`);
+    // 640 高的基准屏落在 480–720 之间：帽子在、只是收小一档
+    expect(css).toContain(`@media (max-height:${SHORT_SCREEN_PX}px){.shk-quiz-castle svg{width:min(140px,42%);}}`);
+    expect(css).toContain("@media (max-height:480px){.shk-quiz-castle{display:none;}}");
+    // 720 那一档只收尺寸，绝不 display:none——不许把验收屏的氛围帽藏没了
+    expect(css).not.toContain(`@media (max-height:${SHORT_SCREEN_PX}px){.shk-quiz-castle{display:none;}}`);
     handle.destroy();
   });
 

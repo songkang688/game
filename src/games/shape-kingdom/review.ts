@@ -177,11 +177,14 @@ const REVIEW_CSS = `
 /* 问答关的王国氛围帽（B 档修订清单第 7 条）：castleSvg(0) 剪影紫静态复用。
    lit=0 六段全剪影、不带 shk-seg-new 也没有升旗，天生静态，reduced 无关；
    纯装饰不接指针，挂在提示条面板顶部、答题器宿主 .shk-quizhost 之外，
-   不进答题区包围盒。矮屏沿作图关同一门槛整顶藏掉，竖向空间全部还给题面。 */
+   不进答题区包围盒。矮屏两档退让：沿作图关同一门槛（720）收一档不藏帽——
+   360×640 正是验收基准屏，氛围帽就是给它看的；真挤的横屏（≤480）才整顶藏掉，
+   竖向空间全部还给题面（答题宿主本就被 fitIntoStage 钳住会自己滚，够不着不存在）。 */
 .shk-quiz-castle{display:flex;justify-content:center;pointer-events:none;min-height:0;}
 .shk-quiz-castle svg{width:min(188px,54%);height:auto;display:block;opacity:.85;
   filter:drop-shadow(0 2px 2px rgba(120,100,160,.22));}
-@media (max-height:${SHORT_SCREEN_PX}px){.shk-quiz-castle{display:none;}}
+@media (max-height:${SHORT_SCREEN_PX}px){.shk-quiz-castle svg{width:min(140px,42%);}}
+@media (max-height:480px){.shk-quiz-castle{display:none;}}
 `;
 
 export interface ReviewOptions {
