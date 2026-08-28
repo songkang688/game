@@ -201,6 +201,28 @@ export const MJ_CSS = `
 /* 毛毡上的提示字换成浅色,保证对比度(基础 .mj-msg 规则在上面,别挪顺序) */
 .mj-board .mj-msg{color:#e2f2e6;}
 .mj-river .mj-msg{color:#d9eddc;}
+/* N-75 r17:915×412 对局手牌 514..574/616..678、状态行 712 全在舞台裁切线(322px)外。
+   矮横屏改紧凑桌:对手行(藏牌背)+牌河限高走左右两列,人手「名字+一行横滚手牌」;
+   发牌/番种/胜负零触碰,牌宽仍 44 不动 N-41 */
+@media (min-width:640px) and (max-height:500px){
+  .mj-wrap{padding:4px 10px;}
+  .mj-top{margin-bottom:4px;}
+  .mj-board{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:4px 8px;
+    align-items:start;padding:4px;border-width:4px;}
+  .mj-board>.mj-foe{grid-column:1;min-height:20px;}
+  .mj-board>.mj-mid{grid-column:2;grid-row:1 / span 3;}
+  .mj-mid .mj-info{display:none;}
+  .mj-backs{display:none;}
+  .mj-river{min-height:36px;max-height:64px;overflow-y:auto;padding:4px;}
+  .mj-board>div:not([class]){grid-column:1 / -1;display:flex;align-items:center;gap:6px;min-width:0;}
+  .mj-board>div:not([class])>.mj-foe{flex:0 0 auto;min-height:0;}
+  .mj-board>div:not([class])>.mj-hand{flex:1 1 auto;min-width:0;flex-wrap:nowrap;overflow-x:auto;}
+  .mj-board>.mj-melds,.mj-board>.mj-acts{grid-column:1 / -1;}
+  .mj-hand{padding:2px 2px 4px;}
+  .mj-tile{height:44px;}
+  .mj-acts{margin-top:0;}
+  .mj-wrap>.mj-msg{margin-top:2px;min-height:0;font-size:14px;}
+}
 .mj-modebar,.mj-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .mj-modebar[hidden]{display:none;}
