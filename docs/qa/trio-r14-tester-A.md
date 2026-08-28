@@ -36,4 +36,4 @@ N-48/58/59、N-39 主修（四处 `showMap(true)` 保持）、N-43 第三套 scr
 
 `npm test` **1174** files / **19455** tests；`npm run build` 绿。kit 未扩。存档 key / meta.id / 题库 / seed / 胜负未改。
 
-B 已先合 `d78c9e50`（N-69..74 休闲）。本分支 rebase 其上，撞车取先合版。
+B 已先合 `d78c9e50`（N-69..74 休闲）。r13 A 后到主干：N-63 `pinL99Host` / C-6 舞台余量钳高。本分支 rebase 撞车取先合版，本工位增量是 N-68 三图横排、N-73 视奏、N-47 残留、N-37 sticky 补笔。
