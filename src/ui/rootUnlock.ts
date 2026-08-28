@@ -110,7 +110,9 @@ function unlockMap(map: LevelMapLike): number {
 
   if (isRootPermanent()) {
     const note = map.querySelector(".l99-jump-note") as { textContent: string | null } | null;
-    if (note) note.textContent = ROOT_PERMANENT_NOTE;
+    // 值没变就不写:写相同的 textContent 也会触发 MutationObserver,
+    // 「增强 → 触发 → 再增强」会转成微任务死循环把页面锁死
+    if (note && note.textContent !== ROOT_PERMANENT_NOTE) note.textContent = ROOT_PERMANENT_NOTE;
   }
   return count;
 }
@@ -140,15 +142,19 @@ export function watchRootUnlock(host: HTMLElement): () => void {
   if (typeof MutationObserver === "undefined") return () => undefined;
   let pending = false;
   const schedule = (): void => {
-    // 攒一帧再干活:showMap 是一次性同步建完整棵树,等它建完只增强一遍;
-    // 增强自身引发的变更再触发时,地图上已没有锁定格,空转一次就停
+    // 攒一拍再干活:showMap 是一次性同步建完整棵树,等它建完只增强一遍;
+    // 增强自身引发的变更再触发时,地图上已没有锁定格,空转一次就停。
+    // 特意用宏任务而不是微任务:就算哪天出现「增强 → 触发 → 再增强」的环,
+    // 宏任务之间浏览器仍能渲染与响应,页面不会被微任务链锁死。
     if (pending) return;
     pending = true;
     const run = (): void => {
       pending = false;
       applyRootUnlock(host);
     };
-    if (typeof queueMicrotask === "function") queueMicrotask(run);
+    const g = globalThis as { setTimeout?: typeof setTimeout };
+    if (g.setTimeout) g.setTimeout(run, 0);
+    else if (typeof queueMicrotask === "function") queueMicrotask(run);
     else void Promise.resolve().then(run);
   };
   const observer = new MutationObserver(schedule);
