@@ -13,6 +13,7 @@
  */
 
 import { shade, withAlpha } from "../../art/kit/palette";
+import { strokeOutline } from "../../art/kit/outline";
 import { SIDE_RATIO, roundRectPath, topSideBlock } from "../../art/kit/block25d";
 import { DX, DY } from "./terrain12";
 import type { Tank, World } from "./logic";
@@ -80,6 +81,36 @@ export const TRACK_TOOTH_H = 1.5;
 export const TRACK_TOOTH_GAP = 3;
 /** 炮塔圆壳直径 = 0.55 × 车宽 */
 export const TURRET_RATIO = 0.55;
+
+// ---------------------------------------------------------------------------
+// C-3 家族光照上主角(B 档 R2 一致性排名 5,克制执行两笔):
+// ① 炮塔圆顶左上高光弧从 1px 白细线换 shade(炮塔顶色,+18) 2px 圆头弧(静态);
+// ② 徽章描边换 kit strokeOutline(深 20% / 1.5px)对齐家规。
+// 地形块顶侧双面是本款方言,一个不动;不新增徽记。
+// ---------------------------------------------------------------------------
+
+/** 炮塔高光弧:比炮塔顶色再亮 18%(家族左上 45° 光照语言) */
+export const TURRET_SHEEN_SHADE = 18;
+/** 高光弧线宽(px,静态) */
+export const TURRET_SHEEN_W = 2;
+/** 高光弧的弧段:左上象限(canvas 角度 π×0.9 → π×1.45),与原白细线同位 */
+export const TURRET_SHEEN_ARC = [Math.PI * 0.9, Math.PI * 1.45] as const;
+
+/** 炮塔高光弧取色:顶色 shade(+18) */
+export function turretSheenColor(topLite: string): string {
+  return shade(topLite, TURRET_SHEEN_SHADE);
+}
+
+/** C-3 ①:炮塔圆顶左上高光弧 —— 唯一的动作是把家族光照带上主角,静态零动效 */
+export function drawTurretSheen(c: CanvasRenderingContext2D, x: number, y: number, r: number, topLite: string): void {
+  if (!(r > 0)) return;
+  c.strokeStyle = turretSheenColor(topLite);
+  c.lineWidth = TURRET_SHEEN_W;
+  c.lineCap = "round";
+  c.beginPath();
+  c.arc(x, y, r, TURRET_SHEEN_ARC[0], TURRET_SHEEN_ARC[1]);
+  c.stroke();
+}
 
 // ---------------------------------------------------------------------------
 // 纯函数相位:全部「毫秒进、相位出」,不持有状态
@@ -283,14 +314,12 @@ export function drawFlowerBadge(c: CanvasRenderingContext2D, x: number, y: numbe
   c.fill();
 }
 
-/** 星星徽章:金色五角星 + 深金描边 */
+/** 星星徽章:金色五角星,描边走 kit strokeOutline(C-3 ②:深 20% / 1.5px 对齐家规) */
 export function drawStarBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   c.fillStyle = TK_GOLD;
-  c.strokeStyle = shade(TK_GOLD, -26);
-  c.lineWidth = Math.max(1, r * 0.16);
   starPath(c, x, y, r);
   c.fill();
-  c.stroke();
+  strokeOutline(c, TK_GOLD);
 }
 
 /** 齿轮徽章(敌方·火力/机灵):八齿 + 中孔 */
@@ -326,11 +355,12 @@ export function drawRivetBadge(c: CanvasRenderingContext2D, x: number, y: number
   }
 }
 
-/** 闪电徽章(敌方·快速):亮黄折线闪电 */
+/** 闪电徽章的亮黄主色 */
+export const BOLT_YELLOW = "#FFE08A";
+
+/** 闪电徽章(敌方·快速):亮黄折线闪电,描边走 kit strokeOutline(C-3 ②) */
 export function drawBoltBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  c.fillStyle = "#FFE08A";
-  c.strokeStyle = TK_IRON;
-  c.lineWidth = Math.max(0.8, r * 0.12);
+  c.fillStyle = BOLT_YELLOW;
   c.beginPath();
   c.moveTo(x + r * 0.18, y - r);
   c.lineTo(x - r * 0.42, y + r * 0.12);
@@ -340,7 +370,7 @@ export function drawBoltBadge(c: CanvasRenderingContext2D, x: number, y: number,
   c.lineTo(x + r * 0.06, y - r * 0.12);
   c.closePath();
   c.fill();
-  c.stroke();
+  strokeOutline(c, BOLT_YELLOW);
 }
 
 /** 徽章总入口:按形状分发 */

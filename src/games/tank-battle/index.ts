@@ -92,6 +92,7 @@ import {
   drawMuzzleFlash,
   drawPart,
   drawShieldBadge,
+  drawTurretSheen,
   iceSheenPos,
   rebuildProgress,
   ringAngle,
@@ -564,11 +565,8 @@ function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, tMs: number,
   c.beginPath();
   c.arc(0, 0, turret, 0, Math.PI * 2);
   c.fill();
-  c.strokeStyle = "rgba(255,255,255,.6)";
-  c.lineWidth = 1;
-  c.beginPath();
-  c.arc(0, 0, turret * 0.72, Math.PI * 0.9, Math.PI * 1.45);
-  c.stroke();
+  // C-3 ①:左上高光弧换家族语言 —— shade(顶色,+18) 2px(原 1px 白细线),弧段同位
+  drawTurretSheen(c, 0, 0, turret * 0.72, bodyTopLite);
   // 舱盖圆点:徽章占中心,舱盖靠车尾一点
   c.fillStyle = bodySide;
   c.beginPath();
