@@ -717,13 +717,16 @@ function mountArena(opts: ArenaOptions): Arena {
     if (!Number.isFinite(clip)) return;
     // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
     canvas.style.maxHeight = "";
+    canvas.style.maxWidth = "";
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
     // 画布下面的家当(名牌 / 提示 / 触屏按钮排):高度不随画布显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(root.getBoundingClientRect()) - rectBottom(canvasRect));
     const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
     if (px !== null) {
+      // CSS 里画布是 width:100%,只钳高会压扁画面;宽也按 16:9 一起钳才是等比
       canvas.style.maxHeight = `${px}px`;
+      canvas.style.maxWidth = `${Math.round((px * WORLD_W) / WORLD_H)}px`;
       // 等比收窄后画布居中,别贴在左边
       canvas.style.marginLeft = "auto";
       canvas.style.marginRight = "auto";

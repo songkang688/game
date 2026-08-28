@@ -91,6 +91,27 @@ export const STAGE_HEIGHT = 250;
 /** 地面在画布里的 y */
 export const GROUND_Y = 214;
 
+/** 画布显示高压到这以下,人物比按钮还小,打不成了 */
+export const MIN_CANVAS_DISPLAY_PX = 140;
+
+/**
+ * 画布显示高的钳位:塞得下返回 null(别动),塞不下返回该钳到的像素(不低于 min)。
+ *
+ * 为什么要钳:HUD(双方血条/能量/护盾)两行 + 提示行 + 摇杆按钮排加起来 ~200px,
+ * 画布又是按宽度等比长高的 —— 640×360 横屏里 `.game-stage` 只给 ~340px,
+ * 画布 250px 显示高一占,摇杆和「轻/重/必杀」整排掉到裁切线以下;
+ * 触屏没键盘,按钮看不见 = 这局没法打。钳高后画布等比收窄(CSS 只设 max-height,
+ * 宽由 aspect-ratio 跟着缩),战场变小但整场都在屏里。
+ */
+export function canvasDisplayCapPx(nativeH: number, roomPx: number, min = MIN_CANVAS_DISPLAY_PX): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
 const CSS = `
 .cc-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#FFF2F8,#F5F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
@@ -440,6 +461,53 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", "连招对决的舞台");
   const ctx = canvas.getContext("2d");
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /** 画布显示高按可视余量钳一刀(见 canvasDisplayCapPx 的注释) */
+  function fitDisplay(): void {
+    if (destroyed || !canvas.style) return;
+    if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    canvas.style.maxHeight = "";
+    canvas.style.maxWidth = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    // 画布下面的家当(提示行 + 摇杆按钮排):高度不随画布显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    if (px !== null) {
+      // CSS 里画布是 width:100%,只钳高会压扁人物;宽也按 backing 比例一起钳才是等比
+      canvas.style.maxHeight = `${px}px`;
+      canvas.style.maxWidth = `${Math.round((px * canvas.width) / canvas.height)}px`;
+      // 等比收窄后画布居中,别贴在左边
+      canvas.style.marginLeft = "auto";
+      canvas.style.marginRight = "auto";
+    }
+  }
 
   const msg = document.createElement("div");
   msg.className = "cc-msg";
@@ -911,11 +979,18 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   raf = requestAnimationFrame(frame);
   render();
 
+  fitDisplay();
+  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
+  const fitTimer = window.setTimeout(fitDisplay, 0);
+  window.addEventListener("resize", fitDisplay);
+
   return {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
       raf = 0;
+      window.clearTimeout(fitTimer);
+      window.removeEventListener("resize", fitDisplay);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       for (const off of offs) off();
