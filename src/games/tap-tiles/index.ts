@@ -287,6 +287,10 @@ const CSS = `
     max-width:94%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     background:rgba(255,255,255,.88);border-radius:10px;padding:1px 10px;pointer-events:none;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .tt-btns{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(246,242,255,0),#F6F2FF 14px);}
+}
 @media (prefers-reduced-motion:reduce){
   .tt-btn:active,.tt-open:active,.tt-goback:active{transform:none;}
 }

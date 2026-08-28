@@ -99,6 +99,9 @@ const CSS = `
 @media (max-height: 520px) {
   .frc-ctrl { position: sticky; bottom: 0; z-index: 4; background: linear-gradient(180deg, rgba(255,249,232,0), #FFF9E8 10px); padding-top: 8px; }
 }
+@media (max-height: 840px) and (min-height: 521px) {
+  .frc-ctrl { position: sticky; bottom: 0; z-index: 4; background: linear-gradient(180deg, rgba(255,249,232,0), #FFF9E8 10px); padding-top: 8px; }
+}
 .frc-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFD9A0; color: #8A5A20; cursor: pointer; box-shadow: 0 4px 0 #EBBB77; touch-action: none; }
 .frc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBBB77; }
 .frc-msg { text-align: center; min-height: 20px; color: #D08A3E; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.45; }
