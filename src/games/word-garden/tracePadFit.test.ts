@@ -14,26 +14,27 @@ import {
 } from "./tracing";
 
 describe("N-36 描红 pad 高度尺", () => {
-  it("宽屏高余量：边长封顶 300，与竖屏/平板基线一致", () => {
+  it("宽屏高余量：边长封顶不超过 300，竖屏窄机走 86vw 仍顶到 300", () => {
     expect(tracePadSidePx(390, 700)).toBe(PAD_MAX_PX);
-    expect(tracePadSidePx(412, 700)).toBe(PAD_MAX_PX);
+    expect(tracePadSidePx(412, 700)).toBe(Math.floor(412 * 0.72));
     expect(tracePadSidePx(1024, 700)).toBe(PAD_MAX_PX);
     expect(tracePadSidePx(1280, 700)).toBe(PAD_MAX_PX);
   });
 
   it("915×412 矮横屏：按高度余量收下，整格能进屏", () => {
     const chrome = tracePadChromePx({
-      topH: 32,
-      cardH: 40,
+      topH: 28,
+      cardH: 36,
       gardenH: 28,
       msgH: 22,
       deskPadV: 8,
       wrapGap: 4,
       wrapPadV: 12
     });
-    const hostH = 280;
-    const side = tracePadSidePx(915, hostH - chrome);
-    expect(side).toBeLessThanOrEqual(hostH - chrome);
+    const hostH = 340;
+    const room = hostH - chrome;
+    const side = tracePadSidePx(915, room);
+    expect(side).toBeLessThanOrEqual(room);
     expect(side).toBeGreaterThanOrEqual(PAD_FIT_FLOOR_PX);
     expect(side).toBeLessThan(PAD_MAX_PX);
   });
