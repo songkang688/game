@@ -2660,6 +2660,178 @@ reg("📕", "红课本", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 8 章 旋转灯塔（W8R1-04 余量 · FLIPPABLE ▲五张非对称剪影） ----
+
+reg("🌀", "小旋涡", () => {
+  // FLIPPABLE ▲；双胞胎 🌀↔🌪️ 的区分位：圆盘螺旋 + 尾巴甩向右侧（🌪️ 是上宽下尖漏斗）
+  const c = P.blue;
+  const out = o(c);
+  const spiral =
+    "M24 24 a3 3 0 0 1 3 3 a5.6 5.6 0 0 1 -11.2 0 a8.4 8.4 0 0 1 8.4 -8.4 a11.6 11.6 0 0 1 11.6 11.6 a14 14 0 0 1 -8 12.6";
+  return (
+    gs(24, 43.5, 12) +
+    `<path d="${spiral}" fill="none" stroke="${out}" stroke-width="7" stroke-linecap="round"/>` +
+    `<path d="${spiral}" fill="none" stroke="${c}" stroke-width="4.6" stroke-linecap="round"/>` +
+    `<path d="M37 15 Q40.5 17.5 41.5 21" fill="none" stroke="${shade(c, 18)}" stroke-width="2.2" stroke-linecap="round" opacity=".8"/>` +
+    `<circle cx="15" cy="14.5" r="1.6" fill="${shade(c, 18)}" opacity=".85"/>` +
+    hi(17.5, 16, 2.2, 1.4)
+  );
+});
+
+reg("🚦", "红绿灯", () => {
+  const box = "#5f6678";
+  const out = o(box);
+  return (
+    gs(24, 43.5, 10) +
+    `<path d="M24 40 L24 44" stroke="${out}" stroke-width="3.4" stroke-linecap="round"/>` +
+    `<rect x="15.5" y="6.5" width="17" height="34" rx="4.5" fill="${box}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M28.5 6.5 L30 6.5 Q32.5 6.5 32.5 9.5 L32.5 37.5 Q32.5 40.5 30 40.5 L27 40.5 Q29.8 39.5 29.7 35 Z" fill="${shade(box, -16)}" opacity=".8"/>` +
+    `<path d="M15.5 11 Q11 12 10.5 15.5 L15.5 15.5 Z M15.5 20.5 Q11 21.5 10.5 25 L15.5 25 Z M15.5 30 Q11 31 10.5 34.5 L15.5 34.5 Z" fill="${shade(box, -8)}" stroke="${out}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<circle cx="24" cy="13.5" r="4" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.6"/>` +
+    `<circle cx="24" cy="23.5" r="4" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.6"/>` +
+    `<circle cx="24" cy="33.5" r="4" fill="${P.green}" stroke="${o(P.green)}" stroke-width="1.6"/>` +
+    `<circle cx="22.6" cy="12.2" r="1.2" fill="#ffffff" opacity=".65"/>` +
+    `<circle cx="22.6" cy="22.2" r="1.2" fill="#ffffff" opacity=".65"/>` +
+    `<circle cx="22.6" cy="32.2" r="1.2" fill="#ffffff" opacity=".65"/>` +
+    hi(19, 9, 1.8, 1.1)
+  );
+});
+
+reg("🛟", "救生圈", () => {
+  const ring = "#fdf6ee";
+  const out = o("#d8ccb0");
+  const stripe = P.red;
+  const seg = (a0: number): string => {
+    const r = 11;
+    const x1 = 24 + Math.cos(a0) * r;
+    const y1 = 24 + Math.sin(a0) * r;
+    const x2 = 24 + Math.cos(a0 + Math.PI / 5) * r;
+    const y2 = 24 + Math.sin(a0 + Math.PI / 5) * r;
+    return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="${stripe}" stroke-width="7.6"/>`;
+  };
+  return (
+    gs(24, 42.5, 13) +
+    `<circle cx="24" cy="24" r="16.4" fill="none" stroke="${o(P.gold)}" stroke-width="1.6" stroke-dasharray="3.4 2.6"/>` +
+    `<path fill-rule="evenodd" d="M24 9.5 A14.5 14.5 0 1 0 24.01 9.5 Z M24 17.5 A6.5 6.5 0 1 1 23.99 17.5 Z" fill="${ring}" stroke="${out}" stroke-width="2"/>` +
+    seg(-Math.PI / 2 - Math.PI / 10) + seg(0 - Math.PI / 10) + seg(Math.PI / 2 - Math.PI / 10) + seg(Math.PI - Math.PI / 10) +
+    `<circle cx="24" cy="24" r="14.5" fill="none" stroke="${out}" stroke-width="2"/>` +
+    `<circle cx="24" cy="24" r="6.5" fill="none" stroke="${out}" stroke-width="2"/>` +
+    hi(16.5, 15, 2.6, 1.6)
+  );
+});
+
+reg("⚓", "船锚", () => {
+  const c = P.blueDeep;
+  const out = o(c);
+  return (
+    gs(24, 43, 13) +
+    `<circle cx="24" cy="9.5" r="3.4" fill="none" stroke="${out}" stroke-width="5"/>` +
+    `<circle cx="24" cy="9.5" r="3.4" fill="none" stroke="${c}" stroke-width="2.6"/>` +
+    `<path d="M24 13 L24 36" stroke="${out}" stroke-width="6" stroke-linecap="round"/>` +
+    `<path d="M24 13 L24 36" stroke="${c}" stroke-width="3.8" stroke-linecap="round"/>` +
+    `<path d="M15 20.5 L33 20.5" stroke="${out}" stroke-width="5.4" stroke-linecap="round"/>` +
+    `<path d="M15 20.5 L33 20.5" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>` +
+    `<path d="M10 27.5 Q11.5 39.5 24 40.5 Q36.5 39.5 38 27.5 L42 30.5 Q41 42.5 24 44 Q7 42.5 6 30.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M38 27.5 L42 30.5 Q41.5 36.5 36 40.5 Q39.5 35.5 38.6 29.5 Z" fill="${shade(c, -15)}" opacity=".8"/>` +
+    `<path d="M6 30.5 L11.5 28.5 M42 30.5 L36.5 28.5" stroke="${out}" stroke-width="2" stroke-linecap="round"/>` +
+    hi(20.5, 7.5, 1.8, 1.1)
+  );
+});
+
+reg("🪁", "小风筝", () => {
+  // FLIPPABLE ▲：菱形斜置 + 尾穗甩向左下，剪影左右非对称
+  const c = P.rose;
+  const out = o(c);
+  const bow = (x: number, y: number, rot: number): string =>
+    `<path d="M${x - 3} ${y - 1.8} L${x + 3} ${y + 1.8} M${x - 3} ${y + 1.8} L${x + 3} ${y - 1.8}"` +
+    ` stroke="${P.gold}" stroke-width="2.2" stroke-linecap="round" transform="rotate(${rot} ${x} ${y})"/>`;
+  return (
+    // 斜置菱形（右上高、左下低）
+    `<polygon points="25,4.5 38.5,17 26,30 9.5,15.5" fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<polygon points="25,4.5 38.5,17 26,30 24.8,16" fill="${shade(c, -13)}" opacity=".7"/>` +
+    `<path d="M25 4.5 L26 30 M9.5 15.5 L38.5 17" fill="none" stroke="${out}" stroke-width="1.6" opacity=".75"/>` +
+    `<circle cx="25.4" cy="16.4" r="2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.2"/>` +
+    // 尾线与蝴蝶结（甩向左下）
+    `<path d="M26 30 Q22 36.5 15.5 39 Q10 41 7 44" fill="none" stroke="${out}" stroke-width="1.7" stroke-linecap="round"/>` +
+    bow(20.5, 35, -18) + bow(12, 40.5, -32) +
+    hi(18, 11, 2.6, 1.6)
+  );
+});
+
+reg("🎐", "风铃", () => {
+  // FLIPPABLE ▲：纸签被风吹向右侧，剪影左右非对称
+  const dome = "#bfe3f4";
+  const out = o("#8fb8d8");
+  return (
+    `<path d="M21 4 L21 8.5" stroke="${o(P.wood)}" stroke-width="2" stroke-linecap="round"/>` +
+    // 玻璃铃身
+    `<path d="M12.5 17 Q12.5 8.5 21 8.5 Q29.5 8.5 29.5 17 Q29.5 22.5 21 22.5 Q12.5 22.5 12.5 17 Z"` +
+    ` fill="${dome}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M21 22.5 Q29.5 22.5 29.5 17 Q29.5 11.5 25 9.5 Q27.5 13 26.5 17.5 Q25.5 21.5 19 22.3 Q20 22.5 21 22.5 Z" fill="${shade(dome, -12)}" opacity=".7"/>` +
+    `<path d="M15.5 11.5 Q17.5 9.5 20 9.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity=".85"/>` +
+    // 铃舌与纸签（吹向右）
+    `<path d="M21 22.5 L22.5 27.5" stroke="${out}" stroke-width="1.5" stroke-linecap="round"/>` +
+    `<circle cx="23" cy="29" r="2.2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.3"/>` +
+    `<path d="M23.5 30.5 Q31 33.5 33.5 41 Q33.9 43 31.9 43.5 Q26 44.5 24.5 38.5 Q23.5 34.5 23 30.9 Z"` +
+    ` fill="#fdf6ee" stroke="${o("#d8ccb0")}" stroke-width="1.7" stroke-linejoin="round"/>` +
+    `<path d="M27 35 Q29 37.5 29.5 40.5" fill="none" stroke="${P.rose}" stroke-width="1.5" stroke-linecap="round" opacity=".8"/>` +
+    // 风的示意线（左侧）
+    `<path d="M7 26 Q11 25 14 26.5 M5.5 31 Q9.5 30 12.5 31.5" fill="none" stroke="#a8ccd8" stroke-width="1.6" stroke-linecap="round" opacity=".75"/>` +
+    hi(16.5, 12, 2, 1.3)
+  );
+});
+
+reg("🌪️", "龙卷风", () => {
+  // FLIPPABLE ▲；双胞胎 🌪️↔🌀 的区分位：上宽下尖漏斗 + 尾尖甩向右（🌀 是圆盘螺旋）
+  const c = "#9fb8d8";
+  const out = o(c);
+  return (
+    gs(27, 44, 8) +
+    `<path d="M7.5 8.5 Q24 3.5 40.5 8.5 Q43 9.5 40.5 11 Q33 14.5 15 13.5 Q19 16.5 32 16.5 Q35 17 32.5 19 Q26 23 17.5 21.5 Q21 24.5 28.5 24.5 Q31.5 25 29.5 27.5 Q25.5 31 20.5 30 Q23 33 27 33 Q29.5 33.5 27.5 36 Q25 39 26.5 42.5"` +
+    ` fill="none" stroke="${out}" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="M7.5 8.5 Q24 3.5 40.5 8.5 Q43 9.5 40.5 11 Q33 14.5 15 13.5 Q19 16.5 32 16.5 Q35 17 32.5 19 Q26 23 17.5 21.5 Q21 24.5 28.5 24.5 Q31.5 25 29.5 27.5 Q25.5 31 20.5 30 Q23 33 27 33 Q29.5 33.5 27.5 36 Q25 39 26.5 42.5"` +
+    ` fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<circle cx="40" cy="20" r="1.5" fill="${shade(c, 14)}" opacity=".85"/>` +
+    `<circle cx="11" cy="26" r="1.3" fill="${shade(c, 14)}" opacity=".7"/>` +
+    hi(15, 7.5, 2.4, 1.4)
+  );
+});
+
+reg("🛶", "小木舟", () => {
+  // FLIPPABLE ▲：右端船头高翘 + 船桨斜靠右舷，剪影左右非对称
+  const hull = P.wood;
+  const out = o(hull);
+  return (
+    gs(24, 43, 15) +
+    // 船桨（斜靠右）
+    `<path d="M31 8 L36.5 28" stroke="${o("#c9a06a")}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<ellipse cx="30" cy="6.5" rx="3" ry="4.4" fill="#c9a06a" stroke="${o("#c9a06a")}" stroke-width="1.6" transform="rotate(16 30 6.5)"/>` +
+    // 船体：右头高翘
+    `<path d="M5.5 25 Q13 29.5 24 29.5 Q35 29.5 41 24 Q43.5 21.5 43 26 Q42 34 34 37.5 Q28.5 39.5 19 39.5 Q9 39 6.5 31.5 Q5 27.5 5.5 25 Z"` +
+    ` fill="${hull}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M34 37.5 Q42 34 43 26 Q43.2 23.5 42 24 Q41 31.5 32.5 35.5 Q26 38.3 17 37.8 Q23 39.8 28.5 39 Q31.5 38.5 34 37.5 Z" fill="${shade(hull, -15)}" opacity=".8"/>` +
+    `<path d="M10 31.5 Q24 34.5 38 30 M12.5 35 Q24 37.2 35 33.5" fill="none" stroke="${shade(hull, -22)}" stroke-width="1.3" opacity=".65"/>` +
+    // 水波
+    `<path d="M8 42.5 Q12 40.8 16 42.5 M28 43 Q32 41.3 36 43" fill="none" stroke="${P.blue}" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>` +
+    hi(13, 27.5, 2.6, 1.4)
+  );
+});
+
+reg("🧿", "蓝玻璃珠", () => {
+  // 通用蓝白同心圆装饰珠（不做任何符号细节）
+  const c = P.blueDeep;
+  const out = o(c);
+  return (
+    gs(24, 42.5, 12) +
+    `<circle cx="24" cy="24" r="14.5" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 38.5 a14.5 14.5 0 0 0 13.3 -20.2 a17 17 0 0 1 -13.3 20.2" fill="${shade(c, -16)}" opacity=".8"/>` +
+    `<circle cx="24" cy="24" r="9" fill="#fdf6ee" stroke="${o("#d8ccb0")}" stroke-width="1.4"/>` +
+    `<circle cx="24" cy="24" r="5.2" fill="${P.blue}" stroke="${o(P.blue)}" stroke-width="1.4"/>` +
+    `<ellipse cx="17.5" cy="16.5" rx="4" ry="2.5" fill="#ffffff" opacity=".55" transform="rotate(-26 17.5 16.5)"/>`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
