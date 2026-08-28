@@ -56,6 +56,53 @@ import {
   type View,
   type Viewport,
 } from "./seek12";
+import {
+  ALIEN_SPECS,
+  ALIEN_TINTS,
+  AS_PALETTE,
+  HUD_TIMER_MIN_PX,
+  UFO_BEAM_MS,
+  UFO_ENTER_MS,
+  UFO_TOTAL_MS,
+  UNCOVER_MS,
+  alienPose,
+  alienSilhouette,
+  cavityGrad,
+  ceremonyAt,
+  featureParts,
+  lightenHex,
+  mixHex,
+  spotUncover,
+  wrongPose,
+  wantedCardLayout,
+  type AlienPose,
+  type AlienSpec,
+  type PathCmd,
+} from "./visual";
+import {
+  createMeteor,
+  hillPoints,
+  makeStars,
+  meteorFrame,
+  paintHills,
+  paintMeteor,
+  paintNebula,
+  paintStar,
+  resetMeteor,
+  starAlpha,
+  stepMeteor,
+  type HillPoint,
+  type MeteorState,
+  type NightStar,
+} from "../../art/kit/nightsky";
+import {
+  clearSparkles,
+  paintSparkles,
+  spawnSparkles,
+  stepSparkles,
+  type SparkleParticle,
+} from "../../art/kit/sparklePaper";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 /** 两位玩家的光标颜色:朵朵粉、星星蓝 */
 const P_COLOR = ["#e8558f", "#3f7fd6"];
@@ -64,7 +111,7 @@ const P_NAME = ["朵朵", "星星"];
 const CSS = `
 .as-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
-.as-canvas{width:100%;display:block;border-radius:16px;background:#f7f5ff;touch-action:none;cursor:pointer;}
+.as-canvas{width:100%;display:block;border-radius:16px;background:#28234d;touch-action:none;cursor:pointer;}
 .as-clues{background:#fffdf6;border-radius:14px;padding:9px 12px;display:flex;flex-direction:column;gap:5px;
   box-shadow:0 2px 8px rgba(160,150,190,.22);}
 .as-clue{font-size:13px;font-weight:700;color:#5f5280;line-height:1.5;display:flex;gap:7px;align-items:flex-start;}
@@ -102,11 +149,12 @@ const CSS = `
 .als-list{display:flex;gap:8px;overflow-x:auto;padding:6px 4px;scrollbar-width:thin;
   -webkit-overflow-scrolling:touch;}
 .als-item{flex:0 0 auto;width:56px;display:flex;flex-direction:column;align-items:center;gap:2px;
-  background:#fffdf6;border-radius:12px;padding:4px 2px;box-shadow:0 2px 6px rgba(160,150,190,.22);}
-.als-item.als-done{background:#e9fbe8;}
-.als-thumb{width:40px;height:40px;display:block;border-radius:10px;background:#f4f1ff;}
+  background:rgba(255,255,255,.9);border:1px solid #e2d9f6;border-radius:12px;padding:4px 2px;
+  box-shadow:0 2px 6px rgba(160,150,190,.22);}
+.als-item.als-done{background:#e9fbe8;border-color:#c8ecc6;}
+.als-thumb{width:40px;height:40px;display:block;border-radius:10px;}
 .als-name{font-size:11px;font-weight:800;color:#5f5280;max-width:54px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap;}
+  text-overflow:ellipsis;white-space:nowrap;background:#f1ecff;border-radius:6px;padding:0 5px;}
 .als-tick{font-size:12px;font-weight:900;color:#3f9a54;line-height:1;}
 .als-tools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center;}
 .als-tool{border:none;border-radius:13px;min-width:46px;min-height:44px;padding:4px 10px;font-size:15px;
@@ -116,6 +164,8 @@ const CSS = `
 .als-tool:disabled{opacity:.5;cursor:default;box-shadow:none;}
 .als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
+${touchUpliftCss([".as-open", ".as-back"])}
+${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
 `;
 
 /** 用户在系统里关掉了动画吗(关了就不抖不闪) */
@@ -143,13 +193,55 @@ function wobble(seed: number): number {
   return (s - Math.floor(s)) * 2 - 1;
 }
 
-function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number): void {
+/** 把 visual.ts 吐出来的画法指令描到画布上(M/L/Q 同 SVG,A 圆弧,E 椭圆) */
+function tracePath(c2d: CanvasRenderingContext2D, cmds: PathCmd[]): void {
+  c2d.beginPath();
+  for (const c of cmds) {
+    switch (c[0]) {
+      case "M":
+        c2d.moveTo(c[1], c[2]);
+        break;
+      case "L":
+        c2d.lineTo(c[1], c[2]);
+        break;
+      case "Q":
+        c2d.quadraticCurveTo(c[1], c[2], c[3], c[4]);
+        break;
+      case "A":
+        c2d.moveTo(c[1] + c[3], c[2]);
+        c2d.arc(c[1], c[2], c[3], c[4], c[5]);
+        break;
+      case "E":
+        c2d.moveTo(c[1] + c[3], c[2]);
+        c2d.ellipse(c[1], c[2], c[3], c[4], 0, 0, Math.PI * 2);
+        break;
+      case "Z":
+        c2d.closePath();
+        break;
+    }
+  }
+}
+
+/**
+ * 藏身点:1.3 升级成「可掀开的藏身处」——夜景落影 + 左上 45° 受光面 +
+ * 一个能藏东西的深色内腔;找到后两瓣掀开、缝里透暖光。
+ * open / shakeX 全是画法参数,形状几何与命中判定的圆心半径一个像素不动。
+ */
+function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open = 0, shakeX = 0): void {
   const fill = COLOR_HEX[s.color];
   const line = shade(fill, 0.55);
   const r = s.r;
+  const up = spotUncover(s, open);
   c2d.save();
-  c2d.translate(s.x, s.y);
+  c2d.translate(s.x + shakeX, s.y);
   c2d.rotate(wobble(i + 1) * 0.05);
+
+  // 夜景统一落影(光源左上,影子往右下溜一点)
+  c2d.fillStyle = AS_PALETTE.asShadow;
+  c2d.beginPath();
+  c2d.ellipse(r * 0.14, r * 0.82, r * 0.85, r * 0.22, 0, 0, Math.PI * 2);
+  c2d.fill();
+
   c2d.lineWidth = 3.5;
   c2d.lineJoin = "round";
   c2d.lineCap = "round";
@@ -203,106 +295,401 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number): void 
       break;
   }
   c2d.fill(path);
+  // 受光面:左上 45° 一层高光、右下一层暗部,平涂立刻有体积
+  const lg = c2d.createLinearGradient(-r, -r, r * 0.9, r * 0.9);
+  lg.addColorStop(0, "rgba(255,255,255,.32)");
+  lg.addColorStop(0.55, "rgba(255,255,255,0)");
+  lg.addColorStop(1, "rgba(30,26,60,.16)");
+  c2d.fillStyle = lg;
+  c2d.fill(path);
   c2d.stroke(path);
 
-  // 每种藏身点再补一笔小细节,一眼能认出是什么东西
-  c2d.fillStyle = line;
+  // 「能藏东西」的内腔:每种藏身点一个更深的开口,掀开(open)时越张越大。
+  // 内腔统一走 2 停径向渐变(中心 #3E3A66 → 边缘 -18%),掀开后不再平涂
+  const cavity = (cx: number, cy: number, rad: number): void => {
+    c2d.fillStyle = cavityGrad(c2d, cx, cy, rad);
+  };
+  const gapGlow = up.gap > 0.12;
   if (s.kind === "树洞") {
+    cavity(0, r * 0.15, r * 0.55);
     c2d.beginPath();
-    c2d.ellipse(0, r * 0.15, r * 0.4, r * 0.5, 0, 0, Math.PI * 2);
+    c2d.ellipse(0, r * 0.15, r * (0.34 + 0.12 * up.gap), r * (0.44 + 0.12 * up.gap), 0, 0, Math.PI * 2);
     c2d.fill();
-  } else if (s.kind === "木箱") {
-    c2d.fillRect(-r * 0.85, -r * 0.08, r * 1.7, r * 0.16);
-  } else if (s.kind === "花丛") {
+    // 洞口上缘一圈受光的木纹边
+    c2d.strokeStyle = lightenHex(fill, 0.22);
+    c2d.lineWidth = 2;
     c2d.beginPath();
-    c2d.arc(0, 0, r * 0.26, 0, Math.PI * 2);
+    c2d.ellipse(0, r * 0.15, r * 0.4, r * 0.5, 0, Math.PI * 1.05, Math.PI * 1.95);
+    c2d.stroke();
+  } else if (s.kind === "木箱") {
+    // 盖缝:找到时盖子抬起,缝里透光
+    cavity(0, -r * 0.04, r * 0.9);
+    c2d.fillRect(-r * 0.85, -r * 0.12, r * 1.7, r * 0.16);
+    if (open > 0) {
+      c2d.save();
+      c2d.translate(-r * 0.85, -r * 0.12 - up.lift * r);
+      c2d.rotate(-up.flapAngle * 0.5);
+      c2d.fillStyle = lightenHex(fill, 0.12);
+      c2d.strokeStyle = line;
+      c2d.lineWidth = 3;
+      const lid = new Path2D();
+      lid.roundRect(0, -r * 0.58, r * 1.7, r * 0.6, r * 0.14);
+      c2d.fill(lid);
+      c2d.stroke(lid);
+      c2d.restore();
+    }
+  } else if (s.kind === "花丛") {
+    // 三簇叠层:后簇更深,有前后才藏得住
+    c2d.fillStyle = shade(fill, 0.68);
+    c2d.beginPath();
+    c2d.arc(-r * 0.34, -r * 0.12, r * 0.34, 0, Math.PI * 2);
+    c2d.arc(r * 0.36, -r * 0.1, r * 0.3, 0, Math.PI * 2);
+    c2d.fill();
+    cavity(0, r * 0.04, r * 0.4);
+    c2d.beginPath();
+    c2d.arc(0, r * 0.04, r * (0.26 + 0.1 * up.gap), 0, Math.PI * 2);
     c2d.fill();
   } else if (s.kind === "水缸") {
+    // 缸口:一圈深色的「里面」,水光在口沿
+    cavity(0, -r * 0.68, r * 0.56);
+    c2d.beginPath();
+    c2d.ellipse(0, -r * 0.68, r * (0.5 + 0.06 * up.gap), r * 0.16, 0, 0, Math.PI * 2);
+    c2d.fill();
     c2d.beginPath();
     c2d.moveTo(-r * 0.55, r * 0.15);
     c2d.quadraticCurveTo(0, -r * 0.1, r * 0.55, r * 0.15);
     c2d.lineWidth = 3;
-    c2d.strokeStyle = line;
+    c2d.strokeStyle = lightenHex(fill, 0.3);
     c2d.stroke();
   } else if (s.kind === "帐篷") {
+    // 门帘:深色门洞,掀开时门帘往边上翻
+    cavity(0, r * 0.3, r * 0.75);
     c2d.beginPath();
-    c2d.moveTo(0, -r * 0.5);
-    c2d.lineTo(r * 0.3, r * 0.7);
-    c2d.lineTo(-r * 0.3, r * 0.7);
+    c2d.moveTo(0, -r * 0.4);
+    c2d.lineTo(r * (0.3 + 0.08 * up.gap), r * 0.7);
+    c2d.lineTo(-r * (0.3 + 0.08 * up.gap), r * 0.7);
     c2d.closePath();
     c2d.fill();
+    if (open > 0) {
+      c2d.save();
+      c2d.translate(-r * 0.08, r * 0.7);
+      c2d.rotate(-up.flapAngle);
+      c2d.fillStyle = lightenHex(fill, 0.18);
+      c2d.beginPath();
+      c2d.moveTo(0, 0);
+      c2d.lineTo(r * 0.06, -r * 1.05);
+      c2d.lineTo(r * 0.4, -r * 0.1);
+      c2d.closePath();
+      c2d.fill();
+      c2d.restore();
+    }
   } else if (s.kind === "信箱") {
-    c2d.fillRect(-r * 0.4, -r * 0.45, r * 0.8, r * 0.12);
+    cavity(0, -r * 0.35, r * 0.55);
+    c2d.fillRect(-r * 0.4, -r * 0.45, r * 0.8, r * (0.12 + 0.14 * up.gap));
   } else if (s.kind === "石头") {
+    // 影子后的石缝:右下一道能塞进小朋友的缝
+    cavity(r * 0.25, r * 0.27, r * 0.5);
     c2d.beginPath();
-    c2d.arc(r * 0.2, -r * 0.2, r * 0.14, 0, Math.PI * 2);
+    c2d.moveTo(r * 0.2, -r * 0.1);
+    c2d.lineTo(r * (0.5 + 0.1 * up.gap), r * 0.5);
+    c2d.lineTo(r * 0.05, r * 0.42);
+    c2d.closePath();
     c2d.fill();
+    c2d.fillStyle = lightenHex(fill, 0.28);
+    c2d.beginPath();
+    c2d.arc(-r * 0.24, -r * 0.34, r * 0.13, 0, Math.PI * 2);
+    c2d.fill();
+  } else if (s.kind === "云朵") {
+    // 云肚子的阴影层:下缘一条软软的暗带
+    cavity(0, r * 0.36, r * 0.62);
+    c2d.beginPath();
+    c2d.ellipse(0, r * (0.36 - 0.08 * up.gap), r * 0.62, r * 0.2, 0, 0, Math.PI * 2);
+    c2d.fill();
+  }
+
+  // 掀开的缝隙光:里头透出一点暖光,告诉小朋友「这里已经看过了」
+  if (gapGlow) {
+    c2d.fillStyle = `rgba(255,243,201,${0.3 * up.gap})`;
+    c2d.beginPath();
+    c2d.ellipse(0, r * 0.1, r * 0.24 * up.gap, r * 0.3 * up.gap, 0, 0, Math.PI * 2);
+    c2d.fill();
+  }
+
+  // 拨开的两瓣(草丛式藏身处;木箱 / 水缸走上面的掀盖):瓣长不超过 1.1r,不遮邻居
+  if (open > 0 && s.kind !== "木箱" && s.kind !== "水缸") {
+    for (const d of [-1, 1]) {
+      c2d.save();
+      c2d.translate(d * r * 0.4, r * 0.24);
+      c2d.rotate(d * up.flapAngle);
+      c2d.fillStyle = lightenHex(fill, 0.1);
+      c2d.strokeStyle = line;
+      c2d.lineWidth = 2;
+      c2d.beginPath();
+      c2d.moveTo(0, r * 0.16);
+      c2d.quadraticCurveTo(d * r * 0.52, -r * 0.12, d * r * 0.26, -r * 0.6);
+      c2d.quadraticCurveTo(d * r * 0.02, -r * 0.3, 0, r * 0.16);
+      c2d.closePath();
+      c2d.fill();
+      c2d.stroke();
+      c2d.restore();
+    }
   }
   c2d.restore();
 }
 
-/** 躲在藏身点后面的外星小朋友:只露出脑袋和触角,这就是要找的东西 */
-function drawAlien(c2d: CanvasRenderingContext2D, x: number, y: number, size: number, tint: number, peek: boolean): void {
-  const body = ["#8fe0c4", "#a9d8ff", "#ffd28f", "#d9bcff", "#b6e89a", "#ffb6c9"][tint % 6];
+/** 眼睛:六款眼型各画各的,眨眼(blink)与瞟眼(eyeShift)全从 pose 来 */
+function drawAlienEyes(c2d: CanvasRenderingContext2D, spec: AlienSpec, size: number, pose: AlienPose): void {
+  const ink = "#3a3a4a";
+  const openK = 1 - pose.blink * 0.85;
+  const px = pose.eyeShift * size * 0.06;
+  const bead = (ex: number, ey: number, rx: number, ry: number): void => {
+    c2d.fillStyle = ink;
+    c2d.beginPath();
+    c2d.ellipse(ex, ey, rx, Math.max(0.5, ry * openK), 0, 0, Math.PI * 2);
+    c2d.fill();
+    c2d.fillStyle = "#fff";
+    c2d.beginPath();
+    c2d.arc(ex + rx * 0.32, ey - ry * 0.32, Math.max(0.4, rx * 0.3), 0, Math.PI * 2);
+    c2d.fill();
+  };
+  switch (spec.eyes) {
+    case "cyclops": {
+      c2d.fillStyle = "#fff";
+      c2d.beginPath();
+      c2d.ellipse(0, -size * 0.12, size * 0.26, Math.max(0.5, size * 0.26 * openK), 0, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.lineWidth = 1.5;
+      c2d.stroke();
+      c2d.fillStyle = ink;
+      c2d.beginPath();
+      c2d.ellipse(px * 1.8, -size * 0.12, size * 0.12, Math.max(0.5, size * 0.12 * openK), 0, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.fillStyle = "#fff";
+      c2d.beginPath();
+      c2d.arc(px * 1.8 + size * 0.04, -size * 0.16, size * 0.04, 0, Math.PI * 2);
+      c2d.fill();
+      break;
+    }
+    case "triple":
+      bead(-size * 0.26 + px, -size * 0.2, size * 0.08, size * 0.1);
+      bead(px, -size * 0.3, size * 0.09, size * 0.11);
+      bead(size * 0.26 + px, -size * 0.2, size * 0.08, size * 0.1);
+      break;
+    case "droopy":
+      // 双眼下垂:往外斜一点,一脸温柔
+      for (const d of [-1, 1]) {
+        c2d.save();
+        c2d.translate(d * size * 0.24 + px, -size * 0.04);
+        c2d.rotate(d * 0.4);
+        c2d.fillStyle = ink;
+        c2d.beginPath();
+        c2d.ellipse(0, 0, size * 0.09, Math.max(0.5, size * 0.13 * openK), 0, 0, Math.PI * 2);
+        c2d.fill();
+        c2d.fillStyle = "#fff";
+        c2d.beginPath();
+        c2d.arc(size * 0.02, -size * 0.04, size * 0.032, 0, Math.PI * 2);
+        c2d.fill();
+        c2d.restore();
+      }
+      break;
+    case "beads":
+      bead(-size * 0.2 + px, -size * 0.1, size * 0.07, size * 0.07);
+      bead(size * 0.2 + px, -size * 0.1, size * 0.07, size * 0.07);
+      break;
+    case "boxy":
+      for (const d of [-1, 1]) {
+        c2d.fillStyle = ink;
+        const bw = size * 0.17;
+        const bh = Math.max(1, size * 0.19 * openK);
+        c2d.beginPath();
+        c2d.roundRect(d * size * 0.28 - bw / 2 + px, -size * 0.18 - bh / 2, bw, bh, size * 0.04);
+        c2d.fill();
+        c2d.fillStyle = "#9fe8ff";
+        c2d.fillRect(d * size * 0.28 - bw * 0.22 + px, -size * 0.22, bw * 0.3, bh * 0.3);
+      }
+      break;
+    case "starry":
+      // 星星眼:四角小星
+      for (const d of [-1, 1]) {
+        c2d.fillStyle = ink;
+        c2d.beginPath();
+        const ex = d * size * 0.22 + px;
+        const ey = -size * 0.1;
+        const ro = size * 0.13;
+        const ri = size * 0.05;
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
+          const rr = k % 2 === 0 ? ro : ri;
+          if (k === 0) c2d.moveTo(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr);
+          else c2d.lineTo(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr);
+        }
+        c2d.closePath();
+        c2d.fill();
+        c2d.fillStyle = "#fff";
+        c2d.beginPath();
+        c2d.arc(ex + size * 0.03, ey - size * 0.03, size * 0.03, 0, Math.PI * 2);
+        c2d.fill();
+      }
+      break;
+  }
+}
+
+/**
+ * 外星小朋友:六只按 ALIEN_SPECS 走剪影级差异(独眼圆胖 / 三眼瘦高 / 大耳光环 /
+ * 蘑菇双尾 / 方脑袋天线 / 小翅膀螺旋),三停径向渐变 + 肚皮浅色域 + 1.5px 描边。
+ * peek 只露上半身、眼睛左右瞟;waveK 是找到仪式的挥手摆角;reduced 全静止。
+ */
+function drawAlien(
+  c2d: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  tint: number,
+  peek: boolean,
+  tMs = 0,
+  reduced = true,
+  waveK = 0
+): void {
+  const idx = ((tint % 6) + 6) % 6;
+  const spec = ALIEN_SPECS[idx];
+  const body = ALIEN_TINTS[idx];
+  const line = shade(body, 0.5);
+  const pose = alienPose(spec, peek, tMs, reduced);
   c2d.save();
   c2d.translate(x, y);
-  c2d.lineWidth = 2.6;
-  c2d.lineJoin = "round";
-  c2d.strokeStyle = shade(body, 0.5);
-  // 触角
-  for (const d of [-1, 1]) {
+  if (peek) {
+    // 探头:只露上半身,下缘按 reveal 裁掉(裁的是画,不是命中区)
     c2d.beginPath();
-    c2d.moveTo(d * size * 0.3, -size * 0.35);
-    c2d.quadraticCurveTo(d * size * 0.55, -size * 0.95, d * size * 0.42, -size * 1.15);
-    c2d.stroke();
-    c2d.fillStyle = "#ffe066";
+    c2d.rect(-size * 2.4, -size * 2.4, size * 4.8, size * 2.4 + size * (pose.reveal - 0.3));
+    c2d.clip();
+  } else {
+    c2d.fillStyle = AS_PALETTE.asShadow;
     c2d.beginPath();
-    c2d.arc(d * size * 0.42, -size * 1.2, size * 0.15, 0, Math.PI * 2);
+    c2d.ellipse(size * 0.1, size * 0.72, size * 0.6, size * 0.16, 0, 0, Math.PI * 2);
     c2d.fill();
-    c2d.stroke();
   }
-  // 脑袋
-  c2d.fillStyle = body;
-  c2d.beginPath();
-  c2d.ellipse(0, 0, size * 0.62, size * 0.55, 0, 0, Math.PI * 2);
+  c2d.lineWidth = 1.5;
+  c2d.lineJoin = "round";
+  c2d.lineCap = "round";
+  c2d.strokeStyle = line;
+
+  // 特征件:触角 / 光环 / 尾巴 / 天线 / 翅膀,按 idle 摆动(reduced 静止)
+  for (const part of featureParts(spec, size)) {
+    c2d.save();
+    if (part.sway) c2d.rotate(part.kind === "wing" ? pose.wingAngle * 0.22 : pose.antennaSwing * 0.09);
+    if (part.kind === "halo") {
+      tracePath(c2d, part.cmds);
+      c2d.strokeStyle = "#ffe066";
+      c2d.lineWidth = 2.4;
+      c2d.stroke();
+    } else if (part.kind === "spiralWing") {
+      tracePath(c2d, part.cmds);
+      c2d.lineWidth = 1.8;
+      c2d.stroke();
+    } else if (part.kind === "wing") {
+      tracePath(c2d, part.cmds);
+      c2d.fillStyle = lightenHex(body, 0.42);
+      c2d.fill();
+      c2d.lineWidth = 1.5;
+      c2d.stroke();
+    } else if (part.kind === "twinTail") {
+      tracePath(c2d, part.cmds);
+      c2d.lineWidth = Math.max(2.4, size * 0.14);
+      c2d.strokeStyle = shade(body, 0.7);
+      c2d.stroke();
+    } else {
+      // 触角 / 天线:杆描线,顶端小球点亮
+      tracePath(c2d, part.cmds.filter((c) => c[0] !== "A"));
+      c2d.lineWidth = 1.8;
+      c2d.strokeStyle = line;
+      c2d.stroke();
+      tracePath(c2d, part.cmds.filter((c) => c[0] === "A"));
+      c2d.fillStyle = "#ffe066";
+      c2d.fill();
+      c2d.lineWidth = 1.5;
+      c2d.stroke();
+    }
+    c2d.restore();
+  }
+  c2d.strokeStyle = line;
+  c2d.lineWidth = 1.5;
+
+  // 身体:三停径向渐变(顶光 +22% → 主色 → 底部压暗),光源统一左上 45°
+  const g = c2d.createRadialGradient(-size * 0.28, -size * 0.36, size * 0.08, 0, 0, size * 1.05);
+  g.addColorStop(0, lightenHex(body, 0.22));
+  g.addColorStop(0.55, body);
+  g.addColorStop(1, shade(body, 0.78));
+  tracePath(c2d, alienSilhouette(spec, size));
+  c2d.fillStyle = g;
   c2d.fill();
   c2d.stroke();
-  // 眼睛
-  c2d.fillStyle = "#3a3a4a";
-  for (const d of [-1, 1]) {
-    c2d.beginPath();
-    c2d.ellipse(d * size * 0.22, -size * 0.05, size * 0.11, size * 0.14, 0, 0, Math.PI * 2);
-    c2d.fill();
-  }
-  c2d.fillStyle = "#fff";
-  for (const d of [-1, 1]) {
-    c2d.beginPath();
-    c2d.arc(d * size * 0.22 + size * 0.04, -size * 0.1, size * 0.04, 0, Math.PI * 2);
-    c2d.fill();
-  }
+
+  // 肚皮浅色域
+  c2d.fillStyle = lightenHex(body, 0.4);
+  c2d.beginPath();
+  c2d.ellipse(0, size * 0.3, size * 0.3, size * 0.2, 0, 0, Math.PI * 2);
+  c2d.fill();
+
+  drawAlienEyes(c2d, spec, size, pose);
+
   if (!peek) {
     // 找到之后露出整张笑脸
     c2d.strokeStyle = "#3a3a4a";
-    c2d.lineWidth = 2.2;
+    c2d.lineWidth = 2;
     c2d.beginPath();
-    c2d.arc(0, size * 0.14, size * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+    c2d.arc(0, size * 0.16, size * 0.16, 0.15 * Math.PI, 0.85 * Math.PI);
     c2d.stroke();
+  }
+  if (waveK !== 0) {
+    // 找到仪式的挥手:小手臂从身侧举起来摆(是打招呼,不是被抓)
+    c2d.save();
+    c2d.translate(size * 0.5, -size * 0.02);
+    c2d.rotate(-0.7 - waveK * 0.35);
+    c2d.strokeStyle = line;
+    c2d.lineWidth = Math.max(2, size * 0.13);
+    c2d.beginPath();
+    c2d.moveTo(0, 0);
+    c2d.lineTo(size * 0.42, 0);
+    c2d.stroke();
+    c2d.fillStyle = lightenHex(body, 0.3);
+    c2d.beginPath();
+    c2d.arc(size * 0.5, 0, size * 0.12, 0, Math.PI * 2);
+    c2d.fill();
+    c2d.restore();
   }
   c2d.restore();
 }
 
-/** 线索物:一颗会闪的小星星贴纸 */
-function drawTrinket(c2d: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+/** 线索物:一颗真的会呼吸发光的小星星贴纸(reduced 恒亮不动) */
+function drawTrinket(
+  c2d: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  tMs = 0,
+  reduced = true
+): void {
+  const pulse = reduced ? 1 : 1 + 0.07 * Math.sin(tMs / 280);
+  const s = size * pulse;
   c2d.save();
   c2d.translate(x, y);
-  c2d.fillStyle = "#ffd75e";
+  // 夜里的一圈柔光
+  c2d.fillStyle = "rgba(255,243,201,.22)";
+  c2d.beginPath();
+  c2d.arc(0, 0, s * 1.5, 0, Math.PI * 2);
+  c2d.fill();
+  const g = c2d.createRadialGradient(-s * 0.25, -s * 0.3, s * 0.1, 0, 0, s * 1.1);
+  g.addColorStop(0, "#fff3c9");
+  g.addColorStop(0.55, "#ffd75e");
+  g.addColorStop(1, "#efb63e");
+  c2d.fillStyle = g;
   c2d.strokeStyle = "#c8942a";
   c2d.lineWidth = 2.2;
   c2d.lineJoin = "round";
   c2d.beginPath();
   for (let k = 0; k < 10; k++) {
     const a = (k / 10) * Math.PI * 2 - Math.PI / 2;
-    const rr = k % 2 === 0 ? size : size * 0.45;
+    const rr = k % 2 === 0 ? s : s * 0.45;
     if (k === 0) c2d.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
     else c2d.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
   }
@@ -312,25 +699,51 @@ function drawTrinket(c2d: CanvasRenderingContext2D, x: number, y: number, size: 
   c2d.restore();
 }
 
-/** 背景:按章节换一批涂鸦(草丛 / 果子 / 水波 / 云 / 星星 / 齿轮 / 晶簇 / 星轨) */
-function drawBackdrop(c2d: CanvasRenderingContext2D, chapter: number, t: number): void {
-  const base = CHAPTERS[Math.max(0, Math.min(CHAPTERS.length - 1, chapter))].color;
-  const g = c2d.createLinearGradient(0, 0, 0, SCENE_H);
-  g.addColorStop(0, "#ffffff");
-  g.addColorStop(1, base);
-  c2d.fillStyle = g;
-  c2d.fillRect(0, 0, SCENE_W, SCENE_H);
+/** 一局的夜空状态:亮星 / 流星 / 两层丘陵,seed 定了就一整局不变 */
+interface SkyState {
+  stars: NightStar[];
+  meteor: MeteorState;
+  hillFar: HillPoint[];
+  hillNear: HillPoint[];
+}
 
+/**
+ * 背景:1.3 升级成星空氛围——星云双色径向渐变(揉一点章节色,八章各有色温)、
+ * 亮星 12 颗两级缓慢闪烁、流星 8~14s 一条、两层丘陵剪影跟镜头做视差;
+ * 章节涂鸦压成夜色里的淡纹理,不跟藏匿点抢眼。reduced:闪烁与漂移全停。
+ */
+function drawBackdrop(c2d: CanvasRenderingContext2D, chapter: number, t: number, sky: SkyState, viewCx: number, reduced: boolean): void {
+  const base = CHAPTERS[Math.max(0, Math.min(CHAPTERS.length - 1, chapter))].color;
+  // ① 星云渐变底
+  paintNebula(
+    c2d,
+    SCENE_W,
+    SCENE_H,
+    mixHex(AS_PALETTE.asNebulaB, base, 0.24),
+    mixHex(AS_PALETTE.asNebulaA, base, 0.12)
+  );
+  // ② 亮星与流星
+  const tMs = t * 1000;
+  for (const st of sky.stars) paintStar(c2d, st, starAlpha(st, tMs, reduced), AS_PALETTE.asStar);
+  const mf = meteorFrame(sky.meteor);
+  if (mf) paintMeteor(c2d, mf, AS_PALETTE.asStar);
+  // ③④ 两层丘陵剪影:远丘跟镜头多挪一点,天就显得远
+  const off = viewCx - SCENE_W / 2;
+  paintHills(c2d, sky.hillFar, SCENE_H, mixHex(AS_PALETTE.asHillFar, base, 0.16), off * 0.14);
+  paintHills(c2d, sky.hillNear, SCENE_H, mixHex(AS_PALETTE.asHillNear, base, 0.1), off * 0.06);
+
+  // 章节涂鸦:调得很淡,只是夜色里的一点纹理
   c2d.save();
-  c2d.strokeStyle = shade(base, 0.72);
-  c2d.fillStyle = shade(base, 0.82);
+  c2d.globalAlpha = 0.16;
+  c2d.strokeStyle = "#cfc6f0";
+  c2d.fillStyle = "#cfc6f0";
   c2d.lineWidth = 3;
   c2d.lineCap = "round";
   for (let i = 0; i < 26; i++) {
     const x = 30 + ((i * 173) % (SCENE_W - 60));
     const y = 40 + ((i * 271) % (SCENE_H - 80));
     const s = 12 + ((i * 7) % 10);
-    const drift = Math.sin(t * 0.7 + i) * 3;
+    const drift = reduced ? 0 : Math.sin(t * 0.7 + i) * 3;
     c2d.save();
     c2d.translate(x, y + drift);
     switch (chapter % 8) {
@@ -399,6 +812,116 @@ function drawBackdrop(c2d: CanvasRenderingContext2D, chapter: number, t: number)
     }
     c2d.restore();
   }
+  c2d.restore();
+}
+
+/** 一只圆滚滚的原创小飞碟:薰衣草色碟身 + 透明舱盖 + 一排小灯 */
+function drawUfo(c2d: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c2d.save();
+  // 舱盖
+  c2d.fillStyle = "rgba(205,236,255,.8)";
+  c2d.beginPath();
+  c2d.ellipse(x, y - r * 0.26, r * 0.5, r * 0.44, 0, Math.PI, Math.PI * 2);
+  c2d.closePath();
+  c2d.fill();
+  // 碟身
+  const g = c2d.createLinearGradient(x - r, y - r * 0.3, x + r, y + r * 0.3);
+  g.addColorStop(0, "#e6def8");
+  g.addColorStop(1, "#b7a8e4");
+  c2d.fillStyle = g;
+  c2d.strokeStyle = "#6f5cae";
+  c2d.lineWidth = 2;
+  c2d.beginPath();
+  c2d.ellipse(x, y, r, r * 0.34, 0, 0, Math.PI * 2);
+  c2d.fill();
+  c2d.stroke();
+  // 一排小灯
+  c2d.fillStyle = "#ffe066";
+  for (let k = 0; k < 4; k++) {
+    c2d.beginPath();
+    c2d.arc(x + (k - 1.5) * r * 0.46, y + r * 0.1, r * 0.075, 0, Math.PI * 2);
+    c2d.fill();
+  }
+  c2d.restore();
+}
+
+/** 找到仪式的覆盖层:UFO 飘入 → 光束锥 → (外星人在藏身点那边挥手上升) */
+function drawCeremonyOverlay(
+  c2d: CanvasRenderingContext2D,
+  fx: { x: number; y: number; r: number; t: number },
+  reduced: boolean
+): void {
+  const f = ceremonyAt(fx.t * 1000, reduced);
+  if (f.phase === "done") return;
+  if (f.phase === "static") {
+    // reduced:静态光圈一帧(挥手那一帧由藏身点上的外星人自己画)
+    c2d.strokeStyle = AS_PALETTE.asBeam;
+    c2d.lineWidth = 7;
+    c2d.beginPath();
+    c2d.arc(fx.x, fx.y - fx.r * 0.2, fx.r + 12, 0, Math.PI * 2);
+    c2d.stroke();
+    return;
+  }
+  const startX = -140;
+  const ux = startX + (fx.x - startX) * f.ufoT;
+  const uy = fx.y - fx.r * 2.6 - (1 - f.ufoT) * 70;
+  if (f.beamK > 0) {
+    // 光束锥:半透明渐变罩住外星人
+    const g = c2d.createLinearGradient(0, uy, 0, fx.y + fx.r * 0.3);
+    g.addColorStop(0, "rgba(180,230,255,.5)");
+    g.addColorStop(1, "rgba(180,230,255,.06)");
+    c2d.fillStyle = g;
+    c2d.beginPath();
+    c2d.moveTo(ux - fx.r * 0.3, uy + fx.r * 0.28);
+    c2d.lineTo(ux + fx.r * 0.3, uy + fx.r * 0.28);
+    c2d.lineTo(fx.x + fx.r * (0.5 + 0.45 * f.beamK), fx.y + fx.r * 0.3);
+    c2d.lineTo(fx.x - fx.r * (0.5 + 0.45 * f.beamK), fx.y + fx.r * 0.3);
+    c2d.closePath();
+    c2d.fill();
+  }
+  drawUfo(c2d, ux, uy, fx.r * 0.9);
+}
+
+/** 点错时冒出来的小问号云:只是「咦?」一下,不批评 */
+function drawQuestionCloud(
+  c2d: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  alpha: number,
+  scale: number
+): void {
+  c2d.save();
+  c2d.globalAlpha = Math.max(0, Math.min(1, alpha));
+  c2d.translate(x, y);
+  c2d.scale(scale, scale);
+  c2d.fillStyle = "rgba(255,255,255,.94)";
+  c2d.strokeStyle = "#b9aede";
+  c2d.lineWidth = 2;
+  c2d.beginPath();
+  c2d.arc(-r * 0.28, 0, r * 0.26, 0, Math.PI * 2);
+  c2d.arc(0, -r * 0.12, r * 0.32, 0, Math.PI * 2);
+  c2d.arc(r * 0.28, 0.02 * r, r * 0.24, 0, Math.PI * 2);
+  c2d.fill();
+  c2d.stroke();
+  // 问号换 2.2px 描边白路径 + 薰衣草落影(B 档第 1 轮建议级,第 2 轮清偿):
+  // 钩 = 上半圆弧顺到下垂小竖,点 = 实心小圆;先画偏移的落影再画白芯,
+  // 白纸云上白问号靠落影浮起来。文本字形一个不留。
+  const qStroke = (dx: number, dy: number, color: string, width: number): void => {
+    c2d.strokeStyle = color;
+    c2d.lineWidth = width;
+    c2d.lineCap = "round";
+    c2d.beginPath();
+    c2d.arc(dx, dy - r * 0.16, r * 0.14, Math.PI, Math.PI * 2.25);
+    c2d.quadraticCurveTo(dx + r * 0.1, dy + r * 0.02, dx, dy + r * 0.04);
+    c2d.stroke();
+    c2d.beginPath();
+    c2d.arc(dx, dy + r * 0.16, r * 0.05, 0, Math.PI * 2);
+    c2d.fillStyle = color;
+    c2d.fill();
+  };
+  qStroke(r * 0.035, r * 0.05 - r * 0.06, "rgba(122,104,176,.8)", 3.4);
+  qStroke(0, -r * 0.06, "#ffffff", 2.2);
   c2d.restore();
 }
 
@@ -517,6 +1040,56 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   let focusTimer = 0;
   const softMotion = reducedMotion();
 
+  // ---- 纯视觉状态(1.3 视觉升级):夜空 / 掀开 / 点错 / UFO 仪式 / 星屑 ----
+  const skySeed = (lv.chapter + 1) * 131 + (lv.index + 2) * 17;
+  const sky: SkyState = {
+    stars: makeStars(skySeed, SCENE_W, SCENE_H * 0.92),
+    meteor: createMeteor(skySeed + 5),
+    hillFar: hillPoints(skySeed + 1, SCENE_W, SCENE_H * 0.66, 44, 5),
+    hillNear: hillPoints(skySeed + 2, SCENE_W, SCENE_H * 0.78, 34, 6),
+  };
+  /** 纯视觉时钟(秒):结算后 UFO 仪式还要走完,所以不搭玩法的 clock */
+  let vClock = 0;
+  let sparkles: SparkleParticle[] = [];
+  /** 已点开藏身点的掀开进度(毫秒,封顶 UNCOVER_MS 之后保持张开) */
+  const fxOpen = new Map<number, number>();
+  let fxWrong: { spot: number; t: number } | null = null;
+  let ceremony: { spot: number; x: number; y: number; r: number; t: number; sparkled: boolean } | null = null;
+
+  /** 找到外星朋友:开一场 UFO 仪式(纯视觉覆盖层,不阻塞下一次点击) */
+  function startCeremony(i: number): void {
+    const s = lv.spots[i];
+    if (!s) return;
+    ceremony = { spot: i, x: s.x, y: s.y, r: s.r, t: 0, sparkled: false };
+  }
+
+  /** 推进纯视觉动效:和 step(玩法)分开,结算后仪式与星屑照样收尾 */
+  function stepFx(dt: number): void {
+    if (paused) return;
+    vClock += dt;
+    stepMeteor(sky.meteor, dt * 1000, SCENE_W, SCENE_H, softMotion);
+    if (sparkles.length > 0) sparkles = stepSparkles(sparkles, dt * 1000);
+    for (const [k, v] of fxOpen) {
+      if (v < UNCOVER_MS) fxOpen.set(k, Math.min(UNCOVER_MS, v + dt * 1000));
+    }
+    if (fxWrong) {
+      fxWrong.t += dt;
+      if (wrongPose(fxWrong.t * 1000, softMotion).done) fxWrong = null;
+    }
+    if (ceremony) {
+      ceremony.t += dt;
+      const tMs = ceremony.t * 1000;
+      if (!ceremony.sparkled && !softMotion && tMs >= UFO_ENTER_MS + UFO_BEAM_MS) {
+        // 光束罩住的那一刻撒星屑彩纸
+        sparkles = sparkles.concat(
+          spawnSparkles(skySeed + ceremony.spot, ceremony.x, ceremony.y - ceremony.r, 16)
+        );
+        ceremony.sparkled = true;
+      }
+      if (tMs >= UFO_TOTAL_MS) ceremony = null;
+    }
+  }
+
   // 出生点与 sim.ts 的限时校验保持一致:那边算「够不够时间」就是从这里起步的
   const cursors = [
     { x: START_X, y: START_Y },
@@ -577,12 +1150,15 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       if (crossed.has(i)) return;
       if (i === (lv as DeduceLevel).answer) {
         found.set(i, player);
+        fxOpen.set(i, softMotion ? UNCOVER_MS : 0);
+        startCeremony(i);
         opts.sfx("coin");
         settle(true);
       } else {
         crossed.add(i);
         misses++;
         left = Math.max(0, left - penalty);
+        fxWrong = { spot: i, t: 0 };
         opts.sfx("oops");
         say("这个地方和线索对不上,再读一遍线索～");
         if (misses >= 3) settle(false);
@@ -595,11 +1171,18 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (!hit) {
       misses++;
       left = Math.max(0, left - penalty);
+      fxWrong = { spot: i, t: 0 };
       opts.sfx("oops");
       say("这里没人躲着,再找找!");
       return;
     }
     found.set(i, player);
+    fxOpen.set(i, softMotion ? UNCOVER_MS : 0);
+    if (hit.role === "alien") startCeremony(i);
+    else if (!softMotion) {
+      const s = lv.spots[i];
+      sparkles = sparkles.concat(spawnSparkles(skySeed + i, s.x, s.y - s.r * 0.6, 12));
+    }
     scores[player]++;
     opts.sfx(hit.role === "alien" ? "meow" : "coin");
     say(hit.role === "alien" ? `找到${hit.name}啦!` : `捡到${hit.name}!`);
@@ -642,7 +1225,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     c2d.translate(cssW / 2, cssH / 2);
     c2d.scale(s, s);
     c2d.translate(-view.cx, -view.cy);
-    drawBackdrop(c2d, lv.chapter, softMotion ? 0 : clock);
+    const vMs = vClock * 1000;
+    drawBackdrop(c2d, lv.chapter, vClock, sky, view.cx, softMotion);
 
     lv.spots.forEach((s, i) => {
       const hidden = deduce ? -1 : targets.findIndex((t) => t.spot === i);
@@ -650,15 +1234,21 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       // 先画躲在后面的小家伙,再画藏身点——只露出一点点脑袋,这就是要「找」的东西
       if (!deduce && hidden >= 0 && !isFound) {
         const t = targets[hidden];
-        if (t.role === "alien") drawAlien(c2d, s.x + s.r * 0.34, s.y - s.r * 0.92, s.r * 0.5, i, true);
-        else drawTrinket(c2d, s.x - s.r * 0.5, s.y - s.r * 0.9, s.r * 0.26);
+        if (t.role === "alien") drawAlien(c2d, s.x + s.r * 0.34, s.y - s.r * 0.92, s.r * 0.5, i, true, vMs, softMotion);
+        else drawTrinket(c2d, s.x - s.r * 0.5, s.y - s.r * 0.9, s.r * 0.26, vMs, softMotion);
       }
-      drawSpotShape(c2d, s, i);
+      const openK = isFound ? Math.min(1, (fxOpen.get(i) ?? UNCOVER_MS) / UNCOVER_MS) : 0;
+      const shakeX = fxWrong && fxWrong.spot === i ? wrongPose(fxWrong.t * 1000, softMotion).shakeX : 0;
+      drawSpotShape(c2d, s, i, openK, shakeX);
 
       if (isFound) {
         const t = hidden >= 0 ? targets[hidden] : null;
-        if (!t || t.role === "alien") drawAlien(c2d, s.x, s.y - s.r * 0.2, s.r * 0.62, i, false);
-        else drawTrinket(c2d, s.x, s.y - s.r * 0.1, s.r * 0.4);
+        // 仪式进行中:外星人跟着光束挥手上升;仪式结束回到藏身点上站好
+        const cf = ceremony && ceremony.spot === i ? ceremonyAt(ceremony.t * 1000, softMotion) : null;
+        if (!t || t.role === "alien") {
+          const rise = cf ? -cf.riseK * s.r * 1.1 : 0;
+          drawAlien(c2d, s.x, s.y - s.r * 0.2 + rise, s.r * 0.62, i, false, vMs, softMotion, cf ? cf.waveK : 0);
+        } else drawTrinket(c2d, s.x, s.y - s.r * 0.1, s.r * 0.4, vMs, softMotion);
         c2d.strokeStyle = P_COLOR[found.get(i) ?? 0];
         c2d.lineWidth = 5;
         c2d.beginPath();
@@ -666,7 +1256,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
         c2d.stroke();
       }
       if (crossed.has(i)) {
-        c2d.strokeStyle = "rgba(120,110,140,.75)";
+        c2d.strokeStyle = "rgba(200,190,225,.8)";
         c2d.lineWidth = 6;
         c2d.lineCap = "round";
         const d = s.r * 0.7;
@@ -679,12 +1269,23 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       }
     });
 
+    // ---- 反馈层:问号云 / UFO 仪式 / 星屑彩纸(全是覆盖层,不挡点击) ----
+    if (fxWrong) {
+      const s = lv.spots[fxWrong.spot];
+      const wp = wrongPose(fxWrong.t * 1000, softMotion);
+      if (s && wp.cloudAlpha > 0) {
+        drawQuestionCloud(c2d, s.x, s.y - s.r * 0.95, s.r * 0.9, wp.cloudAlpha, Math.max(0.25, Math.min(1.15, wp.cloudScale)));
+      }
+    }
+    if (ceremony) drawCeremonyOverlay(c2d, ceremony, softMotion);
+    if (sparkles.length > 0) paintSparkles(c2d, sparkles);
+
     // 望远镜圈出来的一片:只框范围,里头有几个藏身点还是要自己认
     if (focus) {
       c2d.strokeStyle = "rgba(120,90,200,.75)";
       c2d.lineWidth = 6;
       c2d.setLineDash([18, 12]);
-      c2d.lineDashOffset = softMotion ? 0 : -clock * 26;
+      c2d.lineDashOffset = softMotion ? 0 : -vClock * 26;
       c2d.strokeRect(focus.left + 6, focus.top + 6, focus.right - focus.left - 12, focus.bottom - focus.top - 12);
       c2d.setLineDash([]);
     }
@@ -694,7 +1295,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       c2d.strokeStyle = P_COLOR[p];
       c2d.lineWidth = 5;
       c2d.setLineDash([12, 9]);
-      c2d.lineDashOffset = softMotion ? 0 : -clock * 34;
+      c2d.lineDashOffset = softMotion ? 0 : -vClock * 34;
       c2d.beginPath();
       c2d.arc(cur.x, cur.y, 30, 0, Math.PI * 2);
       c2d.stroke();
@@ -708,22 +1309,25 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     }
     c2d.restore();
 
-    // ---- 顶栏 ----
+    // ---- 顶栏:横幅卡 + 计时计数卡(卡片化,夜空上更清楚) ----
     c2d.textBaseline = "middle";
-    c2d.font = `bold ${Math.max(12, Math.round(cssW * 0.038))}px sans-serif`;
-    c2d.fillStyle = "rgba(255,255,255,.88)";
-    c2d.beginPath();
-    c2d.roundRect(6, 6, cssW - 12, 30, 12);
-    c2d.fill();
-    c2d.fillStyle = "#5f4a90";
-    c2d.textAlign = "left";
-    c2d.fillText(opts.banner, 14, 21);
-    c2d.textAlign = "right";
+    c2d.font = `bold ${Math.max(HUD_TIMER_MIN_PX, Math.round(cssW * 0.038))}px sans-serif`;
     const right =
       opts.players === 2
         ? `${P_NAME[0]} ${scores[0]} : ${scores[1]} ${P_NAME[1]}　⏱ ${formatClock(left)}`
         : `${deduce ? "🔍" : `${found.size}/${need}`}　⏱ ${formatClock(left)}`;
-    c2d.fillText(right, cssW - 14, 21);
+    const rightW = c2d.measureText(right).width + 20;
+    const leftW = Math.min(c2d.measureText(opts.banner).width + 20, cssW - rightW - 20);
+    c2d.fillStyle = AS_PALETTE.asCard;
+    c2d.beginPath();
+    c2d.roundRect(6, 6, leftW, 30, 12);
+    c2d.roundRect(cssW - 6 - rightW, 6, rightW, 30, 12);
+    c2d.fill();
+    c2d.fillStyle = "#5f4a90";
+    c2d.textAlign = "left";
+    c2d.fillText(opts.banner, 16, 21);
+    c2d.textAlign = "right";
+    c2d.fillText(right, cssW - 16, 21);
 
     // 时间条:快没时间了变红,小朋友一眼看得见
     const ratio = lv.seconds > 0 ? Math.max(0, left / lv.seconds) : 0;
@@ -766,6 +1370,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     last = now;
     syncSize();
     step(dt);
+    stepFx(dt);
     draw();
   }
 
@@ -926,7 +1531,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     refreshTools();
   }
 
-  /** 清单栏里的一枚缩略图:直接把外星朋友 / 线索物画一遍,不用任何外部图片 */
+  /** 清单栏里的一枚「通缉令小卡」:圆角卡 + 别针 + 半身像 + 名字条,全程序化绘制 */
   function drawThumb(target: { role: "alien" | "clue"; spot: number }): HTMLCanvasElement {
     const cv = document.createElement("canvas");
     cv.className = "als-thumb";
@@ -935,10 +1540,44 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const g = cv.getContext("2d");
     if (g) {
       g.scale(2, 2);
-      g.fillStyle = "#f4f1ff";
-      g.fillRect(0, 0, 40, 40);
-      if (target.role === "alien") drawAlien(g, 20, 24, 15, target.spot, false);
-      else drawTrinket(g, 20, 20, 13);
+      const card = wantedCardLayout(40, 40);
+      // 卡底
+      g.fillStyle = AS_PALETTE.asCard;
+      g.strokeStyle = "#d9d0f2";
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.roundRect(1, 1, card.w - 2, card.h - 2, card.radius);
+      g.fill();
+      g.stroke();
+      for (const part of card.parts) {
+        if (part === "portrait") {
+          // 半身像:名字条以下裁掉
+          g.save();
+          g.beginPath();
+          g.rect(2, 4, card.w - 4, card.nameStrip.y - 4);
+          g.clip();
+          if (target.role === "alien") {
+            drawAlien(g, card.portrait.x, card.portrait.y, card.portrait.size + 3, target.spot, false, 0, true);
+          } else {
+            drawTrinket(g, card.portrait.x, card.portrait.y - 2, card.portrait.size, 0, true);
+          }
+          g.restore();
+        } else if (part === "nameStrip") {
+          g.fillStyle = "#efe7ff";
+          g.beginPath();
+          g.roundRect(card.nameStrip.x, card.nameStrip.y, card.nameStrip.w, card.nameStrip.h, 3);
+          g.fill();
+        } else if (part === "pin") {
+          g.fillStyle = "#e8558f";
+          g.beginPath();
+          g.arc(card.pin.x, card.pin.y, card.pin.r, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = "#ffd3e4";
+          g.beginPath();
+          g.arc(card.pin.x - card.pin.r * 0.3, card.pin.y - card.pin.r * 0.3, card.pin.r * 0.32, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
     }
     return cv;
   }
@@ -1080,6 +1719,12 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       drag = null;
       pinch = null;
       hintBtn = null;
+      // 视觉动效清场:流星计时与星屑粒子全部归零
+      resetMeteor(sky.meteor);
+      clearSparkles(sparkles);
+      fxOpen.clear();
+      fxWrong = null;
+      ceremony = null;
       wrap.remove();
     },
   };

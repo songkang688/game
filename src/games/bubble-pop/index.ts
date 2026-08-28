@@ -8,6 +8,7 @@ import {
   BIG_GROUP,
   BubbleBag,
   CHAIN,
+  type CollapsePlan,
   SEA_ROWS,
   blowShuffle,
   chainBlast,
@@ -42,28 +43,19 @@ import {
   revealHidden,
   STONE,
 } from "./logic";
+import { BP_DECOR, BP_TIMINGS, bpBurstDelayMs, bpBurstLifeMs, bpCellSkin, bpIsTiny, bpVisualCss, bpWeedsSvg } from "./visual";
 
 const COLS = 8;
 /** 一关里最多帮孩子「吹气重排」几次，之后才收局（重排不扣分） */
 const MAX_SHUFFLE = 3;
 
-const COLORS = [
-  { bg: "radial-gradient(circle at 35% 30%, #FFE1EE, #FF9EC8)", ring: "#FF9EC8", mark: "●" },
-  { bg: "radial-gradient(circle at 35% 30%, #DFF3FF, #8FCBFF)", ring: "#8FCBFF", mark: "▲" },
-  { bg: "radial-gradient(circle at 35% 30%, #E6FBDF, #9FE08D)", ring: "#9FE08D", mark: "■" },
-  { bg: "radial-gradient(circle at 35% 30%, #FFF6DA, #FFD26E)", ring: "#FFD26E", mark: "★" },
-  { bg: "radial-gradient(circle at 35% 30%, #F0E2FF, #C9A0F0)", ring: "#C9A0F0", mark: "♥" },
-];
-
 const CSS = `
-.bp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F6FF, #F2EDFF); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.bp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .bp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .bp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #4FA3C7; box-shadow: 0 2px 6px rgba(100,170,210,.25); font-size: 14px; }
 .bp-board { display: grid; grid-template-columns: repeat(${COLS}, 1fr); gap: 4px; }
 .bp-cell { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; transition: opacity .2s; padding: 0; font-size: clamp(12px, 3.6vw, 20px); display: flex; align-items: center; justify-content: center; min-width: 36px; }
 .bp-cell.bp-empty { background: transparent !important; box-shadow: none !important; cursor: default; }
-.bp-cell.bp-rainbow { animation: bpSpin 2.5s linear infinite; }
-@keyframes bpSpin { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
 .bp-msg { text-align: center; min-height: 22px; color: #4FA3C7; font-weight: 700; margin-top: 10px; font-size: 15px; line-height: 1.5; }
 
 /* 1.2 塌陷时间线 / 预览高亮 / 泡泡海（bbp- 前缀） */
@@ -89,9 +81,8 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) {
   .bbp-pop { animation-duration: 16ms; }
   .bbp-ripple { animation: none; }
-  .bp-cell.bp-rainbow { animation: none; }
 }
-`;
+` + bpVisualCss();
 
 /** 孩子的系统开了「减少动态效果」就把塌陷压到一帧（状态机还是同一个） */
 function prefersReduced(): boolean {
@@ -117,49 +108,23 @@ function pitchOf(cells: HTMLElement[]): { x: number; y: number } {
   };
 }
 
-/** 把一颗泡泡画到格子上（颜色 + 图案双通道，色觉不敏感也分得清） */
+/** 把一颗泡泡画到格子上（颜色 + 图案双通道，色觉不敏感也分得清；皮肤参数全在 visual.ts） */
 function paintCell(el: HTMLButtonElement, v: number): void {
-  el.classList.remove("bp-rainbow");
   el.textContent = "";
   el.classList.toggle("bp-empty", v < 0);
   // dataset 只是给自动冒烟脚本读的状态镜像，不参与玩法
   el.dataset.v = String(v);
-  if (v < 0) {
-    el.style.background = "";
-    el.style.boxShadow = "";
-  } else if (v === RAINBOW) {
-    el.classList.add("bp-rainbow");
-    el.style.background = "conic-gradient(#FF9EC8, #FFD26E, #9FE08D, #8FCBFF, #C9A0F0, #FF9EC8)";
-    el.style.boxShadow = "0 2px 8px rgba(150,120,220,.5)";
-    el.textContent = "🌈";
-  } else if (v === CHAIN) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #FFE9D6, #FFA45C)";
-    el.style.boxShadow = "0 2px 8px rgba(230,140,60,.5)";
-    el.textContent = "🎇";
-  } else if (v === STONE) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #DCD8CC, #A8A296)";
-    el.style.boxShadow = "0 2px 5px rgba(120,110,100,.4)";
-    el.textContent = "🪨";
-  } else if (v === BOLT) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #FFF9DA, #FFD84D)";
-    el.style.boxShadow = "0 2px 8px rgba(230,180,40,.5)";
-    el.textContent = "⚡";
-  } else if (isFrozen(v)) {
-    el.style.background = COLORS[v - FROZEN_OFFSET].bg;
-    el.style.boxShadow = "inset 0 0 0 3px #9FD6FF, 0 2px 5px rgba(120,180,230,.4)";
-    el.textContent = "🧊";
-  } else if (isHidden(v)) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #6B6580, #3E3A4E)";
-    el.style.boxShadow = "0 2px 6px rgba(60,50,80,.5)";
-    el.textContent = "🏮";
-  } else if (isChameleon(v)) {
-    el.style.background = COLORS[v - CHAMELEON_BASE].bg;
-    el.style.boxShadow = `inset 0 0 0 3px #7FCF95, 0 2px 5px ${COLORS[v - CHAMELEON_BASE].ring}66`;
-    el.textContent = "🦎";
-  } else {
-    const skin = COLORS[v] ?? COLORS[0];
-    el.style.background = skin.bg;
-    el.style.boxShadow = `0 2px 5px ${skin.ring}66`;
+  const skin = bpCellSkin(v);
+  el.classList.toggle("bp-rainbow", skin.rainbow);
+  el.style.background = skin.background;
+  el.style.boxShadow = skin.boxShadow;
+  if (skin.pattern) {
+    const pat = document.createElement("span");
+    pat.className = skin.patternClass ? `bp-pat ${skin.patternClass}` : "bp-pat";
+    pat.innerHTML = skin.pattern;
+    el.appendChild(pat);
+  }
+  if (skin.mark) {
     const mark = document.createElement("span");
     mark.className = "bbp-mark";
     mark.textContent = skin.mark;
@@ -173,6 +138,11 @@ function paintBoard(cells: HTMLButtonElement[], grid: number[][], rows: number):
   }
 }
 
+/** 泡径 < 32px 时给容器挂 bp-tiny：副高光 / 铆钉这类点缀省略，纹样保留 */
+function syncTiny(container: HTMLElement, cells: HTMLElement[]): void {
+  container.classList.toggle("bp-tiny", bpIsTiny(cells[0]?.clientWidth ?? 0));
+}
+
 /** 把逻辑终态整片搬进现有盘面（保持数组身份不变，闭包里到处引用它） */
 function copyInto(grid: number[][], next: readonly number[][]): void {
   for (let r = 0; r < grid.length; r++) {
@@ -183,7 +153,7 @@ function copyInto(grid: number[][], next: readonly number[][]): void {
 function clearFx(cells: HTMLElement[]): void {
   for (const el of cells) {
     el.style.transform = "";
-    el.classList.remove("bbp-moving", "bbp-pop");
+    el.classList.remove("bbp-moving", "bbp-pop", "bp-ghosted", "bp-jelly");
   }
 }
 
@@ -195,6 +165,108 @@ interface CollapseHost {
   render: () => void;
   alive: () => boolean;
   onRaf: (id: number) => void;
+  /** 破裂幽灵层挂在哪(纯装饰;拿不到就退回 1.2 的整批淡出) */
+  board: () => HTMLElement | null;
+  /** 装饰清场用的延时(走 BubbleBag,destroy 一把倒干净) */
+  after: (fn: () => void, ms: number) => void;
+}
+
+/**
+ * 破裂三阶段幽灵层:每颗被消的泡泡原位克隆一枚「幽灵」,按曼哈顿距离分波
+ * (每波 40ms、上限 6 波、0–12ms 抖动)播「鼓 1.12 倍 → 薄膜白环 → 水珠溅落」。
+ * 纯装饰:消除集合、得分、塌陷时间线一概不碰;reduced 或量不出格子位置就不放,
+ * 返回 false 让调用方退回 1.2 的 .bbp-pop 淡出。
+ */
+function spawnBursts(host: CollapseHost, popped: Array<[number, number]>, origin: [number, number]): boolean {
+  if (prefersReduced()) return false;
+  const board = host.board();
+  if (!board || typeof board.getBoundingClientRect !== "function") return false;
+  const bRect = board.getBoundingClientRect();
+  if (!bRect || bRect.width <= 0) return false;
+  let made = false;
+  for (const [r, c] of popped) {
+    const el = host.cells[r * COLS + c];
+    if (!el || typeof el.getBoundingClientRect !== "function") continue;
+    const rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 0) continue;
+    const delay = bpBurstDelayMs(Math.abs(r - origin[0]) + Math.abs(c - origin[1]), Math.random());
+    const ghost = document.createElement("span");
+    ghost.className = "bp-burst";
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.style.left = `${rect.left - bRect.left}px`;
+    ghost.style.top = `${rect.top - bRect.top}px`;
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    ghost.style.setProperty("--bp-wait", `${delay}ms`);
+    const skin = document.createElement("i");
+    skin.className = "bp-burst-skin";
+    skin.style.background = el.style.background;
+    ghost.appendChild(skin);
+    const ring = document.createElement("i");
+    ring.className = "bp-burst-ring";
+    ghost.appendChild(ring);
+    for (let d = 1; d <= 4; d++) {
+      const dropEl = document.createElement("i");
+      dropEl.className = `bp-burst-drop bp-dr${d}`;
+      ghost.appendChild(dropEl);
+    }
+    board.appendChild(ghost);
+    host.after(() => ghost.remove(), bpBurstLifeMs(delay));
+    made = true;
+  }
+  return made;
+}
+
+/**
+ * 水下氛围装饰：两道斜向光柱 + 底部水草剪影 + 缓升装饰气泡。
+ * 全部 pointer-events:none、挂在 z-index 0，泡泡按钮热区一个像素不动；
+ * reduced 下装饰气泡（唯一带动画的）不加，随宿主一起被 remove，无需另清。
+ */
+function paintAmbience(wrap: HTMLElement): void {
+  for (const cls of ["bp-beam bp-beam-a", "bp-beam bp-beam-b"]) {
+    const beam = document.createElement("i");
+    beam.className = cls;
+    beam.setAttribute("aria-hidden", "true");
+    wrap.appendChild(beam);
+  }
+  const weeds = document.createElement("i");
+  weeds.className = "bp-weeds";
+  weeds.setAttribute("aria-hidden", "true");
+  weeds.innerHTML = bpWeedsSvg();
+  wrap.appendChild(weeds);
+  if (prefersReduced()) return;
+  for (const d of BP_DECOR) {
+    const b = document.createElement("i");
+    b.className = "bp-decor";
+    b.setAttribute("aria-hidden", "true");
+    b.style.left = d.left;
+    b.style.width = `${d.sizePx}px`;
+    b.style.height = `${d.sizePx}px`;
+    b.style.animationDelay = `${d.delayMs}ms`;
+    wrap.appendChild(b);
+  }
+}
+
+/**
+ * 补位果冻落定：塌陷播完、终态渲染之后，给刚落定的泡泡加一下 scaleY .92 → 1。
+ * 只加一个 90ms 的过渡类再摘掉——补位逻辑与 planCollapse 时序常量一个没动。
+ */
+function jellyLand(host: CollapseHost, plan: CollapsePlan): void {
+  if (prefersReduced() || plan.falls.length === 0) return;
+  const colTo = new Map<number, number>();
+  for (const s of plan.shifts) colTo.set(s.fromC, s.toC);
+  const landed: HTMLElement[] = [];
+  for (const f of plan.falls) {
+    const c = colTo.get(f.toC) ?? f.toC;
+    const el = host.cells[f.toR * COLS + c];
+    if (!el) continue;
+    el.classList.add("bp-jelly");
+    landed.push(el);
+  }
+  if (landed.length === 0) return;
+  host.after(() => {
+    for (const el of landed) el.classList.remove("bp-jelly");
+  }, BP_TIMINGS.jellyMs + 40);
 }
 
 /**
@@ -202,10 +274,12 @@ interface CollapseHost {
  * 每一帧都按 visualRowAt / visualColAt 摆位置，所以中途的视觉坐标和逻辑坐标是错开的；
  * 全程只有这一条路径，没有「一次 render 直达终态」的旁路。
  */
-function runCollapse(host: CollapseHost, popped: Array<[number, number]>, done: () => void): void {
+function runCollapse(host: CollapseHost, popped: Array<[number, number]>, origin: [number, number], done: () => void): void {
   const plan = planCollapse(host.grid, COLS, host.gravityUp, { reduced: prefersReduced() });
   const step = pitchOf(host.cells);
-  for (const [r, c] of popped) host.cells[r * COLS + c]?.classList.add("bbp-pop");
+  // 幽灵放出去了本体就立刻隐身(破裂交给幽灵演);放不出去退回 1.2 的整批淡出
+  const ghosted = spawnBursts(host, popped, origin);
+  for (const [r, c] of popped) host.cells[r * COLS + c]?.classList.add(ghosted ? "bp-ghosted" : "bbp-pop");
 
   let seen: "pop" | "fall" | "shift" = "pop";
   const t0 = nowMs();
@@ -250,6 +324,7 @@ function runCollapse(host: CollapseHost, popped: Array<[number, number]>, done: 
       clearFx(host.cells);
       copyInto(host.grid, plan.next);
       host.render();
+      jellyLand(host, plan);
       done();
       return;
     }
@@ -258,6 +333,9 @@ function runCollapse(host: CollapseHost, popped: Array<[number, number]>, done: 
 
   host.onRaf(requestAnimationFrame(frame));
 }
+
+/** 仅供视觉冒烟测试(桩 DOM)取用的内部挂钩;运行时不走这条 */
+export const __bpVisualHooks = { paintCell, paintBoard, runCollapse, paintAmbience } as const;
 
 // ---------------------------------------------------------------------------
 // 188 关闯关
@@ -295,6 +373,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="bp-msg"></div>
   `;
   stage.appendChild(wrap);
+  paintAmbience(wrap);
 
   const boardEl = wrap.querySelector(".bp-board") as HTMLElement;
   const leftEl = wrap.querySelector(".bp-left") as HTMLElement;
@@ -315,6 +394,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     render: () => render(),
     alive: () => bag.alive,
     onRaf: (id) => bag.onRaf(id),
+    board: () => boardEl,
+    after: (fn, ms) => bag.after(fn, ms),
   };
 
   function setup(): void {
@@ -388,6 +469,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function render(): void {
     paintBoard(cells, grid, rows);
+    syncTiny(wrap, cells);
     leftEl.textContent = `🫧 剩 ${countLeftOn(grid)} 个`;
     scoreEl.textContent = `✨ ${score} 分`;
     if (gravEl) gravEl.textContent = gravityUp ? "🙃 重力 ⬆️" : "🙂 重力 ⬇️";
@@ -468,7 +550,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   /** 每成功消一步之后的收尾：变色泡泡换色、重力方向结算、塌陷动画、落定判定 */
-  function afterPop(popped: Array<[number, number]>, gained: number): void {
+  function afterPop(popped: Array<[number, number]>, gained: number, origin: [number, number]): void {
     score += gained;
     busy = true;
     if (cfg.moveLimit) movesLeft = Math.max(0, movesLeft - 1);
@@ -479,7 +561,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       boardEl.classList.add("bbp-ripple");
       later(() => boardEl.classList.remove("bbp-ripple"), 460);
     }
-    runCollapse(host, popped, () => {
+    // 连消数字跳动(彩色描边),reduced 不加类
+    if (!prefersReduced()) {
+      scoreEl.classList.add("bp-combo");
+      later(() => scoreEl.classList.remove("bp-combo"), BP_TIMINGS.comboMs + 60);
+    }
+    runCollapse(host, popped, origin, () => {
       busy = false;
       checkEnd();
     });
@@ -515,7 +602,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (isFrozen(grid[rr][cc])) grid[rr][cc] -= FROZEN_OFFSET;
       }
       popCells(list);
-      afterPop(list, groupScore(list.length));
+      afterPop(list, groupScore(list.length), [r, c]);
       return;
     }
     if (v === RAINBOW) {
@@ -534,7 +621,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ctx.sfx("coin");
       msgEl.textContent = `🌈 彩虹泡泡消掉了 ${list.length - 1} 个泡泡！`;
       popCells(list);
-      afterPop(list, groupScore(list.length));
+      afterPop(list, groupScore(list.length), [r, c]);
       return;
     }
     if (v === BOLT) {
@@ -554,7 +641,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (isFrozen(grid[rr][cc])) grid[rr][cc] -= FROZEN_OFFSET;
       }
       popCells(list);
-      afterPop(list, groupScore(list.length));
+      afterPop(list, groupScore(list.length), [r, c]);
       return;
     }
     const g = groupAt(grid, COLS, r, c, cfg.colors);
@@ -572,7 +659,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       msgEl.textContent = `消掉 ${g.length} 个，进账 ${gained} 分～再攒大一点收益更高！`;
     }
     popCells(g);
-    afterPop(g, gained);
+    afterPop(g, gained, [r, c]);
   }
 
   setup();
@@ -618,6 +705,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   const cells: HTMLButtonElement[] = [];
   let boardEl: HTMLElement | null = null;
   let msgEl: HTMLElement | null = null;
+  let panelEl: HTMLElement | null = null;
 
   function later(fn: () => void, ms: number): void {
     bag.after(fn, ms);
@@ -631,10 +719,13 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     render: () => render(),
     alive: () => bag.alive && !over,
     onRaf: (id) => bag.onRaf(id),
+    board: () => boardEl,
+    after: (fn, ms) => bag.after(fn, ms),
   };
 
   function render(): void {
     paintBoard(cells, grid, SEA_ROWS);
+    if (panelEl) syncTiny(panelEl, cells);
     chip.textContent = `🌊 ${score} 分 · 涨潮 ${pushes} 次 · 最好 ${best} 分`;
   }
 
@@ -713,6 +804,10 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     const gained = groupScore(g.length);
     score += gained;
     api.play("pop");
+    if (!prefersReduced()) {
+      chip.classList.add("bp-combo");
+      later(() => chip.classList.remove("bp-combo"), BP_TIMINGS.comboMs + 60);
+    }
     if (msgEl) msgEl.textContent = g.length >= BIG_GROUP
       ? `好大一团！${g.length} 个进账 ${gained} 分！`
       : `消掉 ${g.length} 个，进账 ${gained} 分。`;
@@ -725,7 +820,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       }
     }
     busy = true;
-    runCollapse(view, g, () => {
+    runCollapse(view, g, [r, c], () => {
       busy = false;
       render();
     });
@@ -766,6 +861,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
 
     const panel = document.createElement("div");
     panel.className = "bp-wrap";
+    panelEl = panel;
     const line = document.createElement("div");
     line.className = "bbp-line";
     boardEl = document.createElement("div");
@@ -775,6 +871,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     msgEl.textContent = "海水会从下面一行一行涨上来，别让泡泡顶到虚线！先消最大的一团。";
     panel.append(line, boardEl, msgEl);
     stage.appendChild(panel);
+    paintAmbience(panel);
 
     const colors = seaColors(0);
     for (let r = 0; r < SEA_ROWS; r++) {

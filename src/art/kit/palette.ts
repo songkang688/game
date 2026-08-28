@@ -184,3 +184,20 @@ export function withAlpha(hex: string, alpha: number): string {
   const a = Math.max(0, Math.min(1, alpha));
   return `rgba(${r},${g},${b},${Math.round(a * 1000) / 1000})`;
 }
+
+/** 窗口 6 粉彩基础 token（和 sparklePaper 五色一家人，外加纸底和墨字） */
+export const PASTEL = {
+  paper: "#FFF8EC",
+  ink: "#7A5433",
+  pink: "#ffb6c9",
+  blue: "#a9d8ff",
+  mint: "#8fe0c4",
+  lemon: "#ffd75e",
+  lilac: "#d9bcff"
+} as const;
+
+/** 感知加权明度(0..1)：对比度自查用 */
+export function luma(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}

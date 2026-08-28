@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   CHAR_COLORS,
   KIT_PALETTE,
+  PASTEL,
   PASTELS,
   hexToRgb,
+  luma,
   rgbToHex,
   shade,
   tint,
@@ -154,5 +156,50 @@ describe("art/kit palette（窗口 5）", () => {
     expect(withAlpha("#FFFFFF", 0.28)).toBe("rgba(255,255,255,0.28)");
     expect(withAlpha("#000000", 9)).toBe("rgba(0,0,0,1)");
     expect(withAlpha("#000000", -1)).toBe("rgba(0,0,0,0)");
+  });
+});
+
+describe("palette · 窗口 6 粉彩 token", () => {
+  it("基础 token 齐全且都是合法 #rrggbb", () => {
+    const keys = ["paper", "ink", "pink", "blue", "mint", "lemon", "lilac"] as const;
+    for (const k of keys) expect(PASTEL[k]).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
+
+  it("五色和 sparklePaper 一家人:粉 / 蓝 / 薄荷 / 柠檬 / 丁香", () => {
+    expect(PASTEL.pink).toBe("#ffb6c9");
+    expect(PASTEL.blue).toBe("#a9d8ff");
+    expect(PASTEL.mint).toBe("#8fe0c4");
+    expect(PASTEL.lemon).toBe("#ffd75e");
+    expect(PASTEL.lilac).toBe("#d9bcff");
+  });
+});
+
+describe("palette · 窗口 6 颜色换算", () => {
+  it("hexToRgb / rgbToHex 互逆,#rgb 简写也认", () => {
+    expect(hexToRgb("#C89B6C")).toEqual([200, 155, 108]);
+    expect(rgbToHex(200, 155, 108)).toBe("#c89b6c");
+    expect(hexToRgb("#fff")).toEqual([255, 255, 255]);
+    expect(rgbToHex(300, -5, 12)).toBe("#ff000c");
+  });
+
+  it("shade(x, 0) 不变,+100 全白,-100 全黑", () => {
+    expect(shade("#C89B6C", 0)).toBe("#c89b6c");
+    expect(shade("#C89B6C", 100)).toBe("#ffffff");
+    expect(shade("#C89B6C", -100)).toBe("#000000");
+  });
+
+  it("shade(-22) 每个分量都乘 0.78:立柱 / 箱侧面的换算口径", () => {
+    expect(shade("#C89B6C", -22)).toBe("#9c7954");
+    expect(shade("#D9A06B", -22)).toBe("#a97d53");
+  });
+
+  it("shade(+20) 往白提亮 20%:顶光的换算口径", () => {
+    expect(shade("#C89B6C", 20)).toBe("#d3af89");
+  });
+
+  it("luma 单调:白 1、黑 0、粉彩都在中高段", () => {
+    expect(luma("#ffffff")).toBeCloseTo(1, 5);
+    expect(luma("#000000")).toBe(0);
+    expect(luma(PASTEL.paper)).toBeGreaterThan(luma(PASTEL.ink));
   });
 });

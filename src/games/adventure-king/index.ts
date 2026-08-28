@@ -17,6 +17,7 @@ import {
   type AdvLevel,
 } from "./levels";
 import {
+  ROPE_MAX,
   SPEEDRUN_KEY,
   boomerangOffset,
   clamp,
@@ -24,9 +25,44 @@ import {
   isNewTimeRecord,
   levelStars,
   parseBestTimes,
+  pickAnchor,
   serializeBestTimes,
   timeAttackStars,
 } from "./logic";
+import {
+  AK_CARD,
+  AK_PALETTE,
+  AK_TIMING,
+  VisualFx,
+  anchorGlow,
+  artifactSpinPhase,
+  boomTrailSegments,
+  castleBoxSvg,
+  castleGlyphSvg,
+  castleHeroSvg,
+  drawAnchorSprite,
+  drawArtifactGem,
+  drawArtifactSprite,
+  drawBoomerangSprite,
+  drawEnemySprite,
+  drawFlagProgress,
+  drawHudCard,
+  drawPlayerSprite,
+  drawRope,
+  drawStunFx,
+  drawTrail,
+  hatDegraded,
+  invincibleStyle,
+  landSquash,
+  playerPose,
+  runLean,
+  scarfAngle,
+  shadeHex,
+  shadowGroundY,
+  swingLean,
+} from "./visual";
+import { albumCells, albumSummary, caseGlyph } from "./albumView";
+import { drawHangingRoots, drawTerrainProfile, terrainBands } from "../../art/kit/terrain";
 import {
   PIT_Y,
   PLAYER_H,
@@ -78,6 +114,7 @@ import {
   type Dir,
   type RoomState,
 } from "./explore";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 const CSS = `
 .ak-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
@@ -104,8 +141,8 @@ const CSS = `
 .ak-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
 .ak-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
-.ak-chip{background:#fff;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:800;color:#7a5230;
-  box-shadow:0 2px 6px rgba(170,140,110,.25);}
+.ak-chip{background:rgba(255,255,255,.72);border:1.5px solid rgba(122,82,48,.28);border-radius:12px;
+  padding:5px 12px;font-size:14px;font-weight:800;color:#7a5230;box-shadow:0 2px 6px rgba(170,140,110,.18);}
 .ak-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
 .ak-card{border:none;border-radius:16px;padding:10px;text-align:left;cursor:pointer;font-family:inherit;
   background:#ffffffe8;box-shadow:0 3px 8px rgba(160,140,120,.25);}
@@ -125,6 +162,7 @@ const CSS = `
   max-width:420px;width:100%;}
 .advk-cell{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;
   font-size:15px;line-height:1;background:#fffaf0;}
+.advk-cell svg{width:88%;height:88%;display:block;}
 .advk-wall{background:#8d7a62;}
 .advk-dim{background:#f3ece0;color:#b8a88c;}
 .advk-seen{background:#fff4e0;}
@@ -138,7 +176,8 @@ const CSS = `
 .advk-pad2 .advk-slot{visibility:hidden;}
 .advk-hud{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:14px;font-weight:800;
   color:#6b4a2a;line-height:1.5;}
-.advk-hud span{background:#fff;border-radius:999px;padding:4px 10px;box-shadow:0 2px 5px rgba(170,140,110,.25);}
+.advk-hud span{background:rgba(255,255,255,.72);border:1.5px solid rgba(122,82,48,.28);border-radius:12px;
+  padding:4px 10px;box-shadow:0 2px 5px rgba(170,140,110,.18);}
 .advk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .advk-tool{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);}
@@ -148,11 +187,29 @@ const CSS = `
   letter-spacing:1px;color:#7a6046;background:#fffaf0cc;border-radius:12px;padding:8px;text-align:center;
   white-space:pre;overflow-x:auto;}
 .advk-say{text-align:center;font-size:14px;font-weight:800;color:#7a6046;min-height:20px;line-height:1.5;}
-.advk-album{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;font-size:13px;font-weight:700;
+.advk-album{display:flex;flex-direction:column;gap:6px;align-items:stretch;font-size:13px;font-weight:700;
   color:#7a6046;}
 .advk-album b{color:#a4632a;}
+.advk-album-head{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;}
+/* 博物馆展柜:2 列起排,宽屏 4 列;每格展台 + 玻璃反光斜线,未收集是剪影问号 */
+.advk-museum{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%;}
+.advk-case{position:relative;overflow:hidden;border-radius:12px;border:1.5px solid rgba(122,82,48,.28);
+  background:linear-gradient(180deg,#fffdf6,#f3ead9);padding:10px 8px 8px;text-align:center;}
+.advk-case::after{content:"";position:absolute;left:-45%;top:-70%;width:65%;height:240%;
+  transform:rotate(24deg);pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.45),rgba(255,255,255,0));}
+.advk-case-item{font-size:24px;line-height:1.2;}
+.advk-case-name{font-size:12px;font-weight:800;color:#7a6046;margin-top:2px;min-height:15px;}
+.advk-case-stand{margin:6px auto 0;width:62%;height:8px;border-radius:3px 3px 6px 6px;
+  background:linear-gradient(180deg,#eddfc6,#c9b394);box-shadow:0 2px 0 rgba(122,82,48,.22);}
+.advk-case-lock{background:linear-gradient(180deg,#f2eee5,#e6dfd1);}
+.advk-case-lock .advk-case-item{filter:grayscale(1);opacity:.55;}
+.advk-case-lock .advk-case-name{color:#a99e8c;}
+@media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
+${touchUpliftCss([".ak-open"])}
+${bodyFontUpliftCss([".ak-tip"])}
 `;
 
 export interface ClearInfo {
@@ -220,6 +277,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   let raf = 0;
   let last = 0;
 
+  // ---- 纯视觉状态(残影 / 晕圈 / 落地回弹的记账,destroy 时 reset 归零) ----
+  const reducedMotion =
+    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const fx = new VisualFx();
+  let nowMs = 0;
+  /** 上一帧每只守卫还活着吗:翻成 false 的那一帧在原地放「晕圈 + 星星」 */
+  const enemyWasAlive = run.enemies.map((e) => e.alive);
+
   const held = { left: false, right: false, up: false, down: false };
   /** 这一帧刚按下的动作键,推进一帧后清空 */
   const pending = { jump: false, hook: false, throw: false };
@@ -273,8 +338,11 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
           opts.sfx("jump");
           break;
         case "hookOn":
+          opts.sfx("tap");
+          break;
         case "land":
           opts.sfx("tap");
+          fx.markLand(nowMs);
           break;
         case "hookOff":
         case "throw":
@@ -319,6 +387,12 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
           break;
       }
     }
+
+    // 守卫这一帧被回旋镖敲晕了:在它消失的位置放一圈「晕圈 + 星星绕头」(纯视觉)
+    run.enemies.forEach((e, i) => {
+      if (enemyWasAlive[i] && !e.alive) fx.spawnStun(e.x, enemyY(e));
+      enemyWasAlive[i] = e.alive;
+    });
   }
 
   // ---- 画面 ----
@@ -348,6 +422,19 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     g.addColorStop(1, chapterColor);
     c2d.fillStyle = g;
     c2d.fillRect(0, 0, cssW, cssH);
+    // 最远景:圆头远山,视差最慢,给走廊一层「洞外的山」
+    c2d.fillStyle = "rgba(185,175,164,.18)";
+    const hillStep = 340;
+    const hillStart = Math.floor((camX * 0.18) / hillStep) * hillStep;
+    for (let i = -1; i < 6; i++) {
+      const wx = hillStart + i * hillStep;
+      const sx = (wx - camX * 0.18) * scale;
+      const hw = 220 * scale;
+      const hh = (110 + (i % 2 === 0 ? 40 : 0)) * scale;
+      c2d.beginPath();
+      c2d.ellipse(sx + hw / 2, cssH, hw / 2, hh, 0, Math.PI, 0);
+      c2d.fill();
+    }
     // 远景:随摄像机缓慢移动的石柱剪影,给横版一点纵深
     c2d.fillStyle = "rgba(140,120,170,.15)";
     const step2 = 260;
@@ -364,6 +451,28 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     }
   }
 
+  /** 中景灌木:比石柱快、比平台慢的一层圆头灌木,位置确定式,不闪不抖 */
+  function drawMidBushes(): void {
+    const step3 = 170;
+    const startX = Math.floor((camX * 0.7) / step3) * step3;
+    for (let i = -1; i < 10; i++) {
+      const wx = startX + i * step3;
+      const sx = (wx - camX * 0.7) * scale;
+      if (sx < -60 || sx > cssW + 60) continue;
+      const r = (16 + ((i % 3) + 3) * 4) * scale;
+      const by = cssH + 4 * scale;
+      c2d.fillStyle = "rgba(159,217,139,.32)";
+      c2d.beginPath();
+      c2d.arc(sx, by, r, Math.PI, 0);
+      c2d.arc(sx + r * 0.9, by, r * 0.7, Math.PI, 0);
+      c2d.fill();
+      c2d.fillStyle = "rgba(120,180,105,.25)";
+      c2d.beginPath();
+      c2d.arc(sx + r * 0.4, by, r * 0.5, Math.PI, 0);
+      c2d.fill();
+    }
+  }
+
   function drawPlatforms(): void {
     for (const p of lv.platforms) {
       const x = worldX(p.x);
@@ -371,11 +480,25 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       const w = p.w * scale;
       const h = (PIT_Y + 40 - p.y) * scale;
       if (x + w < -20 || x > cssW + 20) continue;
-      drawRoundRect(x, y, w, h, 10 * scale, "#c9a27a");
-      drawRoundRect(x, y, w, 12 * scale, 6 * scale, "#8fc47a");
-      c2d.fillStyle = "rgba(255,255,255,.35)";
-      for (let i = 0; i < Math.floor(p.w / 60); i++) {
-        c2d.fillRect(x + (14 + i * 60) * scale, y + 26 * scale, 26 * scale, 4 * scale);
+      // 草顶 + 土身 + 石底三段剖面(共享套件),小平台再挂几缕悬根须
+      drawTerrainProfile(c2d, x, y, w, h, 10 * scale, {
+        grass: AK_PALETTE.akGrass,
+        grassDark: shadeHex(AK_PALETTE.akGrass, -0.22),
+        soil: AK_PALETTE.akSoil,
+        soilLine: shadeHex(AK_PALETTE.akSoil, -0.18),
+        stone: AK_PALETTE.akStone,
+      }, { scale, strata: 2 });
+      if (p.w <= 170) {
+        const bands = terrainBands(h);
+        drawHangingRoots(
+          c2d,
+          x + w * 0.08,
+          y + bands.grassH + 2 * scale,
+          w * 0.84,
+          26 * scale,
+          shadeHex(AK_PALETTE.akSoil, -0.28),
+          scale
+        );
       }
     }
     for (const pit of lv.pits) {
@@ -396,38 +519,36 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   }
 
   function drawAnchors(): void {
-    for (const a of lv.anchors) {
+    // 此刻甩钩能挂上哪个锚点:只读 pickAnchor 做提示,不写任何状态
+    const hookable = run.hook
+      ? -1
+      : pickAnchor(lv.anchors, run.px, run.py - PLAYER_H * 0.6, ROPE_MAX, run.facing);
+    lv.anchors.forEach((a, i) => {
       const x = worldX(a.x);
       const y = worldY(a.y);
-      if (x < -30 || x > cssW + 30) continue;
-      c2d.strokeStyle = "#6fae5c";
-      c2d.lineWidth = 3 * scale;
-      c2d.beginPath();
-      c2d.moveTo(x, 0);
-      c2d.lineTo(x, y);
-      c2d.stroke();
-      c2d.strokeStyle = "#4f8c3f";
-      c2d.lineWidth = 5 * scale;
-      c2d.beginPath();
-      c2d.arc(x, y, 13 * scale, 0, Math.PI * 2);
-      c2d.stroke();
-    }
+      if (x < -30 || x > cssW + 30) return;
+      drawAnchorSprite(c2d, x, y, scale, i === hookable ? anchorGlow(nowMs, reducedMotion) : null);
+    });
   }
 
   function drawArtifacts(): void {
     for (const art of lv.artifacts) {
       if (run.got.has(art.kind)) continue;
+      const bob = reducedMotion ? 0 : Math.sin(doorFlash * 2 + art.kind) * 4;
       const x = worldX(art.x);
-      const y = worldY(art.y) + Math.sin(doorFlash * 2 + art.kind) * 4;
+      const y = worldY(art.y) + bob;
       if (x < -30 || x > cssW + 30) continue;
-      c2d.fillStyle = "rgba(255,240,180,.75)";
-      c2d.beginPath();
-      c2d.arc(x, y, 20 * scale, 0, Math.PI * 2);
-      c2d.fill();
-      c2d.font = `${Math.round(26 * scale)}px sans-serif`;
-      c2d.textAlign = "center";
-      c2d.textBaseline = "middle";
-      c2d.fillText(ARTIFACT_EMOJI[art.kind], x, y);
+      // 光柱落回脚下的台面(找不到台面就不画柱,只画金环)
+      const gy = shadowGroundY(lv.platforms, art.x, art.y);
+      drawArtifactSprite(
+        c2d,
+        x,
+        y,
+        scale,
+        art.kind,
+        artifactSpinPhase(nowMs, reducedMotion),
+        gy === null ? null : worldY(gy)
+      );
     }
   }
 
@@ -438,20 +559,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       const x = worldX(e.x);
       const y = worldY(ey);
       if (x < -40 || x > cssW + 40) continue;
-      c2d.fillStyle = e.kind === "flyer" ? "#b9a6ea" : "#a08464";
-      c2d.beginPath();
-      c2d.ellipse(x, y - 20 * scale, 19 * scale, 19 * scale, 0, 0, Math.PI * 2);
-      c2d.fill();
-      c2d.fillStyle = "#3a3a4a";
-      c2d.beginPath();
-      c2d.arc(x - 6 * scale, y - 24 * scale, 3 * scale, 0, Math.PI * 2);
-      c2d.arc(x + 6 * scale, y - 24 * scale, 3 * scale, 0, Math.PI * 2);
-      c2d.fill();
-      c2d.strokeStyle = "#3a3a4a";
-      c2d.lineWidth = 2 * scale;
-      c2d.beginPath();
-      c2d.arc(x, y - 15 * scale, 6 * scale, 0.15 * Math.PI, 0.85 * Math.PI);
-      c2d.stroke();
+      drawEnemySprite(c2d, x, y, scale, e.kind, e.dir, reducedMotion ? 0 : nowMs);
     }
   }
 
@@ -462,102 +570,123 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const w = 62 * scale;
     const h = 76 * scale;
     const open = run.got.size >= 3;
+    // 石拱门框(比门体大一圈)+ 门槛石,让首领之门更像「遗迹尽头」
+    drawRoundRect(x - 6 * scale, y - h - 6 * scale, w + 12 * scale, h + 8 * scale, 16 * scale,
+      AK_PALETTE.akStone, shadeHex(AK_PALETTE.akStone, -0.25));
     drawRoundRect(x, y - h, w, h, 14 * scale, open ? "#ffe6a8" : "#9a8a7a", open ? "#e0a83a" : "#6f6357");
+    // 左上一道门板高光,和全场光源一致
+    c2d.fillStyle = "rgba(255,255,255,.22)";
+    c2d.beginPath();
+    c2d.roundRect(x + 3 * scale, y - h + 3 * scale, w * 0.32, h - 8 * scale, 8 * scale);
+    c2d.fill();
+    // 门上的收集清单:三枚迷你纹石(拿到实色、没拿到 25% 透明),不再 emoji 直出
     for (let i = 0; i < 3; i++) {
-      c2d.font = `${Math.round(15 * scale)}px sans-serif`;
-      c2d.textAlign = "center";
-      c2d.textBaseline = "middle";
       c2d.globalAlpha = run.got.has(i) ? 1 : 0.25;
-      c2d.fillText(ARTIFACT_EMOJI[i], x + w / 2, y - h + (16 + i * 22) * scale);
+      drawArtifactGem(c2d, x + w / 2, y - h + (16 + i * 22) * scale, 8 * scale, i);
       c2d.globalAlpha = 1;
     }
     if (open) {
-      c2d.strokeStyle = `rgba(255,210,90,${0.5 + Math.sin(doorFlash * 5) * 0.4})`;
+      const pulse = reducedMotion ? 0.7 : 0.5 + Math.sin(doorFlash * 5) * 0.4;
+      c2d.strokeStyle = `rgba(255,210,90,${pulse.toFixed(3)})`;
       c2d.lineWidth = 4 * scale;
       c2d.strokeRect(x - 3, y - h - 3, w + 6, h + 6);
     }
   }
 
   function drawPlayer(): void {
-    if (run.invincible > 0 && Math.floor(run.invincible * 10) % 2 === 0) return;
-    const facing = run.facing;
+    // 无敌不再整帧消失:每一帧都画,交给 invincibleStyle 的半透明 + 白描边呼吸
     const x = worldX(run.px);
     const y = worldY(run.py);
     const r = 17 * scale;
+    // ① 落影:留在地面投影点(荡绳飞在空中时影子还贴着下方台面)
+    const gy = shadowGroundY(lv.platforms, run.px, run.py);
+    if (gy !== null) {
+      c2d.fillStyle = AK_PALETTE.akShadow;
+      c2d.beginPath();
+      c2d.ellipse(worldX(run.px), worldY(gy) + 3 * scale, r * 0.8, r * 0.2, 0, 0, Math.PI * 2);
+      c2d.fill();
+    }
+    // 钩绳:画在主角手位(胸口)起点,棕底 + 1px 亮芯
     if (run.hook) {
       const a = lv.anchors[run.hook.anchor];
-      c2d.strokeStyle = "#7a5a3a";
-      c2d.lineWidth = 3 * scale;
-      c2d.beginPath();
-      c2d.moveTo(worldX(a.x), worldY(a.y));
-      c2d.lineTo(x, y - PLAYER_H * 0.6 * scale);
-      c2d.stroke();
+      drawRope(c2d, worldX(a.x), worldY(a.y), x, y - PLAYER_H * 0.6 * scale, scale);
     }
-    c2d.fillStyle = "rgba(90,80,110,.18)";
-    c2d.beginPath();
-    c2d.ellipse(x, y + 3 * scale, r, 5 * scale, 0, 0, Math.PI * 2);
-    c2d.fill();
-    // 朵朵:圆脑袋 + 小马尾 + 探险背包带
-    c2d.fillStyle = "#ffb3c8";
-    c2d.beginPath();
-    c2d.roundRect(x - r, y - PLAYER_H * scale, r * 2, PLAYER_H * scale, 12 * scale);
-    c2d.fill();
-    c2d.fillStyle = "#f28fb0";
-    c2d.beginPath();
-    c2d.arc(x - facing * r, y - PLAYER_H * 0.74 * scale, 7 * scale, 0, Math.PI * 2);
-    c2d.fill();
-    c2d.fillStyle = "#3a3a4a";
-    c2d.beginPath();
-    c2d.arc(x - 5 * scale + facing * 2 * scale, y - PLAYER_H * 0.72 * scale, 3 * scale, 0, Math.PI * 2);
-    c2d.arc(x + 6 * scale + facing * 2 * scale, y - PLAYER_H * 0.72 * scale, 3 * scale, 0, Math.PI * 2);
-    c2d.fill();
-    c2d.strokeStyle = "#3a3a4a";
-    c2d.lineWidth = 2 * scale;
-    c2d.beginPath();
-    c2d.arc(x + facing * 1 * scale, y - PLAYER_H * 0.58 * scale, 5 * scale, 0.15 * Math.PI, 0.85 * Math.PI);
-    c2d.stroke();
+    // 姿态:跑 / 跳 / 荡 / 落地四选一;荡绳倾角只读 run.hook.angle 做映射
+    const pose = playerPose(
+      { onGround: run.onGround, hasHook: !!run.hook, sinceLandMs: fx.sinceLand(nowMs) },
+      reducedMotion
+    );
+    const lean =
+      pose === "swing" && run.hook
+        ? swingLean(run.hook.angle)
+        : pose === "run"
+          ? runLean(run.vx, run.facing)
+          : 0;
+    drawPlayerSprite(c2d, {
+      x,
+      y,
+      scale,
+      facing: run.facing,
+      pose,
+      lean,
+      scarf: scarfAngle(pose, run.vx, run.hook ? run.hook.angle : 0, reducedMotion),
+      squash: landSquash(fx.sinceLand(nowMs), reducedMotion),
+      inv: invincibleStyle(run.invincible, reducedMotion),
+      flutterMs: reducedMotion ? 0 : nowMs,
+      hatBlock: hatDegraded(27 * scale),
+      playerH: PLAYER_H,
+    });
   }
 
   function drawBoomerang(): void {
     const boom = run.boom;
-    if (!boom) return;
+    if (!boom) {
+      fx.clearTrail();
+      return;
+    }
     const off = boomerangOffset(boom.t, boom.dir);
-    const x = worldX(boom.ox + off.x);
-    const y = worldY(boom.oy + off.y);
-    c2d.save();
-    c2d.translate(x, y);
-    c2d.rotate(boom.t * 18);
-    c2d.strokeStyle = "#8a5a30";
-    c2d.lineWidth = 5 * scale;
-    c2d.lineCap = "round";
-    c2d.beginPath();
-    c2d.moveTo(-10 * scale, 6 * scale);
-    c2d.lineTo(0, -8 * scale);
-    c2d.lineTo(10 * scale, 6 * scale);
-    c2d.stroke();
-    c2d.restore();
+    const wx = boom.ox + off.x;
+    const wy = boom.oy + off.y;
+    fx.pushTrail(wx, wy);
+    // 弧线残影:常态 3 段渐隐,reduced 1 段
+    drawTrail(
+      c2d,
+      fx.trail.map((p) => ({ x: worldX(p.x), y: worldY(p.y) })),
+      boomTrailSegments(reducedMotion),
+      scale
+    );
+    drawBoomerangSprite(c2d, worldX(wx), worldY(wy), scale, boom.t * 18, !reducedMotion);
+  }
+
+  /** 粒子层:守卫被敲晕的「晕圈 + 星星绕头」 */
+  function drawParticles(): void {
+    for (const s of fx.stuns) {
+      const x = worldX(s.x);
+      if (x < -50 || x > cssW + 50) continue;
+      drawStunFx(c2d, x, worldY(s.y), scale, s.ageMs / AK_TIMING.stunFadeMs, reducedMotion);
+    }
   }
 
   function drawHud(): void {
+    // 顶栏与 renderHud(古堡 DOM)同一套卡片规格:圆角 12、白 72% 底、1.5px 描边
     c2d.textAlign = "left";
     c2d.textBaseline = "middle";
-    c2d.font = `bold ${Math.max(12, Math.round(15 * scale))}px sans-serif`;
-    c2d.fillStyle = "rgba(255,255,255,.85)";
-    c2d.beginPath();
-    c2d.roundRect(6, 6, cssW - 12, 30, 12);
-    c2d.fill();
+    c2d.font = `bold ${Math.max(AK_CARD.fontMin, Math.round(15 * scale))}px sans-serif`;
+    drawHudCard(c2d, 6, 6, cssW - 12, 40);
     c2d.fillStyle = "#7a5230";
-    c2d.fillText(opts.banner, 14, 21);
+    c2d.fillText(opts.banner, 14, 20);
     c2d.textAlign = "right";
     const artText = [0, 1, 2].map((k) => (run.got.has(k) ? ARTIFACT_EMOJI[k] : "▫")).join("");
     const heartText = "💗".repeat(Math.max(0, run.hearts));
     const timeText = opts.showTimer ? ` ⏱ ${run.elapsed.toFixed(1)}s` : "";
-    c2d.fillText(`${artText} ${heartText}${timeText}`, cssW - 14, 21);
+    c2d.fillText(`${artText} ${heartText}${timeText}`, cssW - 14, 20);
+    // 关卡进度小旗路径:走到首领之门算 100%,只读 run.px
+    drawFlagProgress(c2d, 16, 37, cssW - 44, run.px / Math.max(1, lv.door.x));
     if (messageTimer > 0 && message) {
       c2d.textAlign = "center";
       c2d.fillStyle = "rgba(60,40,80,.8)";
       c2d.beginPath();
-      c2d.roundRect(cssW * 0.08, cssH - 46, cssW * 0.84, 30, 12);
+      c2d.roundRect(cssW * 0.08, cssH - 46, cssW * 0.84, 30, AK_CARD.radius);
       c2d.fill();
       c2d.fillStyle = "#fff";
       c2d.fillText(message, cssW / 2, cssH - 31);
@@ -577,7 +706,11 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   function draw(): void {
     const visW = cssW / scale;
     camX = clamp(run.px - visW / 2, 0, Math.max(0, lv.width - visW));
+    // 图层序(visual.ts 的 AK_LAYER_ORDER,从底到顶):
+    // 背景渐变 + 远山 → 中景灌木 → 平台剖面 → 锚点 / 门 / 文物 →
+    // 敌人 → 回旋镖 + 残影 → 主角 + 钩绳 → 粒子 → HUD
     drawBackground();
+    drawMidBushes();
     drawPlatforms();
     drawAnchors();
     drawDoor();
@@ -585,6 +718,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     drawEnemies();
     drawBoomerang();
     drawPlayer();
+    drawParticles();
     drawHud();
   }
 
@@ -592,8 +726,10 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (destroyed) return;
     const dt = Math.min(0.033, Math.max(0, (now - last) / 1000));
     last = now;
+    nowMs = now;
     syncSize();
     step(dt);
+    fx.step(dt * 1000);
     draw();
     raf = requestAnimationFrame(frame);
   }
@@ -701,6 +837,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     destroy() {
       destroyed = true;
       finished = true;
+      fx.reset();
       bag.dispose();
     },
   };
@@ -844,39 +981,46 @@ function saveAlbum(album: readonly string[]): void {
   }
 }
 
-/** 一格该画成什么样(纯展示,规则都在 explore.ts) */
-function cellGlyph(state: RoomState, x: number, y: number): { text: string; cls: string } {
+/**
+ * 一格该画成什么样(纯展示,规则都在 explore.ts)。
+ * W6R1-01 修复:主角与箱子换参数化 SVG(castleHeroSvg / castleBoxSvg);
+ * 第 2 轮 C 档清偿:机关小图标(门/钥匙/锁/压板/链闸/开关/彩门/跷跷板/
+ * 传送/贴纸)全部换同族参数化 SVG(castleGlyphSvg),emoji 退场。
+ */
+function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls: string } {
   const c = cellAt(state, x, y);
-  if (state.player.x === x && state.player.y === y) return { text: "🌸", cls: "advk-me" };
-  if (state.boxes.some((b) => b.x === x && b.y === y)) return { text: "📦", cls: "advk-hot" };
+  if (state.player.x === x && state.player.y === y) return { html: castleHeroSvg(), cls: "advk-me" };
+  if (state.boxes.some((b) => b.x === x && b.y === y)) return { html: castleBoxSvg(), cls: "advk-hot" };
   switch (c) {
     case C_WALL:
     case C_HIDDEN:
-      return { text: "", cls: "advk-wall" };
+      return { html: "", cls: "advk-wall" };
     case C_EXIT:
-      return { text: "🚪", cls: "advk-hot" };
+      return { html: castleGlyphSvg("exit"), cls: "advk-hot" };
     case C_KEY:
-      return { text: "🔑", cls: "advk-hot" };
+      return { html: castleGlyphSvg("key"), cls: "advk-hot" };
     case C_DOOR:
-      return { text: "🔒", cls: "advk-hot" };
+      return { html: castleGlyphSvg("lock"), cls: "advk-hot" };
     case C_PLATE:
-      return { text: "🔲", cls: "advk-seen" };
+      return { html: castleGlyphSvg("plate"), cls: "advk-seen" };
     case C_PGATE:
-      return isPlateDown(state) ? { text: "", cls: "advk-seen" } : { text: "⛓️", cls: "advk-hot" };
+      return isPlateDown(state) ? { html: "", cls: "advk-seen" } : { html: castleGlyphSvg("pgate"), cls: "advk-hot" };
     case C_SWITCH:
-      return { text: state.switchOn ? "💡" : "🔅", cls: "advk-hot" };
+      return { html: castleGlyphSvg(state.switchOn ? "lamp-on" : "lamp-off"), cls: "advk-hot" };
     case C_CGATE:
-      return colorGateOpen(state.switchOn) ? { text: "", cls: "advk-seen" } : { text: "🟪", cls: "advk-hot" };
+      return colorGateOpen(state.switchOn)
+        ? { html: "", cls: "advk-seen" }
+        : { html: castleGlyphSvg("cgate"), cls: "advk-hot" };
     case C_SEESAW_L:
-      return { text: seesawWalkable("left", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+      return { html: castleGlyphSvg(seesawWalkable("left", seesawOf(state)) ? "plank" : "wedge"), cls: "advk-seen" };
     case C_SEESAW_R:
-      return { text: seesawWalkable("right", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+      return { html: castleGlyphSvg(seesawWalkable("right", seesawOf(state)) ? "plank" : "wedge"), cls: "advk-seen" };
     case C_PORTAL:
-      return { text: "🌀", cls: "advk-hot" };
+      return { html: castleGlyphSvg("portal"), cls: "advk-hot" };
     case C_STICKER:
-      return { text: "🎟️", cls: "advk-hot" };
+      return { html: castleGlyphSvg("sticker"), cls: "advk-hot" };
     default:
-      return { text: "", cls: state.explored[y * state.w + x] ? "advk-seen" : "advk-dim" };
+      return { html: "", cls: state.explored[y * state.w + x] ? "advk-seen" : "advk-dim" };
   }
 }
 
@@ -926,15 +1070,58 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   let state: RoomState = current.state;
   let over = false;
   let miniOpen = false;
+  let albumOpen = false;
 
   function speakLine(text: string): void {
     say.textContent = text;
   }
 
+  /** 贴纸图鉴 → 博物馆展柜:汇总行 + 展开按钮 + 展柜网格(2 列起排,宽屏 4 列) */
   function renderAlbum(): void {
     const done = albumBonusStars(stickers);
     const total = STICKER_SETS.reduce((n, s) => n + s.items.length, 0);
-    album.innerHTML = `🎟️ 贴纸图鉴 <b>${stickers.length}/${total}</b> · 集齐 <b>${done}</b> 章`;
+    album.innerHTML = "";
+    const head = document.createElement("div");
+    head.className = "advk-album-head";
+    const sum = document.createElement("span");
+    sum.innerHTML = albumSummary(stickers.length, total, done).replace(
+      /(\d+\/\d+)|(\d+ 章)/g,
+      "<b>$&</b>"
+    );
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "advk-tool";
+    toggle.textContent = albumOpen ? "🏛️ 收起陈列" : "🏛️ 打开陈列";
+    toggle.setAttribute("aria-expanded", albumOpen ? "true" : "false");
+    toggle.addEventListener("click", () => {
+      api.play("tap");
+      albumOpen = !albumOpen;
+      renderAlbum();
+    });
+    head.append(sum, toggle);
+    album.appendChild(head);
+    if (!albumOpen) return;
+    const grid = document.createElement("div");
+    grid.className = "advk-museum";
+    grid.setAttribute("role", "img");
+    grid.setAttribute("aria-label", `贴纸博物馆:已收集 ${stickers.length} 张,共 ${total} 张`);
+    for (const cell of albumCells(stickers)) {
+      const g = caseGlyph(cell);
+      const box = document.createElement("div");
+      box.className = `advk-case${g.cls ? ` ${g.cls}` : ""}`;
+      box.title = g.aria;
+      const item = document.createElement("div");
+      item.className = "advk-case-item";
+      item.textContent = g.text;
+      const name = document.createElement("div");
+      name.className = "advk-case-name";
+      name.textContent = g.label;
+      const stand = document.createElement("div");
+      stand.className = "advk-case-stand";
+      box.append(item, name, stand);
+      grid.appendChild(box);
+    }
+    album.appendChild(grid);
   }
 
   function renderHud(): void {
@@ -956,7 +1143,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
         const g = cellGlyph(state, x, y);
         const cell = document.createElement("div");
         cell.className = `advk-cell ${g.cls}`;
-        cell.textContent = g.text;
+        cell.innerHTML = g.html;
         board.appendChild(cell);
       }
     }

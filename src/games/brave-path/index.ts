@@ -123,14 +123,38 @@ import {
 } from "./power";
 import { collectionEffects } from "../../engine/collection";
 import { save as wallet } from "../../engine/save";
+import { badge } from "../../art/kit/badge";
+import {
+  BVP_TIMING,
+  ELEMENT_TINT,
+  RARITY_TINT,
+  confettiHtml,
+  cooldownAngle,
+  foeBadgeKind,
+  fxClassPlan,
+  gearRarity,
+  heroBadgeKind,
+  hpSegmentOf,
+  itemRarity,
+  litDelayMs,
+  mazeCellView,
+  mazeItemSvg,
+  prefersReducedMotion,
+  rowIconSvg,
+  seenSet,
+  skillRarity,
+  tokenCss,
+  type FxPlan
+} from "./visual";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
 /* ------------------------------------------------------------------ */
 
 const CSS = `
-.bvp-root{--bvp-ink:#4b3a6e;--bvp-soft:#7b6aa0;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  max-width:640px;margin:0 auto;color:var(--bvp-ink);user-select:none;-webkit-user-select:none;}
+.bvp-root{${tokenCss()}--bvp-ink:#4b3a6e;--bvp-soft:#7b6aa0;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  max-width:640px;margin:0 auto;color:var(--bvp-ink);user-select:none;-webkit-user-select:none;position:relative;}
 .bvp-root *{box-sizing:border-box;}
 .bvp-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .bvp-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
@@ -155,16 +179,30 @@ const CSS = `
 .bvp-mode-t{font-size:17px;font-weight:900;display:block;margin-bottom:3px;}
 .bvp-mode-d{font-size:13px;font-weight:700;color:var(--bvp-soft);line-height:1.55;display:block;}
 .bvp-hero-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:800;color:var(--bvp-soft);}
-.bvp-fighter{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:0 3px 10px rgba(140,120,190,.16);margin-bottom:9px;}
+.bvp-fighter{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:0 3px 10px rgba(140,120,190,.16);margin-bottom:9px;
+  position:relative;transition:transform var(--bvp-t-turn) ease-out,box-shadow var(--bvp-t-turn) ease-out;}
 .bvp-fighter-top{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
-.bvp-face{font-size:30px;line-height:1;}
+.bvp-face{font-size:30px;line-height:1;width:54px;height:54px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+.bvp-face svg{width:100%;height:100%;display:block;}
+.bvp-face-hero svg{transform:rotate(-6deg);}
+.bvp-face-foe svg{transform:rotate(6deg);}
+.bvp-turn{transform:translateX(8px);outline:3px solid #ffd9a8;outline-offset:1px;}
+.bvp-hit{animation:bvpShake var(--bvp-t-shake) steps(2,end) 1;}
+@keyframes bvpShake{25%{transform:translateX(-3px);}75%{transform:translateX(3px);}}
+.bvp-float{position:absolute;right:16px;top:8px;font-size:16px;font-weight:900;color:#b4457c;pointer-events:none;
+  z-index:var(--bvp-z-battle);animation:bvpFloat var(--bvp-t-float) ease-out forwards;}
+.bvp-float-heal{color:#2f7a4c;}
+.bvp-float-still{animation:none;opacity:1;}
+@keyframes bvpFloat{0%{opacity:0;transform:translateY(6px);}25%{opacity:1;}100%{opacity:0;transform:translateY(-16px);}}
 .bvp-name{font-size:15px;font-weight:900;flex:1;min-width:0;}
 .bvp-tag{font-size:11px;font-weight:800;border-radius:999px;padding:3px 8px;background:#f0ebff;color:#6b56a0;white-space:nowrap;}
 .bvp-tag-boss{background:#ffe0ec;color:#b4457c;}
 .bvp-tag-weak{background:#fff0d4;color:#a4700f;}
-.bvp-hpbar{height:13px;border-radius:999px;background:#eee6f8;overflow:hidden;position:relative;}
-.bvp-hpfill{height:100%;border-radius:999px;background:linear-gradient(90deg,#7fd39a,#4fb87c);transition:width .28s ease;}
-.bvp-hpfill.bvp-low{background:linear-gradient(90deg,#ffb877,#f18b4c);}
+.bvp-hpbar{height:13px;border-radius:999px;background:#eee6f8;overflow:hidden;position:relative;
+  box-shadow:inset 0 1px 2px rgba(75,58,110,.16);}
+.bvp-hpfill{height:100%;border-radius:999px;background:linear-gradient(90deg,#b8ecb0,var(--bvp-hp-hi));transition:width .28s ease;}
+.bvp-hpfill.bvp-hp-mid{background:linear-gradient(90deg,#f8dd96,var(--bvp-hp-mid));}
+.bvp-hpfill.bvp-hp-low{background:linear-gradient(90deg,#f9b4c6,var(--bvp-hp-low));}
 .bvp-shbar{height:8px;border-radius:999px;background:#e7eefb;overflow:hidden;margin-top:4px;}
 .bvp-shfill{height:100%;border-radius:999px;background:linear-gradient(90deg,#8fc2ff,#5f9be8);transition:width .28s ease;}
 .bvp-nums{display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:var(--bvp-soft);margin-top:4px;gap:6px;flex-wrap:wrap;}
@@ -176,27 +214,42 @@ const CSS = `
 .bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 @media(min-width:480px){.bvp-acts{grid-template-columns:1fr 1fr 1fr;}}
 .bvp-act{border:none;border-radius:14px;padding:11px 8px;font-family:inherit;cursor:pointer;text-align:center;
-  background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);}
+  background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);position:relative;overflow:hidden;
+  transition:transform .15s ease,box-shadow .15s ease;}
+.bvp-act:hover:not([disabled]){transform:translateY(-2px);box-shadow:0 5px 2px rgba(120,95,170,.24);}
 .bvp-act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,95,170,.24);}
+.bvp-cd{position:absolute;inset:0;border-radius:inherit;pointer-events:none;}
 .bvp-act[disabled]{opacity:.42;cursor:default;transform:none;box-shadow:none;}
 .bvp-act-t{display:block;font-size:14px;font-weight:900;}
 .bvp-act-d{display:block;font-size:11px;font-weight:700;color:var(--bvp-soft);margin-top:2px;}
 .bvp-path{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:10px;}
 .bvp-dot{width:26px;height:26px;border-radius:50%;background:#ece5fb;display:flex;align-items:center;
-  justify-content:center;font-size:13px;color:#8d7bb5;font-weight:900;}
-.bvp-dot-done{background:#cfeedd;color:#3c7a58;}
+  justify-content:center;font-size:13px;color:#8d7bb5;font-weight:900;
+  box-shadow:inset 0 -2px 0 rgba(120,95,170,.18);}
+.bvp-dot-done{background:#cfeedd;color:#3c7a58;box-shadow:inset 0 -2px 0 rgba(60,122,88,.25);}
+.bvp-dot-goal svg{width:20px;height:20px;display:block;}
 .bvp-dot-now{background:#ffd6ea;color:#a83a72;outline:3px solid #fff;}
+.bvp-dot-lit{animation:bvpLit .3s ease-out backwards;}
+@keyframes bvpLit{from{transform:scale(.4);opacity:.2;}to{transform:scale(1);opacity:1;}}
 .bvp-opts{display:grid;grid-template-columns:1fr;gap:9px;}
 @media(min-width:520px){.bvp-opts.bvp-opts-2{grid-template-columns:1fr 1fr;}}
 .bvp-opt{border:none;border-radius:16px;padding:13px;cursor:pointer;font-family:inherit;text-align:left;
   background:#fff;box-shadow:0 3px 10px rgba(140,120,190,.18);color:var(--bvp-ink);display:flex;gap:10px;align-items:center;}
 .bvp-opt:active{transform:translateY(2px);}
-.bvp-opt-em{font-size:27px;line-height:1;}
+.bvp-opt-em{font-size:27px;line-height:1;display:block;width:34px;height:34px;flex:0 0 auto;}
+.bvp-opt-em svg{width:100%;height:100%;display:block;}
 .bvp-opt-t{font-size:14px;font-weight:900;display:block;}
 .bvp-opt-d{font-size:12px;font-weight:700;color:var(--bvp-soft);display:block;margin-top:2px;}
 .bvp-list{display:flex;flex-direction:column;gap:8px;}
 .bvp-row{display:flex;align-items:center;gap:9px;background:#fff;border-radius:13px;padding:9px 11px;
-  box-shadow:0 2px 7px rgba(140,120,190,.13);}
+  box-shadow:0 2px 7px rgba(140,120,190,.13);transition:transform .15s ease,box-shadow .15s ease;}
+.bvp-row:hover{transform:translateY(-2px);box-shadow:0 5px 12px rgba(140,120,190,.22);}
+.bvp-ico{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,#fffdff,#f6f1ff);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1;
+  border:1.5px solid #c9c4d4;box-shadow:0 2px 5px rgba(140,120,190,.14);}
+.bvp-ico svg{width:88%;height:88%;display:block;}
+.bvp-ico-rare{border:2px solid #5f9be8;}
+.bvp-ico-epic{border:2.5px solid #e3a82f;background:linear-gradient(180deg,#fffdf4,#fff4d6);}
 .bvp-row-main{flex:1;min-width:0;}
 .bvp-row-t{font-size:14px;font-weight:900;}
 .bvp-row-d{font-size:12px;font-weight:700;color:var(--bvp-soft);line-height:1.5;}
@@ -211,20 +264,67 @@ const CSS = `
 .bvp-fore-easy{background:#dff5e4;color:#2f7a4c;}
 .bvp-fore-risky{background:#fff1d6;color:#94670e;}
 .bvp-fore-hard{background:#ffe2e8;color:#a83f60;}
-.bvp-maze{display:grid;gap:2px;margin:10px auto;max-width:320px;}
-.bvp-mz{aspect-ratio:1;border-radius:4px;background:#fbf8ff;display:flex;align-items:center;
-  justify-content:center;font-size:12px;line-height:1;}
-.bvp-mz-wall{background:#c8bde4;border-radius:3px;}
-.bvp-mz-been{background:#eee6ff;}
-.bvp-mz-me{background:#ffd6ea;font-size:14px;}
-.bvp-mz-ghost{background:#dbe8ff;}
+.bvp-maze{display:grid;gap:3px;margin:10px auto;max-width:320px;padding:6px;border-radius:12px;
+  background:linear-gradient(180deg,#efe7dc,#e6dccc);box-shadow:inset 0 2px 6px rgba(120,95,80,.18);}
+.bvp-mz{position:relative;aspect-ratio:1;border-radius:5px;background:var(--bvp-floor);display:flex;align-items:center;
+  justify-content:center;font-size:12px;line-height:1;z-index:var(--bvp-z-cell);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -4px 0 var(--bvp-floor-edge);}
+.bvp-mz::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(160deg,rgba(120,120,140,.62),var(--bvp-fog) 55%,rgba(120,120,140,.4));
+  box-shadow:inset 0 0 8px 4px rgba(120,120,140,.35);
+  opacity:0;z-index:var(--bvp-z-fog);transition:opacity var(--bvp-t-fog) ease-out;}
+.bvp-mz-fog::after{opacity:1;}
+.bvp-mz-wall{border-radius:4px;background-color:var(--bvp-wall);
+  background-image:linear-gradient(180deg,var(--bvp-moss),var(--bvp-moss)),
+    repeating-linear-gradient(0deg,rgba(75,58,110,.16) 0 1px,transparent 1px 6px),
+    repeating-linear-gradient(90deg,rgba(75,58,110,.13) 0 1px,transparent 1px 8px),
+    linear-gradient(180deg,#dacfea,var(--bvp-wall));
+  background-size:100% 3px,100% 100%,100% 100%,100% 100%;
+  background-repeat:no-repeat,repeat,repeat,no-repeat;
+  box-shadow:inset 0 -4px 0 rgba(75,58,110,.3),inset 0 1px 0 rgba(255,255,255,.4);}
+.bvp-mz-been{background-image:radial-gradient(circle at 38% 58%,rgba(160,130,90,.34) 1.6px,transparent 2.4px),
+  radial-gradient(circle at 62% 40%,rgba(160,130,90,.26) 1.4px,transparent 2.2px);}
+.bvp-mz-near{box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -4px 0 var(--bvp-floor-edge),
+  inset 0 0 0 30px rgba(255,220,150,.16);}
+.bvp-mz-me{z-index:var(--bvp-z-torch);}
+.bvp-mz-me::before{content:"";position:absolute;inset:-62%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,var(--bvp-torch) 0%,rgba(255,200,120,.18) 40%,transparent 60%);
+  z-index:var(--bvp-z-torch);animation:bvpBreath var(--bvp-t-breath) ease-in-out infinite;}
+@keyframes bvpBreath{0%,100%{opacity:.75;transform:scale(1);}50%{opacity:1;transform:scale(1.12);}}
+.bvp-mz-ghost{background-color:#e3ecfb;}
+.bvp-mz-badge{position:relative;z-index:var(--bvp-z-badge);width:82%;height:82%;display:block;pointer-events:none;}
+.bvp-mz-badge svg{width:100%;height:100%;display:block;}
+.bvp-mz-it{position:relative;z-index:var(--bvp-z-badge);width:80%;height:80%;display:block;pointer-events:none;}
+.bvp-mz-it svg{width:100%;height:100%;display:block;}
+.bvp-mz-fog .bvp-mz-it{filter:brightness(0) opacity(.45);}
 .bvp-pads{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,52px);
   gap:8px;justify-content:center;margin-top:8px;}
 .bvp-pad{border:none;border-radius:14px;font-size:20px;font-family:inherit;cursor:pointer;
   background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.26);min-width:56px;min-height:52px;}
 .bvp-pad:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,95,170,.26);}
 .bvp-pad-void{visibility:hidden;}
-@media (prefers-reduced-motion:reduce){.bvp-hpfill,.bvp-shfill{transition:none;}}
+.bvp-hud{position:relative;z-index:var(--bvp-z-hud);background:linear-gradient(180deg,#fffdff,#f4f0ff);
+  border-radius:16px;padding:8px 10px;box-shadow:0 3px 10px rgba(140,120,190,.18);}
+.bvp-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:var(--bvp-z-settle);}
+.bvp-conf{position:absolute;top:-4%;width:9px;height:9px;
+  clip-path:polygon(50% 0,63% 35%,98% 35%,70% 57%,80% 91%,50% 70%,20% 91%,30% 57%,2% 35%,37% 35%);
+  animation:bvpConf 1.25s ease-in forwards;}
+.bvp-conf-0{background:#ffd86b;}
+.bvp-conf-1{background:#8fd98b;}
+.bvp-conf-2{background:#f4a9c8;}
+@keyframes bvpConf{0%{opacity:0;transform:translateY(0) rotate(0deg);}15%{opacity:1;}
+  100%{opacity:0;transform:translateY(72vh) rotate(300deg);}}
+@media (prefers-reduced-motion:reduce){
+  .bvp-hpfill,.bvp-shfill,.bvp-fighter,.bvp-row,.bvp-act,.bvp-mz::after{transition:none;}
+  .bvp-root{--bvp-t-fog:0ms;--bvp-t-float:0ms;--bvp-t-shake:0ms;--bvp-t-turn:0ms;}
+  .bvp-mz-me::before,.bvp-float,.bvp-hit,.bvp-dot-lit,.bvp-conf{animation:none;}
+  .bvp-mz-me::before{opacity:.85;}
+  .bvp-float{opacity:1;}
+  .bvp-turn{transform:none;}
+  .bvp-row:hover,.bvp-act:hover:not([disabled]){transform:none;}
+}
+${touchUpliftCss([".bvp-btn"])}
+${bodyFontUpliftCss([".bvp-chip", ".bvp-btn-sm"])}
 `;
 
 /* ------------------------------------------------------------------ */
@@ -279,13 +379,21 @@ function elementTag(f: { element: keyof typeof ELEMENT_LABEL }): string {
 
 interface FighterCard {
   root: HTMLElement;
+  face: HTMLElement;
   update: (f: Fighter, note?: string) => void;
 }
 
-function fighterCard(f: Fighter, showStats: boolean): FighterCard {
+/** 立绘徽章：勇者侧按属性配职业环，怪物侧按属性配剪影环，怪物可带等级角标 */
+function fighterBadge(f: Fighter, side: "hero" | "foe", foeLevel?: number): string {
+  if (side === "hero") return badge(heroBadgeKind(f.element), { camp: "hero" });
+  return badge(foeBadgeKind(f.element), { camp: "foe", level: foeLevel });
+}
+
+function fighterCard(f: Fighter, showStats: boolean, side: "hero" | "foe", foeLevel?: number): FighterCard {
   const root = el("div", "bvp-fighter");
   const top = el("div", "bvp-fighter-top");
-  const face = el("div", "bvp-face", f.emoji);
+  const face = el("div", `bvp-face bvp-face-${side}`);
+  face.setAttribute("aria-hidden", "true");
   const name = el("div", "bvp-name");
   const tags = el("div");
   tags.style.display = "flex";
@@ -306,8 +414,12 @@ function fighterCard(f: Fighter, showStats: boolean): FighterCard {
   root.append(top, hpbar, shbar, nums, warn);
 
   const update = (cur: Fighter, note?: string): void => {
-    face.textContent = cur.emoji;
-    name.textContent = cur.name;
+    const art = fighterBadge(cur, side, foeLevel);
+    if (face.dataset.art !== art) {
+      face.dataset.art = art;
+      face.innerHTML = art;
+    }
+    name.textContent = `${cur.emoji} ${cur.name}`;
     tags.innerHTML = "";
     const tEl = el("span", "bvp-tag", elementTag(cur));
     tags.appendChild(tEl);
@@ -319,7 +431,9 @@ function fighterCard(f: Fighter, showStats: boolean): FighterCard {
     }
     const ratio = hpRatio(cur);
     hpfill.style.width = `${Math.round(ratio * 100)}%`;
-    hpfill.classList.toggle("bvp-low", ratio <= 0.35);
+    const seg = hpSegmentOf(cur);
+    hpfill.classList.toggle("bvp-hp-mid", seg === "mid");
+    hpfill.classList.toggle("bvp-hp-low", seg === "low");
     const shRatio = cur.maxHp > 0 ? Math.min(1, cur.shield / cur.maxHp) : 0;
     shbar.hidden = cur.shield <= 0;
     shfill.style.width = `${Math.round(shRatio * 100)}%`;
@@ -339,7 +453,7 @@ function fighterCard(f: Fighter, showStats: boolean): FighterCard {
   };
 
   update(f);
-  return { root, update };
+  return { root, face, update };
 }
 
 /* ------------------------------------------------------------------ */
@@ -363,8 +477,8 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
   const wrap = el("div");
   host.appendChild(wrap);
 
-  const bar = el("div", "bvp-bar");
-  const stateChip = el("span", "bvp-chip", "🔑 还没拿到钥匙");
+  const bar = el("div", "bvp-bar bvp-hud");
+  const stateChip = el("span", "bvp-chip", "还没拿到钥匙徽章");
   const timeChip = el("span", "bvp-chip", "⏱️ 0.0 秒");
   bar.append(stateChip, timeChip);
   wrap.appendChild(bar);
@@ -372,6 +486,8 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
   const grid = el("div", "bvp-maze");
   grid.style.gridTemplateColumns = `repeat(${m.cols},1fr)`;
   const cells: HTMLElement[][] = [];
+  /** 每格上一次的视图签名，变了才碰 DOM */
+  const cellSig: string[][] = [];
   for (let r = 0; r < m.rows; r++) {
     const row: HTMLElement[] = [];
     for (let c = 0; c < m.cols; c++) {
@@ -380,10 +496,11 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
       row.push(cell);
     }
     cells.push(row);
+    cellSig.push(new Array<string>(m.cols).fill(""));
   }
   wrap.appendChild(grid);
 
-  const note = el("div", "bvp-note", "方向键 / WASD 或下面的按钮走路。先找到钥匙 🔑，再从门 🚪 过去到出口 🏁。");
+  const note = el("div", "bvp-note", "方向键 / WASD 或下面的按钮走路。先找到钥匙徽章，再从木门过去到终点小旗。");
   wrap.appendChild(note);
 
   const pads = el("div", "bvp-pads");
@@ -421,32 +538,36 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
 
   function paint(): void {
     const g = ghostAt();
+    // 迷雾只是氛围皮：走过的格 + 周围一圈算看见，其余盖一层 55% 半透明雾（看得穿，不改玩法）
+    const seen = seenSet(been, m.rows, m.cols);
     for (let r = 0; r < m.rows; r++) {
       for (let c = 0; c < m.cols; c++) {
-        let cls = "bvp-mz";
-        let text = "";
-        if (m.walls[r][c]) {
-          cls += " bvp-mz-wall";
-        } else {
-          if (been.has(`${r},${c}`)) cls += " bvp-mz-been";
-          if (!hasKey && r === m.key[0] && c === m.key[1]) text = "🔑";
-          if (r === m.door[0] && c === m.door[1]) text = hasKey ? "🚪" : "🔒";
-          if (r === m.exit[0] && c === m.exit[1]) text = "🏁";
-          if (opts.pace && r === g[0] && c === g[1]) {
-            cls += " bvp-mz-ghost";
-            text = "⭐";
-          }
-          if (r === me[0] && c === me[1]) {
-            cls += " bvp-mz-me";
-            text = "🌸";
-          }
+        const wall = m.walls[r][c];
+        let item: "" | "key" | "door" | "lock" | "exit" = "";
+        if (!wall) {
+          if (!hasKey && r === m.key[0] && c === m.key[1]) item = "key";
+          if (r === m.door[0] && c === m.door[1]) item = hasKey ? "door" : "lock";
+          if (r === m.exit[0] && c === m.exit[1]) item = "exit";
         }
-        const cell = cells[r][c];
-        if (cell.className !== cls) cell.className = cls;
-        if (cell.textContent !== text) cell.textContent = text;
+        const view = mazeCellView({
+          wall,
+          been: been.has(`${r},${c}`),
+          seen: seen.has(`${r},${c}`),
+          isMe: !wall && r === me[0] && c === me[1],
+          isGhost: Boolean(opts.pace) && !wall && r === g[0] && c === g[1],
+          nearMe: !wall && Math.abs(r - me[0]) + Math.abs(c - me[1]) === 1,
+          item
+        });
+        const sig = `${view.cls}\u0001${view.html}`;
+        if (cellSig[r][c] !== sig) {
+          cellSig[r][c] = sig;
+          const cell = cells[r][c];
+          cell.className = view.cls;
+          cell.innerHTML = view.html;
+        }
       }
     }
-    stateChip.textContent = hasKey ? "🔑 钥匙到手，去出口！" : "🔑 还没拿到钥匙";
+    stateChip.textContent = hasKey ? "钥匙徽章到手，去出口！" : "还没拿到钥匙徽章";
     timeChip.textContent = `⏱️ ${(elapsed / 1000).toFixed(1)} 秒`;
   }
 
@@ -466,7 +587,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
     if (nr < 0 || nr >= m.rows || nc < 0 || nc >= m.cols) return;
     if (m.walls[nr][nc]) return;
     if (!hasKey && nr === m.door[0] && nc === m.door[1]) {
-      note.textContent = "🔒 这扇门锁着，先去把钥匙 🔑 找到。";
+      note.textContent = "这扇门还锁着，先去把钥匙徽章找到。";
       opts.sfx("oops");
       return;
     }
@@ -475,7 +596,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
     if (!hasKey && nr === m.key[0] && nc === m.key[1]) {
       hasKey = true;
       opts.sfx("coin");
-      note.textContent = "🔑 钥匙拿到啦！现在门开得了，冲向 🏁 出口！";
+      note.textContent = "钥匙徽章拿到啦！现在门开得了，冲向终点小旗！";
     } else {
       opts.sfx("tap");
     }
@@ -540,6 +661,8 @@ interface BattleOptions {
   sfx: (n: SoundName) => void;
   /** 这一场的标题，例如「第 3 关 · 第 2 步」 */
   title: string;
+  /** 对手徽章右下角标的数字（关卡数 / 层数），纯装饰 */
+  foeLevel?: number;
   /** 打完之后：win = 勇者赢了；hero 是带着剩余星芒 / 背包的勇者 */
   onEnd: (result: { win: boolean; hero: Fighter }) => void;
   /** 逃跑按钮（无尽模式的「先回城」） */
@@ -557,8 +680,9 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
 
   let state: CombatState = startCombat(opts.hero, opts.foe);
   let busy = false;
+  const fx = fxClassPlan(prefersReducedMotion());
 
-  const head = el("div", "bvp-bar");
+  const head = el("div", "bvp-bar bvp-hud");
   const title = el("span", "bvp-chip", opts.title);
   head.appendChild(title);
   const roundChip = el("span", "bvp-chip");
@@ -578,12 +702,12 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
   const foreChip = el("span", `bvp-chip bvp-fore bvp-fore-${guess}`, `${FORECAST_EMOJI[guess]} ${FORECAST_LABELS[guess]}`);
   head.appendChild(foreChip);
 
-  const foeCard = fighterCard(state.foe, false);
+  const foeCard = fighterCard(state.foe, false, "foe", opts.foeLevel);
   const foreNote = el("div", "bvp-note", FORECAST_HINTS[guess]);
   const logBox = el("div", "bvp-log");
   logBox.setAttribute("role", "log");
   logBox.setAttribute("aria-live", "polite");
-  const heroCard = fighterCard(state.hero, true);
+  const heroCard = fighterCard(state.hero, true, "hero");
   const hint = el("div", "bvp-note");
   const acts = el("div", "bvp-acts");
 
@@ -607,10 +731,17 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
   function renderActions(): void {
     acts.innerHTML = "";
     if (state.over) return;
-    const add = (t: string, d: string, action: Action, extraOk = true): void => {
+    const add = (t: string, d: string, action: Action, extraOk = true, cdRatio = 0): void => {
       const b = el("button", "bvp-act");
       b.type = "button";
-      b.innerHTML = `<span class="bvp-act-t">${t}</span><span class="bvp-act-d">${d}</span>`;
+      let html = `<span class="bvp-act-t">${t}</span><span class="bvp-act-d">${d}</span>`;
+      // 冷却扇形罩：角度 = 冷却比例 × 360°，只读冷却数据
+      if (cdRatio > 0) {
+        html += `<span class="bvp-cd" style="background:conic-gradient(rgba(75,58,110,.3) ${cooldownAngle(
+          cdRatio
+        )}deg,transparent 0deg)"></span>`;
+      }
+      b.innerHTML = html;
       const ok = extraOk && actionAllowed(state.hero, action) && !busy;
       b.disabled = !ok;
       if (ok) b.addEventListener("click", () => take(action));
@@ -631,7 +762,13 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
             : def.kind === "buff"
               ? "提升攻击力"
               : `${ELEMENT_EMOJI[def.element]} ${power.toFixed(2)} 倍${def.kind === "breaker" ? " · 破盾" : def.kind === "pierce" ? " · 穿透" : ""}`;
-      add(`${def.emoji} ${def.name}`, desc, { kind: "skill", skillId: s.id }, cd <= 0);
+      add(
+        `${def.emoji} ${def.name}`,
+        desc,
+        { kind: "skill", skillId: s.id },
+        cd <= 0,
+        def.cooldown > 0 ? cd / def.cooldown : 0
+      );
     }
     add("🛡️ 防御", "这回合少掉一半星芒", { kind: "guard" });
     for (const slot of state.hero.bag) {
@@ -641,17 +778,43 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
     }
   }
 
+  /** 出手方徽章前移 + 高亮描边（reduced 下 CSS 只留描边） */
+  function setTurn(side: "hero" | "foe" | "none"): void {
+    heroCard.root.classList.toggle("bvp-turn", side === "hero");
+    foeCard.root.classList.toggle("bvp-turn", side === "foe");
+  }
+
+  /** 受击数字上飘 + 徽章抖动两帧；治疗是绿色数字，不抖 */
+  function popAmount(card: FighterCard, text: string, heal: boolean): void {
+    const span = el("span", `${fx.float}${heal ? " bvp-float-heal" : ""}`, text);
+    card.root.appendChild(span);
+    cleanup.after(BVP_TIMING["--bvp-t-float"] + 60, () => span.remove());
+    if (fx.shake && !heal) {
+      card.face.classList.add(fx.shake);
+      cleanup.after(BVP_TIMING["--bvp-t-shake"] + 20, () => card.face.classList.remove(fx.shake));
+    }
+  }
+
   function playEvents(events: CombatEvent[], done: () => void): void {
     let i = 0;
     const step = (): void => {
       if (cleanup.dead) return;
       if (i >= events.length) {
+        setTurn("none");
         done();
         return;
       }
       const ev = events[i++];
       say(ev.text);
       if (ev.sound) opts.sfx(ev.sound);
+      if (ev.side === "hero" || ev.side === "foe") setTurn(ev.side);
+      if (typeof ev.amount === "number" && ev.amount > 0) {
+        if (ev.kind === "damage" || ev.kind === "unleash") {
+          popAmount(ev.side === "hero" ? foeCard : heroCard, `-${ev.amount}`, false);
+        } else if (ev.kind === "heal") {
+          popAmount(ev.side === "hero" ? heroCard : foeCard, `+${ev.amount}`, true);
+        }
+      }
       foeCard.update(state.foe);
       heroCard.update(state.hero);
       cleanup.after(EVENT_STEP, step);
@@ -714,6 +877,7 @@ interface RunDeps {
 function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { destroy: () => void } {
   const cleanup = new Cleanup();
   const plan: LevelPlan = buildLevel(ctx.level);
+  const fx: FxPlan = fxClassPlan(prefersReducedMotion());
   const wrap = el("div");
   stage.appendChild(wrap);
 
@@ -756,11 +920,19 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
   function pathDots(): HTMLElement {
     const row = el("div", "bvp-path");
     plan.steps.forEach((_, i) => {
-      const dot = el("div", `bvp-dot${i < step ? " bvp-dot-done" : i === step ? " bvp-dot-now" : ""}`);
-      dot.textContent = i < step ? "✓" : String(i + 1);
+      const done = i < step;
+      let cls = `bvp-dot${done ? " bvp-dot-done" : i === step ? " bvp-dot-now" : ""}`;
+      // 过层小路逐格点亮：走过的点带 90ms 阶梯延迟；reduced 下不加类，一次性全亮
+      if (done && fx.dotLit) cls += ` ${fx.dotLit}`;
+      const dot = el("div", cls);
+      if (done && fx.dotLit) dot.style.animationDelay = `${litDelayMs(i)}ms`;
+      dot.textContent = done ? "✓" : String(i + 1);
       row.appendChild(dot);
     });
-    row.appendChild(el("div", "bvp-dot", "🏁"));
+    // 终点点位画徽章族的棋盘小旗(与迷宫拾取物同一件),不再用旗帜 emoji 字符
+    const goal = el("div", "bvp-dot bvp-dot-goal");
+    goal.innerHTML = mazeItemSvg("exit");
+    row.appendChild(goal);
     return row;
   }
 
@@ -770,6 +942,12 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
       <span class="bvp-chip">${elementTag(hero)}</span>
       <span class="bvp-chip">🪙 ${deps.getSave().coins}</span>`;
     return row;
+  }
+
+  /** 步骤卡图标：徽章族 SVG 优先（敌人按元素上色），未知节点回退原 emoji */
+  function nodeIconHtml(node: PathNode): string {
+    const tint = node.foe ? ELEMENT_TINT[node.foe.element] : undefined;
+    return rowIconSvg(`node-${node.kind}`, tint) || node.emoji;
   }
 
   function nodeDesc(node: PathNode): string {
@@ -820,7 +998,7 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
     options.forEach((node) => {
       const b = el("button", "bvp-opt");
       b.type = "button";
-      b.innerHTML = `<span class="bvp-opt-em">${node.emoji}</span><span class="bvp-row-main">
+      b.innerHTML = `<span class="bvp-opt-em">${nodeIconHtml(node)}</span><span class="bvp-row-main">
         <span class="bvp-opt-t">${node.label}</span><span class="bvp-opt-d">${nodeDesc(node)}</span></span>`;
       b.addEventListener("click", () => {
         ctx.sfx("tap");
@@ -873,6 +1051,7 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
       foe: makeFighter(spec),
       sfx: ctx.sfx,
       title: `第 ${plan.level + 1} 关 · 第 ${step + 1} 步`,
+      foeLevel: Math.min(99, plan.level + 1),
       onEnd: ({ win, hero: after }) => {
         hero = after;
         if (!win) {
@@ -903,7 +1082,7 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
         const def = ITEMS[id];
         if (!def) continue;
         const row = el("div", "bvp-row");
-        row.innerHTML = `<span class="bvp-face">${def.emoji}</span>
+        row.innerHTML = `<span class="bvp-ico bvp-ico-${itemRarity(def.price)}">${rowIconSvg(`item-${def.id}`) || def.emoji}</span>
           <span class="bvp-row-main"><span class="bvp-row-t">${def.name} · ${def.price} 金币</span>
           <span class="bvp-row-d">${def.desc}　仓库里有 ${stashCount(save, id)} 个</span></span>`;
         const buy = button("买一个", "bvp-btn bvp-btn-sm bvp-btn-go", () => {
@@ -989,6 +1168,16 @@ export function mount(api: GameApi): { destroy: () => void } {
     flash = text;
   };
   const sfx = (n: SoundName): void => api.play(n);
+  const fx: FxPlan = fxClassPlan(prefersReducedMotion());
+
+  /** 胜利撒星屑彩纸：挂在当前屏的 wrap 里，跟着它的清理一起走；reduced 下整个不放 */
+  function celebrate(host: HTMLElement, cleanup: Cleanup): void {
+    if (!fx.confetti) return;
+    const box = el("div", "bvp-confetti", confettiHtml());
+    box.setAttribute("aria-hidden", "true");
+    host.appendChild(box);
+    cleanup.after(1600, () => box.remove());
+  }
 
   function dropCurrent(): void {
     try {
@@ -1005,7 +1194,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function topBar(label: string): HTMLElement {
-    const bar = el("div", "bvp-bar");
+    const bar = el("div", "bvp-bar bvp-hud");
     bar.appendChild(
       button("◀ 换个玩法", "bvp-btn bvp-btn-sm", () => {
         sfx("tap");
@@ -1250,6 +1439,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         foe: makeFighter(endlessFoeSpec(floor)),
         sfx,
         title: `第 ${floor} 层${isEndlessGuardian(floor) ? " · 守门的" : ""}`,
+        foeLevel: Math.min(99, floor),
         fleeLabel: "🏠 到此为止",
         onFlee: () => settle("你收好背包，顺着来路慢慢爬了上去。"),
         onEnd: ({ win, hero: after }) => {
@@ -1281,7 +1471,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (const s of rollSupplies(depth)) {
           const btn = el("button", "bvp-opt");
           btn.type = "button";
-          btn.innerHTML = `<span class="bvp-opt-em">${s.emoji}</span><span class="bvp-row-main">
+          btn.innerHTML = `<span class="bvp-opt-em">${rowIconSvg(`supply-${s.kind}`) || s.emoji}</span><span class="bvp-row-main">
             <span class="bvp-opt-t">${s.name}</span><span class="bvp-opt-d">${s.desc}</span></span>`;
           btn.addEventListener("click", () => {
             sfx("coin");
@@ -1325,7 +1515,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (const b of rollBlessings(depth, hero.maxHp > 0 ? hero.hp / hero.maxHp : 1)) {
           const btn = el("button", "bvp-opt");
           btn.type = "button";
-          btn.innerHTML = `<span class="bvp-opt-em">${b.emoji}</span><span class="bvp-row-main">
+          btn.innerHTML = `<span class="bvp-opt-em">${rowIconSvg(`bless-${b.kind}`) || b.emoji}</span><span class="bvp-row-main">
             <span class="bvp-opt-t">${b.name}</span><span class="bvp-opt-d">${b.desc}</span></span>`;
           btn.addEventListener("click", () => {
             sfx("coin");
@@ -1387,7 +1577,10 @@ export function mount(api: GameApi): { destroy: () => void } {
             `${stars > 0 ? `，还拿到 ${stars} 颗小星星` : ""}。`
         )
       );
-      if (depth > best) card.appendChild(el("div", "bvp-note", `🎉 新纪录！之前最深是第 ${best} 层。`));
+      if (depth > best) {
+        card.appendChild(el("div", "bvp-note", `🎉 新纪录！之前最深是第 ${best} 层。`));
+        celebrate(wrap, cleanup);
+      }
       wrap.appendChild(card);
 
       const row = el("div", "bvp-bar");
@@ -1426,14 +1619,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     current = mountArena(host);
   }
 
-  function teamCard(title: string, team: Fighter[], color: string): HTMLElement {
+  function teamCard(title: string, team: Fighter[], color: string, side: "hero" | "foe"): HTMLElement {
     const card = el("div", "bvp-card");
     card.style.background = color;
     card.appendChild(el("div", "bvp-h", title));
     for (const f of team) {
       const row = el("div", "bvp-row");
-      row.innerHTML = `<span class="bvp-face">${f.emoji}</span><span class="bvp-row-main">
-        <span class="bvp-row-t">${f.name}　<span class="bvp-mini">${elementTag(f)}</span></span>
+      row.innerHTML = `<span class="bvp-ico">${badge(heroBadgeKind(f.element), { camp: side })}</span><span class="bvp-row-main">
+        <span class="bvp-row-t">${f.emoji} ${f.name}　<span class="bvp-mini">${elementTag(f)}</span></span>
         <span class="bvp-row-d">星芒 ${f.maxHp} · 攻 ${f.atk} · 防 ${f.def} · 速 ${f.spd}</span></span>`;
       card.appendChild(row);
     }
@@ -1475,8 +1668,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       const mine = buildMyTeam(save);
       const theirs = buildRivalTeam(save.level, save.arenaWins, gearFactor(save));
       const grid = el("div", "bvp-team");
-      grid.appendChild(teamCard("🌸 我的队伍", mine, "linear-gradient(180deg,#fff4f9,#ffe6f1)"));
-      grid.appendChild(teamCard("⭐ 星星的队伍", theirs, "linear-gradient(180deg,#f0f6ff,#e0ecff)"));
+      grid.appendChild(teamCard("🌸 我的队伍", mine, "linear-gradient(180deg,#fff4f9,#ffe6f1)", "hero"));
+      grid.appendChild(teamCard("⭐ 星星的队伍", theirs, "linear-gradient(180deg,#f0f6ff,#e0ecff)", "foe"));
       wrap.appendChild(grid);
 
       const row = el("div", "bvp-bar");
@@ -1506,7 +1699,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         el(
           "div",
           "bvp-sub",
-          "同一张迷宫，你和星星留下的影子各跑各的：先找到钥匙 🔑，再穿过门 🚪 冲到 🏁。" +
+          "同一张迷宫，你和星星留下的影子各跑各的：先找到钥匙徽章，再穿过木门冲到终点小旗。" +
             "影子跑的是最短路，但它会时不时犹豫一下——你只要不绕远路，就追得上。"
         )
       );
@@ -1596,6 +1789,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
       const card = el("div", "bvp-card");
       card.appendChild(el("div", "bvp-h", outcome.win ? "🎉 我们赢啦！" : "🌱 这次差一点"));
+      if (outcome.win) celebrate(wrap, cleanup);
       card.appendChild(el("div", "bvp-sub", outcome.text));
       card.appendChild(
         el(
@@ -1729,7 +1923,11 @@ export function mount(api: GameApi): { destroy: () => void } {
           const owned = save.owned.includes(g.id);
           const worn = save.gear[slot] === g.id;
           const row = el("div", "bvp-row");
-          row.innerHTML = `<span class="bvp-face">${g.emoji}</span><span class="bvp-row-main">
+          const gearIcon =
+            g.slot === "badge" && g.element
+              ? badge(heroBadgeKind(g.element), { camp: "hero" })
+              : rowIconSvg(`gear-${g.slot}`, RARITY_TINT[gearRarity(g.reqLevel)]) || g.emoji;
+          row.innerHTML = `<span class="bvp-ico bvp-ico-${gearRarity(g.reqLevel)}">${gearIcon}</span><span class="bvp-row-main">
             <span class="bvp-row-t">${g.name}${worn ? "　<span class=\"bvp-mini\">装备中</span>" : ""}</span>
             <span class="bvp-row-d">${g.desc}${owned ? "" : `　需要 ${g.reqLevel} 级 · ${g.price} 金币`}</span></span>`;
           if (worn) {
@@ -1787,7 +1985,9 @@ export function mount(api: GameApi): { destroy: () => void } {
         const on = save.loadout.includes(u.id);
         const cost = rank === 0 ? u.cost : rankUpCost(rank);
         const row = el("div", "bvp-row");
-        row.innerHTML = `<span class="bvp-face">${def.emoji}</span><span class="bvp-row-main">
+        row.innerHTML = `<span class="bvp-ico bvp-ico-${skillRarity(u.cost)}">${
+          rowIconSvg(`skill-${def.kind}`, ELEMENT_TINT[def.element]) || def.emoji
+        }</span><span class="bvp-row-main">
           <span class="bvp-row-t">${def.name}　<span class="bvp-mini">${
             rank > 0 ? `${rank}/${MAX_SKILL_RANK} 级` : `${u.reqLevel} 级解锁`
           }${on ? " · 已上阵" : ""}</span></span>
@@ -1847,7 +2047,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         const inBag = save.bag.find((x) => x.id === def.id)?.count ?? 0;
         const inStash = stashCount(save, def.id);
         const row = el("div", "bvp-row");
-        row.innerHTML = `<span class="bvp-face">${def.emoji}</span><span class="bvp-row-main">
+        row.innerHTML = `<span class="bvp-ico bvp-ico-${itemRarity(def.price)}">${rowIconSvg(`item-${def.id}`) || def.emoji}</span><span class="bvp-row-main">
           <span class="bvp-row-t">${def.name}　<span class="bvp-mini">背包 ${inBag} · 仓库 ${inStash}</span></span>
           <span class="bvp-row-d">${def.desc}</span></span>`;
         const buy = button(`买（${def.price}）`, "bvp-btn bvp-btn-sm", () => {
@@ -1905,8 +2105,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (const c of COMPANIONS) {
           const chosen = save.party[idx] === c.id;
           const row = el("div", "bvp-row");
-          row.innerHTML = `<span class="bvp-face">${c.emoji}</span><span class="bvp-row-main">
-            <span class="bvp-row-t">${c.name}　<span class="bvp-mini">${ELEMENT_EMOJI[c.element]}${
+          row.innerHTML = `<span class="bvp-ico">${badge(heroBadgeKind(c.element), { camp: "hero" })}</span><span class="bvp-row-main">
+            <span class="bvp-row-t">${c.emoji} ${c.name}　<span class="bvp-mini">${ELEMENT_EMOJI[c.element]}${
               ELEMENT_LABEL[c.element]
             }系${chosen ? " · 已上阵" : ""}</span></span>
             <span class="bvp-row-d">${c.desc}</span></span>`;

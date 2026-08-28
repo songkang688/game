@@ -11,7 +11,11 @@
  *
  * 裹着东西的泡泡按「膜 → 泡内物 → 光」三段画:先 `bubbleFilm`,再画泡内物,
  * 最后 `bubbleGloss`,薄膜永远不遮内容物。只接受传进来的 2d 画笔,不摸 DOM。
+ *
+ * 窗口 6 另有 CSS 皮肤：`bubbleSkin(baseHex)` 返回 background / boxShadow。
  */
+
+import { shade } from "./palette";
 
 /** 彩虹缘只在半径不小于这个值时出现(px) */
 export const BUBBLE_RIM_MIN_R = 6;
@@ -94,8 +98,32 @@ export function bubbleGloss(
   ctx.restore();
 }
 
-/** 一颗完整的空泡泡:膜 + 光一次画完(裹着东西时请分开三段画) */
-export function bubbleSkin(
+/** 主高光斑圆心(窗口 6 CSS 皮肤) */
+export const BUBBLE_HIGHLIGHT_X = "30%";
+export const BUBBLE_HIGHLIGHT_Y = "24%";
+export const BUBBLE_LIGHTEN = 10;
+export const BUBBLE_DARKEN = -12;
+export const BUBBLE_INNER_ARC = "inset 0 -2px 4px rgba(255,255,255,.2)";
+export const BUBBLE_CRESCENT_MIN_PX = 32;
+
+export interface BubbleSkinStyle {
+  background: string;
+  boxShadow: string;
+}
+
+export function bubbleHighlight(): string {
+  return `radial-gradient(circle at ${BUBBLE_HIGHLIGHT_X} ${BUBBLE_HIGHLIGHT_Y}, rgba(255,255,255,.8), transparent 40%)`;
+}
+
+export function bubbleBody(base: string): string {
+  return `radial-gradient(circle at 50% 46%, ${shade(base, BUBBLE_LIGHTEN)}, ${shade(base, BUBBLE_DARKEN)} 94%)`;
+}
+
+export function bubbleCrescentVisible(sizePx: number): boolean {
+  return sizePx >= BUBBLE_CRESCENT_MIN_PX;
+}
+
+function paintBubbleSkin(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -105,4 +133,33 @@ export function bubbleSkin(
 ): void {
   bubbleFilm(ctx, x, y, r, tint);
   bubbleGloss(ctx, x, y, r, sheenAngle(opts.sheenMs ?? 0, opts.reduced ?? false));
+}
+
+function cssBubbleSkin(base: string): BubbleSkinStyle {
+  return {
+    background: `${bubbleHighlight()}, ${bubbleBody(base)}`,
+    boxShadow: BUBBLE_INNER_ARC
+  };
+}
+
+/** 画布版：膜 + 光。CSS 版：传入底色 hex，返回 background / boxShadow。 */
+export function bubbleSkin(base: string): BubbleSkinStyle;
+export function bubbleSkin(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  tint: string,
+  opts?: { sheenMs?: number; reduced?: boolean }
+): void;
+export function bubbleSkin(
+  a: string | CanvasRenderingContext2D,
+  x?: number,
+  y?: number,
+  r?: number,
+  tint?: string,
+  opts?: { sheenMs?: number; reduced?: boolean }
+): BubbleSkinStyle | void {
+  if (typeof a === "string") return cssBubbleSkin(a);
+  paintBubbleSkin(a, x ?? 0, y ?? 0, r ?? 0, tint ?? "#ffffff", opts);
 }

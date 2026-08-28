@@ -1,7 +1,7 @@
 import { meta } from "./meta";
 export { meta };
 
-// 泡泡瞄准手 —— 泡泡龙玩法 + 关卡战役：
+// 泡泡瞄准手 —— 瞄准发射三消玩法 + 关卡战役：
 // 选关地图、进度存档、石泡/彩虹泡/黑洞/云挡板/下落新行五种机关。
 // 1.1 追加：下压顶板（每 N 发压下一整层石板）、反弹死角、限弹三章。
 // 瞄准虚线和真实飞行用同一个 simulateShot，保证指哪打哪。
@@ -28,6 +28,7 @@ import {
   failedSpeechLine,
   isStone,
   nearDeadline,
+  neighbors,
   parseLayout,
   pressCeiling,
   releaseLoneRainbows,
@@ -81,6 +82,41 @@ import {
   type Faller,
   type Loader,
 } from "./aim12";
+import {
+  BA_COLORS,
+  BA_TIMINGS,
+  aimDotRadius,
+  aimDots,
+  barrelAngle,
+  bounceOffset,
+  bounceStars,
+  floatPopScale,
+  fuseSparkPhase,
+  isSquashy,
+  paintBarrel,
+  paintBombCat,
+  paintBounceStar,
+  paintBubble,
+  paintInfinity,
+  paintLightBlobs,
+  paintLoadSlot,
+  paintRainbowOrb,
+  paintShooterBase,
+  paintShooterShadow,
+  paintSqueezeDot,
+  paintStarBadge,
+  paintStarRow,
+  paintStoneRock,
+  paintWarnTriangle,
+  paintVineLampBand,
+  rainbowSpinAngle,
+  stoneCracked,
+  swapPositions,
+  swapProgress,
+  trailFrames,
+  vineShadowAlpha,
+} from "./visual";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -95,6 +131,9 @@ interface GameApi {
 
 const FLY_SPEED = 820;
 const SAVE_KEY = "yiduo.bubble-aim.campaign.v2";
+/** 装填槽(下一发预览)的位置:沿用 1.2 原坐标,炮台伸最长也遮不到 */
+const NEXT_X = W - 46;
+const NEXT_Y = SHOOTER_Y + 2;
 /**
  * 无尽墙用的调色板:五色够热闹,又不至于凑不齐三连。
  * 实际每一行用几种由 `endlessPalette(rowsPushed, …)` 决定 —— 开局 3 色,压下来再逐步补满。
@@ -151,7 +190,7 @@ interface CrackFx {
   t: number;
 }
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { destroy: () => void; fxCount: () => number } {
   let destroyed = false;
   let raf = 0;
   let lastTime = 0;
@@ -190,6 +229,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   let floatText = "";
   let floatSize = 14;
   let floatTime = 0;
+  /** 换弹旋转过场剩余毫秒(纯视觉;逻辑交换在按下那一刻已完成) */
+  let swapFx = 0;
   const softMotion = (() => {
     const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
     return typeof mm === "function" ? !!mm("(prefers-reduced-motion: reduce)").matches : false;
@@ -212,6 +253,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   const pops: PopAnim[] = [];
   /** 失联的泡泡真的带着重力往下掉,不是原地消失 */
   const falls: Faller[] = [];
+  /** 掉落串的拖尾残影(3 帧渐隐;reduced 不生成) */
+  const trails: Array<{ x: number; y: number; color: string; life: number }> = [];
   const cracks: CrackFx[] = [];
   /** 掉落用的序号,同一批散得不一样 */
   let fallSeed = 0;
@@ -221,9 +264,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.innerHTML = `
     <style>
       .ba-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F4FF, #FFEFF7); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: none; }
-      .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
-      .ba-badge { background: #fff; border-radius: 14px; padding: 6px 8px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 6px rgba(90,140,200,.2); font-size: 12px; white-space: nowrap; }
-      .ba-btn { border: none; border-radius: 14px; padding: 6px 10px; font-size: 12px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
+      .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 8px; }
+      .ba-badge { background: linear-gradient(180deg, #ffffff, #F4F9FF); border: 1px solid rgba(90,140,200,.16); border-radius: 12px; padding: 5px 7px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 5px rgba(93,84,110,.16); font-size: 14px; white-space: nowrap; }
+      .ba-level { flex: 0 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; }
+      .ba-btn { border: none; border-radius: 12px; padding: 5px 9px; font-size: 14px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
       .ba-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
       .ba-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
@@ -246,9 +290,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       .bba-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 #E7C489; }
       .bba-swap { min-width: 44px; min-height: 34px; background: #FFDCEB; color: #A8467A; box-shadow: 0 3px 0 #EEB6CF; }
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
+      ${touchUpliftCss([".ba-btn", ".bba-mode", ".bba-swap"], { minWidth: true })}
+      ${bodyFontUpliftCss([".ba-msg"])}
     </style>
     <div class="ba-top">
-      <button class="ba-btn ba-back" type="button">🗺️ 地图</button>
+      <button class="ba-btn ba-back" type="button" title="回地图" aria-label="回地图">🗺️</button>
       <span class="ba-badge ba-level">第 1 关</span>
       <span class="ba-badge ba-count">🫧 0</span>
       <span class="ba-badge ba-shots">🎯 0</span>
@@ -426,6 +472,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     endless = false;
     chain = 0;
     floatTime = 0;
+    swapFx = 0;
     loader = freshLoader();
     msgEl.textContent = def.tip;
     updateHud();
@@ -445,6 +492,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     rowsPushed = 0;
     chain = 0;
     floatTime = 0;
+    swapFx = 0;
     grid = parseLayout(endlessStartRows(endlessPalette(0, ENDLESS_COLORS), Math.random));
     obstacles = {};
     dropQueue = [];
@@ -539,10 +587,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     updateHud();
   }
 
-  /** 换弹:当前和下一颗对调 */
+  /** 换弹:当前和下一颗对调(逻辑立刻换;150ms 只是视觉过场,reduced 瞬时) */
   function swapAmmo(): void {
     if (phase !== "play" || flight) return;
     loader = swapLoader(loader);
+    swapFx = softMotion ? 0 : BA_TIMINGS.swapMs;
     api.play("tap");
   }
 
@@ -700,124 +749,19 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   // ---------- 绘制 ----------
 
+  /** 石泡:岩石棱面三块 + 裂纹两态(读既有 cracked 状态,只换皮不写状态) */
   function drawStoneAt(x: number, y: number, cracked: boolean, radius = R, alpha = 1): void {
-    ctx.globalAlpha = alpha;
-    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.15, x, y, radius);
-    grad.addColorStop(0, "#EDEFF4");
-    grad.addColorStop(0.4, "#C9CBD4");
-    grad.addColorStop(1, "#8B8FA0");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    // 石头斑点
-    ctx.fillStyle = "rgba(110,115,132,0.5)";
-    ctx.beginPath();
-    ctx.arc(x + radius * 0.3, y + radius * 0.2, radius * 0.16, 0, Math.PI * 2);
-    ctx.arc(x - radius * 0.25, y + radius * 0.35, radius * 0.11, 0, Math.PI * 2);
-    ctx.fill();
-    if (cracked) {
-      ctx.strokeStyle = "#5A5E70";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x - radius * 0.5, y - radius * 0.3);
-      ctx.lineTo(x - radius * 0.1, y);
-      ctx.lineTo(x - radius * 0.35, y + radius * 0.45);
-      ctx.moveTo(x - radius * 0.1, y);
-      ctx.lineTo(x + radius * 0.45, y - radius * 0.15);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    paintStoneRock(ctx, x, y, radius, cracked, alpha);
   }
 
+  /** 彩虹泡:旋转七彩环 + 中心白星(reduced 静止) */
   function drawRainbowAt(x: number, y: number, radius = R, alpha = 1): void {
-    ctx.globalAlpha = alpha;
-    const spin = animTime * 0.8;
-    for (let k = 0; k < 6; k++) {
-      ctx.fillStyle = `hsl(${k * 60 + animTime * 40}, 85%, 72%)`;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.arc(x, y, radius, spin + (k * Math.PI) / 3, spin + ((k + 1) * Math.PI) / 3);
-      ctx.closePath();
-      ctx.fill();
-    }
-    const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.1, x, y, radius);
-    grad.addColorStop(0, "rgba(255,255,255,0.95)");
-    grad.addColorStop(0.55, "rgba(255,255,255,0.25)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(x, y, radius - 1, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    paintRainbowOrb(ctx, x, y, radius, rainbowSpinAngle(animTime * 1000, softMotion), alpha);
   }
 
-  /** 色弱友好:每种颜色配一个专属白色小图案,不靠颜色也能分清 */
-  function drawColorMark(x: number, y: number, color: string, radius: number): void {
-    const s = radius * 0.34;
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.strokeStyle = "rgba(255,255,255,0.7)";
-    ctx.lineWidth = Math.max(1.5, radius * 0.12);
-    ctx.beginPath();
-    if (color === "R") {
-      // 红:实心三角
-      ctx.moveTo(x, y - s);
-      ctx.lineTo(x + s, y + s * 0.8);
-      ctx.lineTo(x - s, y + s * 0.8);
-      ctx.closePath();
-      ctx.fill();
-    } else if (color === "Y") {
-      // 黄:实心菱形
-      ctx.moveTo(x, y - s * 1.15);
-      ctx.lineTo(x + s * 1.15, y);
-      ctx.lineTo(x, y + s * 1.15);
-      ctx.lineTo(x - s * 1.15, y);
-      ctx.closePath();
-      ctx.fill();
-    } else if (color === "B") {
-      // 蓝:空心圆环
-      ctx.arc(x, y, s, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (color === "G") {
-      // 绿:实心方块
-      ctx.fillRect(x - s * 0.85, y - s * 0.85, s * 1.7, s * 1.7);
-    } else if (color === "P") {
-      // 紫:十字
-      ctx.moveTo(x - s, y);
-      ctx.lineTo(x + s, y);
-      ctx.moveTo(x, y - s);
-      ctx.lineTo(x, y + s);
-      ctx.stroke();
-    }
-  }
-
-  /** 炸弹泡:深色小球加一圈跳动的火花,和普通颜色一眼分得开 */
+  /** 炸弹泡:可爱黑猫(耳朵 + 引信星火;reduced 静止火点),不是武器 */
   function drawBombAt(x: number, y: number, radius = R, alpha = 1): void {
-    ctx.globalAlpha = alpha;
-    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.12, x, y, radius);
-    grad.addColorStop(0, "#8E9BB5");
-    grad.addColorStop(0.45, "#4A5670");
-    grad.addColorStop(1, "#2B3348");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#FFD27A";
-    ctx.lineWidth = Math.max(1.5, radius * 0.14);
-    const spark = 0.7 + 0.3 * Math.sin(animTime * 10);
-    ctx.beginPath();
-    for (let k = 0; k < 6; k++) {
-      const a = (k * Math.PI) / 3 + animTime * 1.6;
-      ctx.moveTo(x + Math.cos(a) * radius * 0.45, y + Math.sin(a) * radius * 0.45);
-      ctx.lineTo(x + Math.cos(a) * radius * 0.82 * spark, y + Math.sin(a) * radius * 0.82 * spark);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    paintBombCat(ctx, x, y, radius, fuseSparkPhase(animTime * 1000, softMotion), alpha);
   }
 
   function drawBubbleAt(x: number, y: number, color: string, radius = R, alpha = 1): void {
@@ -826,39 +770,39 @@ export function mount(api: GameApi): { destroy: () => void } {
       return;
     }
     if (color === STONE || color === STONE_CRACKED) {
-      drawStoneAt(x, y, color === STONE_CRACKED, radius, alpha);
+      drawStoneAt(x, y, stoneCracked(color), radius, alpha);
       return;
     }
     if (color === RAINBOW) {
       drawRainbowAt(x, y, radius, alpha);
       return;
     }
+    // 薄膜描边 + 月牙反光 + 双高光 + 色觉标记(标记最后画,永不被盖)全在 paintBubble 里
     const [light, dark] = COLOR_FILL[color] ?? COLOR_FILL.R;
-    ctx.globalAlpha = alpha;
-    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.15, x, y, radius);
-    grad.addColorStop(0, "#FFFFFF");
-    grad.addColorStop(0.35, light);
-    grad.addColorStop(1, dark);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    drawColorMark(x, y + radius * 0.08, color, radius);
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.ellipse(x - radius * 0.32, y - radius * 0.4, radius * 0.24, radius * 0.15, -0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    paintBubble(ctx, x, y, radius, light, dark, color, alpha);
   }
 
   function drawBackground(): void {
     const th = THEMES[themeOfLevel(levelIndex)];
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, th.skyTop);
-    g.addColorStop(1, th.skyBottom);
+    if (endless) {
+      // 无尽墙不属于任何主题世界:用本档自己的双色渐变
+      g.addColorStop(0, BA_COLORS.baBgTop);
+      g.addColorStop(1, BA_COLORS.baBgBottom);
+    } else {
+      g.addColorStop(0, th.skyTop);
+      g.addColorStop(1, th.skyBottom);
+    }
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    if (th.dark) {
+    // 远处光斑两粒(静态纵深,reduced 保留)
+    paintLightBlobs(ctx, W, H);
+    // 顶部藤蔓吊灯装饰带:泡泡从藤架上垂下;顶板/墙压得越多藤影越深
+    const pressed = endless
+      ? rowsPushed
+      : pressEvery > 0 ? Math.max(0, (LEVELS[levelIndex].pressMax ?? 0) - pressLeft) : 0;
+    paintVineLampBand(ctx, W, vineShadowAlpha(pressed));
+    if (!endless && th.dark) {
       // 夜空主题:一闪一闪的小星星
       for (let k = 0; k < 26; k++) {
         const sx = (k * 73.7 + 11) % W;
@@ -884,10 +828,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.stroke();
     ctx.setLineDash([]);
     if (danger) {
-      ctx.fillStyle = `rgba(255, 70, 100, ${0.6 + blink * 0.4})`;
+      const warnColor = `rgba(255, 70, 100, ${0.6 + blink * 0.4})`;
+      ctx.fillStyle = warnColor;
       ctx.font = "bold 12px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("⚠️ 快到警戒线啦!", W / 2, dy + 16);
+      paintWarnTriangle(ctx, W / 2 - 50, dy + 12, 12, warnColor);
+      ctx.fillText("快到警戒线啦!", W / 2 + 7, dy + 16);
       ctx.textAlign = "left";
     }
   }
@@ -942,6 +888,20 @@ export function mount(api: GameApi): { destroy: () => void } {
         drawBubbleAt(cc.x, cc.y, color);
       }
     }
+    // 贴附成串的软泡泡之间点一粒挤压高光(静态体积感,reduced 保留);
+    // 只挑「后面」的邻居,每对只画一次。只读网格,不写任何格子。
+    for (let r = 0; r < grid.rows.length; r++) {
+      for (let c = 0; c < rowLength(grid, r); c++) {
+        if (!isSquashy(grid.rows[r][c])) continue;
+        const a = cellCenter(grid, r, c);
+        for (const [nr, nc] of neighbors(grid, r, c)) {
+          if (nr < r || (nr === r && nc <= c)) continue;
+          if (!isSquashy(grid.rows[nr][nc])) continue;
+          const b = cellCenter(grid, nr, nc);
+          paintSqueezeDot(ctx, a.x, a.y, b.x, b.y);
+        }
+      }
+    }
   }
 
   function drawAim(): void {
@@ -950,18 +910,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     // 剩下的留给小朋友自己判断,不把整条解直接送到眼前。
     const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy, obstacles);
     const shown = previewPath(result.path);
-    ctx.strokeStyle = result.swallowed ? "rgba(120, 90, 200, 0.75)" : "rgba(90, 150, 220, 0.75)";
-    ctx.lineWidth = 3;
-    ctx.setLineDash([7, 9]);
-    ctx.lineDashOffset = -animTime * 40;
-    ctx.beginPath();
-    shown.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
+    // 渐隐圆点串(功能件,reduced 保留):点径沿路径 4→2px 递减;
+    // 每个点都沿既有物理折线取样,一个物理坐标都不自己算。
+    const tone = result.swallowed ? "120, 90, 200" : "90, 150, 220";
+    for (const d of aimDots(shown)) {
+      ctx.fillStyle = `rgba(${tone}, ${(0.85 - d.t * 0.4).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, aimDotRadius(d.t), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 反弹点小星花:就是物理反射点本身,原样标出来
+    for (const s of bounceStars(shown)) paintBounceStar(ctx, s.x, s.y);
     // 预览线断掉的地方画个淡淡的箭头,提示「还会继续往那边飞」
     const tip = shown[shown.length - 1];
     const prev = shown[shown.length - 2];
@@ -996,7 +955,16 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /**
+   * 发射器炮台六道工序(四·补二):落影 → 木底座 → 旋转炮管(只读瞄准角)→
+   * 星星徽章 → 装填槽待命泡(±2px 弹跳,reduced 静止)→ 换弹 150ms 旋转过场。
+   * 逻辑上 swapLoader 早在按下那一刻换完,这里只演过场。
+   */
   function drawShooter(): void {
+    paintShooterShadow(ctx, SHOOTER_X, SHOOTER_Y, R);
+    paintShooterBase(ctx, SHOOTER_X, SHOOTER_Y, R);
+    paintBarrel(ctx, SHOOTER_X, SHOOTER_Y, barrelAngle({ dx: aimDx, dy: aimDy }), R);
+    // 座舱圈(沿用原白圈,压在炮管根部上)
     ctx.fillStyle = "#FFFFFF";
     ctx.beginPath();
     ctx.arc(SHOOTER_X, SHOOTER_Y, R + 9, 0, Math.PI * 2);
@@ -1004,24 +972,36 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.strokeStyle = "#BFD9F2";
     ctx.lineWidth = 3;
     ctx.stroke();
-    if (phase === "play" && shotsLeft > 0) {
-      drawBubbleAt(SHOOTER_X, SHOOTER_Y, loader.current);
-    }
     ctx.fillStyle = THEMES[themeOfLevel(levelIndex)].dark ? "rgba(255,255,255,0.85)" : "#5E86B0";
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("下一个", W - 46, SHOOTER_Y - 24);
+    ctx.fillText("下一个", NEXT_X, SHOOTER_Y - 24);
     ctx.textAlign = "left";
-    if (phase === "play" && shotsLeft > 1) {
-      drawBubbleAt(W - 46, SHOOTER_Y + 2, loader.next, R * 0.7);
+    paintLoadSlot(ctx, NEXT_X, NEXT_Y, R * 0.7);
+    if (phase === "play" && swapFx > 0) {
+      // 换弹过场:两颗泡上下弧对转 150ms;槽里那颗小、炮位那颗随进度长大
+      const p = swapProgress(BA_TIMINGS.swapMs - swapFx, softMotion);
+      const pos = swapPositions(p, SHOOTER_X, SHOOTER_Y, NEXT_X, NEXT_Y);
+      if (shotsLeft > 1) drawBubbleAt(pos.nxt.x, pos.nxt.y, loader.next, R * (1 - 0.3 * p));
+      if (shotsLeft > 0) drawBubbleAt(pos.cur.x, pos.cur.y, loader.current, R * (0.7 + 0.3 * p));
+    } else {
+      if (phase === "play" && shotsLeft > 1) {
+        drawBubbleAt(NEXT_X, NEXT_Y + bounceOffset(animTime * 1000, softMotion), loader.next, R * 0.7);
+      }
+      if (phase === "play" && shotsLeft > 0) {
+        drawBubbleAt(SHOOTER_X, SHOOTER_Y, loader.current);
+      }
     }
+    paintStarBadge(ctx, SHOOTER_X, SHOOTER_Y + R * 1.05, R);
   }
 
-  /** 连锁飘字:掉得越多字越大,从发射台上方慢慢升起来 */
+  /** 连锁飘字:白描边 + 轻弹入场(reduced 直接满尺寸),掉得越多字越大,慢慢升起 */
   function drawFloatText(dt: number): void {
     if (floatTime <= 0 || !floatText) return;
     floatTime -= dt;
     const k = Math.max(0, Math.min(1, floatTime / 1.2));
+    const pop = softMotion ? 1 : floatPopScale(k);
+    ctx.save();
     ctx.globalAlpha = k;
     ctx.fillStyle = "#F0872F";
     ctx.strokeStyle = "rgba(255,255,255,0.9)";
@@ -1029,10 +1009,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.font = `bold ${floatSize}px sans-serif`;
     ctx.textAlign = "center";
     const y = SHOOTER_Y - 70 - (1 - k) * 40;
-    ctx.strokeText(floatText, W / 2, y);
-    ctx.fillText(floatText, W / 2, y);
-    ctx.textAlign = "left";
-    ctx.globalAlpha = 1;
+    ctx.translate(W / 2, y);
+    ctx.scale(pop, pop);
+    ctx.strokeText(floatText, 0, 0);
+    ctx.fillText(floatText, 0, 0);
+    ctx.restore();
   }
 
   function drawFlight(): void {
@@ -1053,6 +1034,40 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawBubbleAt(x, y, flight.color, radius);
   }
 
+  /**
+   * 掉落串(图层④):先画拖尾残影(3 帧渐隐,reduced 不生成),再推重力画本体。
+   * 掉落仍走 aim12 的重力:一帧一帧经过中间位置,关掉动效也只是掉得更快。
+   */
+  function drawFalls(dt: number): void {
+    for (let i = trails.length - 1; i >= 0; i--) {
+      const tr = trails[i];
+      tr.life -= 1;
+      if (tr.life <= 0) {
+        trails.splice(i, 1);
+        continue;
+      }
+      const k = tr.life / BA_TIMINGS.trailFrames;
+      ctx.globalAlpha = 0.28 * k;
+      ctx.fillStyle = (COLOR_FILL[tr.color] ?? COLOR_FILL.R)[1];
+      ctx.beginPath();
+      ctx.arc(tr.x, tr.y, R * (0.7 + 0.2 * k), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const trailLife = trailFrames(softMotion);
+    for (let i = falls.length - 1; i >= 0; i--) {
+      const before = falls[i];
+      if (trailLife > 0) trails.push({ x: before.x, y: before.y, color: before.color, life: trailLife });
+      const stepped = stepFaller(before, dt, fallGravity(softMotion));
+      falls[i] = stepped;
+      if (fallenOut(stepped)) {
+        falls.splice(i, 1);
+        continue;
+      }
+      drawBubbleAt(stepped.x, stepped.y, stepped.color, R, Math.max(0.3, 1 - stepped.age * 0.6));
+    }
+  }
+
   function drawAnims(dt: number): void {
     for (let i = pops.length - 1; i >= 0; i--) {
       const p = pops[i];
@@ -1068,16 +1083,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.beginPath();
       ctx.arc(p.x, p.y, R * (1 + k), 0, Math.PI * 2);
       ctx.stroke();
-    }
-    // 掉落走 aim12 的重力:一帧一帧经过中间位置,关掉动效也只是掉得更快
-    for (let i = falls.length - 1; i >= 0; i--) {
-      const stepped = stepFaller(falls[i], dt, fallGravity(softMotion));
-      falls[i] = stepped;
-      if (fallenOut(stepped)) {
-        falls.splice(i, 1);
-        continue;
-      }
-      drawBubbleAt(stepped.x, stepped.y, stepped.color, R, Math.max(0.3, 1 - stepped.age * 0.6));
     }
     for (let i = cracks.length - 1; i >= 0; i--) {
       const cfx = cracks[i];
@@ -1105,7 +1110,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
       ctx.font = "bold 21px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("♾️ 无尽墙", W / 2, 212);
+      paintInfinity(ctx, W / 2 - 34, 205, 24, `rgba(62, 124, 184, ${a})`);
+      ctx.fillText("无尽墙", W / 2 + 13, 212);
       ctx.font = "13px sans-serif";
       ctx.fillText(`每 ${ENDLESS_PUSH_EVERY} 发压下一行,能顶多久?`, W / 2, 238);
       ctx.fillText(`最好成绩 ${bestEndless} 分`, W / 2, 258);
@@ -1149,8 +1155,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.font = "bold 24px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("清空啦！", W / 2, 210);
-      ctx.font = "26px sans-serif";
-      ctx.fillText("⭐".repeat(wonStars) + "☆".repeat(3 - wonStars), W / 2, 248);
+      paintStarRow(ctx, W / 2, 240, 11, wonStars);
       // 14px 深蓝：小字对比 5.5:1（标题的 #3E7CB8 只有 4.4:1，13px 小字不达 AA）
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#3a6c9e";
@@ -1177,12 +1182,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /** 图层序(四·补一):①背景+光斑 ②藤蔓吊灯(都在 drawBackground)→ 机关 → ③网格串
+   *  → ④掉落拖尾 → ⑤飞行泡 → ⑥瞄准点串(功能件) → ⑦炮台 → ⑧星花/飘分 → ⑨HUD */
   function draw(dt: number): void {
     drawBackground();
     drawObstacles();
     drawGrid();
-    drawAim();
+    drawFalls(dt);
     drawFlight();
+    drawAim();
     drawShooter();
     drawAnims(dt);
     drawFloatText(dt);
@@ -1203,6 +1211,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     animTime += dt;
     phaseTime += dt;
     if (bannerTime > 0) bannerTime -= dt;
+    if (swapFx > 0) swapFx = Math.max(0, swapFx - dt * 1000);
 
     if (screen === "play") {
       // 飞行推进
@@ -1327,12 +1336,25 @@ export function mount(api: GameApi): { destroy: () => void } {
       destroyed = true;
       cancelAnimationFrame(raf);
       stopSpeaking();
+      // 粒子与计时当场归零,不留尾巴
+      pops.length = 0;
+      falls.length = 0;
+      trails.length = 0;
+      cracks.length = 0;
+      floatText = "";
+      floatTime = 0;
+      swapFx = 0;
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
       wrap.remove();
+    },
+    /** 测试探针:还挂着多少视觉粒子 / 计时(destroy 后必须是 0) */
+    fxCount() {
+      return pops.length + falls.length + trails.length + cracks.length +
+        (floatTime > 0 ? 1 : 0) + (swapFx > 0 ? 1 : 0);
     },
   };
 }
