@@ -78,7 +78,11 @@ export function mixColor(a: string, b: string, t: number): string {
 
 const CSS = `
 .dmz-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEA,#F4F0FF);
-  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
+  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;
+  /* 撑满壳层舞台:进门菜单只有半屏内容时,下面不再露一大块白底(1.3 UX 走查) */
+  flex:1 0 auto;display:flex;flex-direction:column;}
+.dmz-view{flex:1;display:flex;flex-direction:column;min-height:0;}
+.dmz-view>*{flex:0 0 auto;}
 .dmz-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
 .dmz-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#8a6a2f;
   box-shadow:0 2px 6px rgba(180,160,90,.25);white-space:nowrap;}
@@ -97,7 +101,9 @@ const CSS = `
 .dmz-pad-t{font-size:14px;font-weight:900;color:#8b7bb0;}
 .dmz-pad-star .dmz-key{color:#4560ab;box-shadow:0 3px 0 rgba(84,112,192,.3);}
 .dmz-pad-star .dmz-key:active{box-shadow:0 1px 0 rgba(84,112,192,.3);}
-.dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
+.dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;
+  /* 菜单占满剩余高并垂直居中,别缩在舞台顶上 */
+  flex:1;justify-content:center;}
 .dmz-title{font-size:19px;font-weight:900;color:#7a5da8;text-align:center;}
 .dmz-sub{font-size:14px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
 .dmz-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
@@ -904,6 +910,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   style.textContent = CSS;
   wrap.appendChild(style);
   const view = document.createElement("div");
+  view.className = "dmz-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
 
