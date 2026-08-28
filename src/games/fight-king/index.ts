@@ -306,6 +306,35 @@ const CANVAS_H_NARROW = 470;
 /** 低于这个 CSS 宽度就算窄屏 */
 const NARROW_PX = 520;
 
+/** 对局画面显示高的下限:再矮两个人就看不清了,低于它宁可交给舞台滚动 */
+export const FIGHT_MIN_H = 150;
+
+/**
+ * 画面盒子(`.fk-stage`)该钳到多宽(null = 装得下,不用钳)。
+ *
+ * 画布是 `width:100%; height:auto` 的 replaced 元素:显示高 = 显示宽 × (backingH/backingW)。
+ * 横屏 640×360 上按宽算显示高 ~267px,而画布下面还有整排触屏摇杆——
+ * `.game-stage` 的可视高只剩 ~280px,摇杆整排掉在裁切线以下,纯触屏一步都动不了。
+ * 把盒子宽度钳到「可视余量 ÷ 高宽比」,画布高度就跟着回到裁切线以内;
+ * HUD / 横幅 / 暂停面板都是盒子里的 absolute 层,跟着盒子一起走,不会错位。
+ * 量不出余量(测试桩 / 独立挂载)时调用方不给数,这里返回 null,一个样式都不写。
+ */
+export function stageMaxWidthPx(
+  cssW: number,
+  ratioHW: number,
+  roomPx: number,
+  minH = FIGHT_MIN_H
+): number | null {
+  if (!Number.isFinite(cssW) || cssW <= 0) return null;
+  if (!Number.isFinite(ratioHW) || ratioHW <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const wantH = cssW * ratioHW;
+  const capH = Math.max(minH, Math.floor(roomPx - 4));
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (wantH <= capH + 1) return null;
+  return Math.max(120, Math.floor(capH / ratioHW));
+}
+
 function prefersReducedMotion(): boolean {
   try {
     const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
@@ -497,11 +526,70 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
   /** 按容器宽度切换画布比例；只有真的变了才动 canvas.width，免得每帧清空画面 */
   function syncLayout(): void {
-    const cssW = canvas.clientWidth || (globalThis as { innerWidth?: number }).innerWidth || 400;
+    // 拿整个 wrap 的宽当「天然宽」:画面盒子可能被 fitStage 钳过,
+    // 按钳过的宽判窄屏会误切到更高的窄屏比例,越钳越窄
+    const cssW =
+      wrap.clientWidth || canvas.clientWidth || (globalThis as { innerWidth?: number }).innerWidth || 400;
     const narrow = cssW > 0 && cssW < NARROW_PX;
     if (narrow === narrowLayout) return;
     narrowLayout = narrow;
     canvas.height = narrow ? CANVAS_H_NARROW : CANVAS_H_WIDE;
+  }
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = stage.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /** 量布局是回流读,不必每帧;draw 每 15 帧(~250ms)量一次 */
+  let fitTick = 0;
+
+  /** 画面装不进可视余量就把 .fk-stage 钳窄(见 stageMaxWidthPx 的注释) */
+  function fitStage(): void {
+    if (fitTick++ % 15 !== 0) return;
+    if (!stage.style || typeof stage.getBoundingClientRect !== "function") return;
+    if (typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    const stageRect = stage.getBoundingClientRect();
+    if (!Number.isFinite(stageRect.top)) return;
+    // 画面下面还有多高的家当(触屏摇杆两块):它们的高度不随画面高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(stageRect));
+    const room = clip - stageRect.top - below;
+    const cssW = wrap.clientWidth || 0;
+    const cap = stageMaxWidthPx(cssW, canvas.height / canvas.width, room);
+    if (cap === null) {
+      if (stage.style.maxWidth) {
+        stage.style.maxWidth = "";
+        stage.style.marginLeft = "";
+        stage.style.marginRight = "";
+      }
+      return;
+    }
+    const px = `${cap}px`;
+    if (stage.style.maxWidth !== px) {
+      stage.style.maxWidth = px;
+      stage.style.marginLeft = "auto";
+      stage.style.marginRight = "auto";
+    }
   }
 
   canvas.setAttribute("role", "img");
@@ -1394,6 +1482,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   function draw(): void {
     if (!g) return;
     syncLayout();
+    fitStage();
     const H = canvas.height;
     const line = groundY();
     g.setTransform(1, 0, 0, 1, 0, 0);
