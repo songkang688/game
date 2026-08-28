@@ -266,18 +266,37 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){
   .dvs-meter i{transition:none;}
 }
+/* N-26:矮横屏把键排搬到画布旁边,别再堆在画布底下。
+   先合版那一版把 .dvs-pad 改成了 flex-direction:column —— 七枚键竖着摞成 365px 一条,
+   而且 .dvs-arena 一变 grid,作为 flex 子项的 .dvs-wrap 的 max-content 塌到 332px,
+   整个擂台缩到屏幕中间一条。实测五个模式全线下(闯关裁 500、团队赛裁 526)。
+   这里重排:单人局「画布左 + 键排右」,双人局「键排 A 左 + 画布中 + 键排 B 右」,
+   键排照旧是会折行的横排,46px 热区一格不让。 */
 @media (max-height:520px) and (orientation:landscape){
+  /* .dvs-wrap 是 .game-stage 这个 flex 容器的子项,擂台一变 grid 就会按 max-content 缩水 */
+  .dvs-wrap{width:100%;}
   .dvs-arena{
-    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:6px;
+    display:grid;column-gap:8px;align-items:start;
+    grid-template-columns:minmax(0,1fr) minmax(190px,238px);
+    grid-template-areas:"bar bar" "canvas pads" "canvas cards" "canvas hint";
   }
-  .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
-  .dvs-canvas{grid-column:2;max-width:100%;}
-  .dvs-pads{
-    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
-    pointer-events:none;padding:0 2px 6px;background:transparent;
+  .dvs-arena>.dvs-bar{grid-area:bar;padding:4px 10px;}
+  .dvs-arena>.dvs-canvas{grid-area:canvas;align-self:start;}
+  .dvs-arena>.dvs-pads{grid-area:pads;padding:6px 8px 0;}
+  .dvs-arena>.dvs-cards{grid-area:cards;padding:6px 8px;}
+  .dvs-arena>.dvs-hint{grid-area:hint;padding:0 8px 6px;}
+  .dvs-arena .dvs-pad{justify-content:center;gap:5px;}
+  /* 元气「颜色条 + 数字」是双通道,矮屏也不许砍掉数字那条,只收行距 */
+  .dvs-arena .dvs-card{flex:1 1 100%;padding:4px 8px;}
+  .dvs-arena .dvs-meter{margin:3px 0 2px;}
+  /* 双人局(两块键排):一人一边,画布回到中间 */
+  .dvs-arena:has(.dvs-pad + .dvs-pad){
+    grid-template-columns:minmax(107px,124px) minmax(0,1fr) minmax(107px,124px);
+    grid-template-areas:"bar bar bar" "padA canvas padB" "padA cards padB" "padA hint padB";
   }
-  .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
-  .dvs-pad .dvs-padname{width:auto;}
+  .dvs-arena:has(.dvs-pad + .dvs-pad)>.dvs-pads{display:contents;}
+  .dvs-arena:has(.dvs-pad + .dvs-pad) .dvs-pad:first-child{grid-area:padA;padding:6px 0 0 8px;}
+  .dvs-arena:has(.dvs-pad + .dvs-pad) .dvs-pad:last-child{grid-area:padB;padding:6px 8px 0 0;}
 }
 `;
 
@@ -703,10 +722,18 @@ function mountArena(opts: ArenaOptions): Arena {
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 
-  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
-  function stageClipBottom(): number {
+  /**
+   * 平台舞台(`.game-stage`,定高会裁内容)的下沿,外加一路上滚掉的高度。
+   *
+   * 舞台自己会滚,闯关那一路外面还套着 level99 的 `.l99-view`。滚下去之后
+   * `getBoundingClientRect().top` 跟着往上跑,按它算余量会越算越大,该钳的时候不钳。
+   * 把沿途 scrollTop 加回去,余量就跟滚没滚无关了。
+   */
+  function stageBox(): { clip: number; scrolled: number } {
     let node: HTMLElement | null = root.parentElement ?? null;
-    for (let i = 0; node && i < 10; i++) {
+    let scrolled = 0;
+    for (let i = 0; node && i < 12; i++) {
+      scrolled += typeof node.scrollTop === "number" ? node.scrollTop : 0;
       if (typeof node.className === "string" && node.className.includes("game-stage")) {
         if (typeof node.getBoundingClientRect !== "function") break;
         const r = node.getBoundingClientRect();
@@ -714,28 +741,32 @@ function mountArena(opts: ArenaOptions): Arena {
           typeof node.clientHeight === "number" && node.clientHeight > 0
             ? (node.clientTop || 0) + node.clientHeight
             : r.height;
-        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) {
+          return { clip: r.top + inner, scrolled };
+        }
         break;
       }
       node = node.parentElement ?? null;
     }
-    return Number.NaN;
+    return { clip: Number.NaN, scrolled: 0 };
   }
 
   /** 画布显示高按可视余量钳一刀(见 canvasDisplayCapPx 的注释) */
   function fitDisplay(): void {
     if (!canvas.style) return;
     if (typeof canvas.getBoundingClientRect !== "function" || typeof root.getBoundingClientRect !== "function") return;
-    const clip = stageClipBottom();
-    if (!Number.isFinite(clip)) return;
-    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」。
+    // 舞台下沿与滚动量也要在这之后读——放开钳位会回流一次,
+    // 浏览器的滚动锚定还会顺手改一次 scrollTop,读早了就不是同一份布局。
     canvas.style.maxHeight = "";
     canvas.style.maxWidth = "";
+    const { clip, scrolled } = stageBox();
+    if (!Number.isFinite(clip)) return;
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
     // 画布下面的家当(名牌 / 提示 / 触屏按钮排):高度不随画布显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(root.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    const px = canvasDisplayCapPx(canvasRect.height, clip - (canvasRect.top + scrolled) - below - 4);
     if (px !== null) {
       // CSS 里画布是 width:100%,只钳高会压扁画面;宽也按 16:9 一起钳才是等比
       canvas.style.maxHeight = `${px}px`;
@@ -1057,8 +1088,12 @@ function mountArena(opts: ArenaOptions): Arena {
   }
 
   /* ---- 主循环 ---- */
+  /** 量布局是回流读,不必每帧;主循环每 20 帧(~330ms)回头复量一次,布局落定后收敛 */
+  let refitTick = 0;
+
   function frame(now: number): void {
     if (destroyed) return;
+    if (refitTick++ % 20 === 0) resize();
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
     last = now;
     if (hitStop > 0) {
