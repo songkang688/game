@@ -396,6 +396,17 @@ export function mount(api: GameApi): { destroy: () => void } {
           background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
           box-shadow: 0 -8px 14px rgba(90,140,190,.16);
         }
+        /* N-87:菜单规则/收藏/开跑钉底。不改上面 .dr-btns */
+        .dr-setup-cta {
+          position: sticky; bottom: 0; z-index: 4; display: flex; gap: 6px; flex-wrap: wrap;
+          margin-top: 6px; padding: 6px 0 2px;
+          background: linear-gradient(180deg, rgba(233,244,255,.4), #E9F4FF 36%, #FFEEF6);
+        }
+        .dr-setup-cta .dr-softbtn, .dr-setup-cta .dr-start {
+          flex: 1 1 140px; width: auto; min-height: 44px; padding: 10px 8px; font-size: 15px;
+        }
+        .dr-setup { gap: 8px; }
+        .dr-seg button { min-height: 44px; padding: 8px 6px; }
       }
       .dr-pause { background: #E3E8FF; color: #4A55A8; }
       .dr-again { background: #D9F2C4; color: #4A7A2A; }
@@ -464,9 +475,11 @@ export function mount(api: GameApi): { destroy: () => void } {
         <p class="dr-hint dur-handicap-hint">默认关闭。打开以后画面上会一直写着「让分」，谁都看得见。</p>
       </div>
       <p class="dr-ghostline"></p>
-      <button class="dr-softbtn dr-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
-      <button class="dr-softbtn dr-collectbtn dr-hidden" type="button">🎁 我的收藏册</button>
-      <button class="dr-start" type="button">准备好，开跑 ▶</button>
+      <div class="dr-setup-cta">
+        <button class="dr-softbtn dr-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
+        <button class="dr-softbtn dr-collectbtn dr-hidden" type="button">🎁 我的收藏册</button>
+        <button class="dr-start" type="button">准备好，开跑 ▶</button>
+      </div>
     </div>
     <div class="dr-game dr-hidden">
       <div class="dur-stage">
