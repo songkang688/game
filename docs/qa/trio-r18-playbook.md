@@ -107,3 +107,59 @@
 3. 干净清单（学习员已量，下轮不必再测）：landlord-cards 915、暂停覆盖层、root×bowling 直达条（27–71 h44 + 永久文案）、root×xiangqi 残局学堂、bowling 1024×768 地图、hue-hand/sudoku 390 竖屏。
 4. 每条修复：915 前后数字 + 小测试；`npm test`/`npm run build` 只增不减。
 5. 交卷报告写 `docs/qa/trio-r18-tester-A.md` / `trio-r18-tester-B.md`（新文件，勿覆盖他人）。
+
+---
+
+# 附录 · 第二学习员补充派单（N-100…N-105；与上文同轮，优先级并入）
+
+> 依据本文件同名笔记的「附录」段（分支 `cursor/trio-r18-learner-c337`，基线 `e58ccceb` 实测）。
+> 撞号已让位先合版；以下全部是上文没有的**新伤**。独占面在上表基础上**追加**：
+> A 追加 `src/games/level99.ts`（N-100）；B 追加 `src/games/{combo-clash,mahjong-bloom,bumper-cars,ice-fire-forest,landlord-cards}/**`（N-101…N-105）。
+
+## B 第零优先 · N-105 主干红灯抢修 🔧（先于一切）
+
+- `e58ccceb` 起 `npx vitest run` 即红：**2 文件 / 5 用例**——PR #78 `81b228c2` 的 `@media (max-height:500px)` 把
+  `combo-clash .cc-info`、`mahjong-bloom .mj-goal` 调到 **14px**（`.mj-goal` 还锁 nowrap），破 360px 文字 ≥16px 守门
+  （`src/ui/mobileText.test.ts` 3 例 + `src/games/window1-mobile-text.test.ts` 2 例）。
+- 修法：两处字号回 **16px**、`.mj-goal` 解 nowrap（高度紧就收 padding/max-height 两行截断），**不许砍/放宽守门测试**，不许回退 N-75/76 键排。
+- 验收：全量 vitest 全绿（**1193 files / 19489 tests**，此为 `e58ccceb` 实测总数；上文红线里的 1182/19477 是 PR #78 合入前旧水位）+ 915×412 复量 `.cc-info`/`.mj-goal` 仍在屏。
+
+## A · N-100 level99 进场「开始冒险 ▶」+ 工具行卷出视口顶 🔧
+
+- 章节 tab 折多行的款，915×412 进场 `.l99-view` 被当前关 scrollIntoView 卷到 300+：word-garden `.l99-continue` **-154**、
+  ice-fire-forest **-104**、xiangqi **-50**、landlord-cards **-52**、bumper-cars **-39**；root×pinyin-train「🎫 直达」**-54**。
+  bowling 等 tab 单行款不触发（干净清单 27~71 IN 不矛盾）。
+- 修法（选其一）：进场滚动锚定 clamp 到工具行以下 / 当前关只在 `.l99-map` 盒内居中；或 `max-height:500px` 档把
+  `.l99-continue`+`.l99-tools` sticky 到 `.l99-view` 顶。**红线**：不动 `showMap(true)` 四处调用（N-39/N-63 前车）、
+  模式芯片行（`.ld-open`/`.bc-open`/`.xq-mode` 实测 IN）勿动、paneH 常量勿碰。
+- 验收：上述 6 款 915 进场 `.l99-continue` 与 root 直达条 top ≥ 0、当前关仍在屏；390×844（pinyin-train CTA 43~87）与
+  1024×768（match-stars 162~206）不回退。
+
+## B · N-101 duo-vs-star 赛中触屏键柱全线下 🔧（重；与 N-94 连修）
+
+- 双人对战开打后 915×412：canvas 122~302 IN，两列 ◀▲▼▶✋💥🤝（h=46）**400~746 全 OUT**，触屏两人没法打。
+- 修法参照 N-75 fixed 配方：矮横屏两列键柱放 canvas 左右（x:294~622 之外全空），或压缩键距钉进 412。**勿改** `battle.ts` 状态机/键盘映射/出招判定。
+- 验收：915 十四键 bottom ≤ 412、h ≥ 44；390×844 竖屏不回退。修 N-94 时顺带把 `.dvs-pick` 30 / `.dvs-back` 40 抬到 44。
+
+## B · N-102 bumper-cars 对战画布过小 + 触区 🔧
+
+- 915×412 画布 **140×140**（390 竖屏同局 331×331）；`.bc-open` h=**34**、`.bc-pick` h=**32**；1024×768 两颗「🛑刹车」**741~785** 底切 17px。
+- 修法：矮横屏 fit 按「可用高 − 键排」算而非按宽缩；触区 min-height 44；1024 档键排进 768。**勿改**碰撞世界尺寸/回合逻辑。
+- 验收：915 画布显示边 ≥ 260px 且 IN；三视口冲撞/刹车全 IN h≥44（390 现绿 705~799 勿回退）。
+
+## B · N-103 ice-fire-forest 闯关画布底切 59px 🔧
+
+- 915×412 L1 主画布 **232~471**（切 59），谜题下几行看不见；键垫 253~393 IN 勿动。
+- 修法：矮横屏钳画布显示高（「改显示不改世界」口径）或画布上移贴 HUD。**勿改**关卡网格数据/双人判定。
+- 验收：915 canvas bottom ≤ 412；390×844 不回退。
+
+## B · N-104 landlord-cards「◀ 回选关」触区 33px 🔧（轻，顺手）
+
+- `.ld-back` h=**33** → min-height 44；叫分行 299~347、暂停 350~394 已绿勿动。
+
+## 附录收口
+
+1. B 先 N-105 修绿主干，再 N-98 / N-95 / N-94（+N-101）/ N-96，随后 N-102/N-103/N-104 与旧号，做或书面降级。
+2. A 在 N-99 / N-97 之外把 N-100 修掉或书面说明；若在途 r18-A 的「选关滚动」已合类似修法，先回归再决定。
+3. 完成水位以 **1193 / 19489 全绿**为底线（含 N-105 修复），只增不减。
+4. 观察项（sprout-defense / ocean-munch 全 canvas 内部热区）不开号，下轮学习员带像素级抽验工装再定。
