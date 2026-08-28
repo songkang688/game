@@ -2933,6 +2933,180 @@ reg("🪸", "珊瑚枝", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 10 章 连环挑战场（W8R1-04 余量收官 · FLIPPABLE ▲四张非对称） ----
+
+reg("⏱️", "小秒表", () => {
+  // FLIPPABLE ▲；双胞胎 ⏱️↔⌛ 的区分位：表冠按钮偏右上（⌛ 是细沙腰木框）
+  const rim = P.blueDeep;
+  const face = "#fdf6ee";
+  return (
+    gs(24, 43, 12) +
+    `<g transform="rotate(26 24 27)">` +
+    // 表冠（旋转后偏向右上）
+    `<rect x="21.6" y="8" width="4.8" height="5" rx="1.4" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.5"/>` +
+    `<rect x="22.8" y="12.5" width="2.4" height="3" fill="${o(rim)}"/>` +
+    `<circle cx="24" cy="27" r="12.8" fill="${rim}" stroke="${o(rim)}" stroke-width="2"/>` +
+    `</g>` +
+    `<path d="M28 39.2 a12.8 12.8 0 0 0 7.5 -19.5 a15 15 0 0 1 -7.5 19.5" fill="${shade(rim, -15)}" opacity=".8" transform="rotate(26 24 27)"/>` +
+    `<circle cx="24" cy="27" r="9.4" fill="${face}" stroke="${o(rim)}" stroke-width="1.5"/>` +
+    `<path d="M24 19.4 L24 21.6 M24 32.4 L24 34.6 M16.4 27 L18.6 27 M29.4 27 L31.6 27" stroke="${o(rim)}" stroke-width="1.4" stroke-linecap="round"/>` +
+    `<path d="M24 27 L28.6 21.8" stroke="${P.red}" stroke-width="2" stroke-linecap="round"/>` +
+    `<circle cx="24" cy="27" r="1.7" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.1"/>` +
+    hi(18.5, 20.5, 2.2, 1.4)
+  );
+});
+
+reg("🏅", "小奖牌", () => {
+  // FLIPPABLE ▲：绶带整体甩向左上，奖章坠在右下，剪影左右非对称
+  const ribbon = P.red;
+  const medal = P.gold;
+  return (
+    gs(27, 43.5, 11) +
+    `<polygon points="12,4.5 20.5,4.5 24.5,21 13.5,23.5 10,14 13.5,13" fill="${ribbon}" stroke="${o(ribbon)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<polygon points="20.5,4.5 28.5,4.5 30.5,17.5 24.5,21" fill="${shade(ribbon, -16)}" stroke="${o(ribbon)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<circle cx="27.5" cy="30" r="11" fill="${medal}" stroke="${o(medal)}" stroke-width="2"/>` +
+    `<path d="M27.5 41 a11 11 0 0 0 10.1 -15.3 a13 13 0 0 1 -10.1 15.3" fill="${shade(medal, -14)}" opacity=".8"/>` +
+    `<circle cx="27.5" cy="30" r="7.6" fill="none" stroke="${shade(medal, -22)}" stroke-width="1.4"/>` +
+    `<polygon points="${starPts(27.5, 30, 5.2)}" fill="#fff6d8" stroke="${o(medal)}" stroke-width="1.3" stroke-linejoin="round"/>` +
+    hi(22.5, 23.5, 2.2, 1.4)
+  );
+});
+
+reg("🎯", "小箭靶", () => {
+  const red = P.red;
+  return (
+    gs(23, 43, 14) +
+    `<circle cx="23" cy="26" r="14.5" fill="${red}" stroke="${o(red)}" stroke-width="2"/>` +
+    `<path d="M23 40.5 a14.5 14.5 0 0 0 13.3 -20.2 a17 17 0 0 1 -13.3 20.2" fill="${shade(red, -14)}" opacity=".75"/>` +
+    `<circle cx="23" cy="26" r="10" fill="#fdf6ee" stroke="${o("#d8ccb0")}" stroke-width="1.6"/>` +
+    `<circle cx="23" cy="26" r="5.8" fill="${red}" stroke="${o(red)}" stroke-width="1.5"/>` +
+    `<circle cx="23" cy="26" r="2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.2"/>` +
+    // 飞镖（从右上方射中靶心旁）
+    `<path d="M27 21.5 L38 9" stroke="${o(P.wood)}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<polygon points="25.6,23.2 29.5,21.5 27.5,19.4" fill="#8fa2b8" stroke="${o("#8fa2b8")}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    `<polygon points="36,6.5 41.5,5 40,10.5 36.5,11.5" fill="${P.teal}" stroke="${o(P.teal)}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    hi(16.5, 18, 2.4, 1.5)
+  );
+});
+
+reg("🎲", "小骰子", () => {
+  const top = "#fdf6ee";
+  const out = o("#c8bfae");
+  const pip = (x: number, y: number, rx = 2, ry = 1.6, rot = 0): string =>
+    `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${INK}" transform="rotate(${rot} ${x} ${y})"/>`;
+  return (
+    gs(24, 43.5, 13) +
+    // 2.5D 三面体
+    `<polygon points="24,6.5 37.5,13 24,19.5 10.5,13" fill="${top}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<polygon points="10.5,13 24,19.5 24,38.5 10.5,32" fill="${shade(top, -10)}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<polygon points="37.5,13 24,19.5 24,38.5 37.5,32" fill="${shade(top, -20)}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    // 顶面 1 点 / 左面 2 点 / 右面 3 点
+    pip(24, 13, 2.6, 1.7) +
+    pip(16, 22.5, 1.9, 1.5, -8) + pip(18.5, 28.5, 1.9, 1.5, -8) +
+    pip(28.5, 23.5, 1.9, 1.5, 8) + pip(30.5, 27.5, 1.9, 1.5, 8) + pip(32.5, 31.5, 1.9, 1.5, 8) +
+    hi(18, 10.5, 2.4, 1.3)
+  );
+});
+
+reg("🚀", "小火箭", () => {
+  // FLIPPABLE ▲：斜飞 + 尾焰甩向一侧，剪影左右非对称；圆头圆窗通用简笔（去色剪影自查）
+  const body = "#eef2fa";
+  const trim = P.rose;
+  return (
+    `<g transform="rotate(38 24 24)">` +
+    // 尾焰（偏向一侧）
+    `<path d="M21 36 Q17.5 41.5 20.5 46 Q22 42.5 24 41 Q23.5 44 26 46.5 Q29.5 42 26.5 36 Z" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    `<path d="M22.5 36.5 Q21.5 40.5 23.8 43 Q25.5 40 24.8 36.5 Z" fill="${P.gold}"/>` +
+    // 側鳍
+    `<path d="M19.5 25 Q13.5 28 13 35.5 Q17 33.5 19.5 33 Z" fill="${trim}" stroke="${o(trim)}" stroke-width="1.7" stroke-linejoin="round"/>` +
+    `<path d="M28.5 25 Q34.5 28 35 35.5 Q31 33.5 28.5 33 Z" fill="${trim}" stroke="${o(trim)}" stroke-width="1.7" stroke-linejoin="round"/>` +
+    // 机身与鼻锥
+    `<path d="M24 3.5 Q30.5 9.5 30.5 20 Q30.5 30 28 36 L20 36 Q17.5 30 17.5 20 Q17.5 9.5 24 3.5 Z" fill="${body}" stroke="${o("#b8c4d8")}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M28 36 Q30.5 30 30.5 20 Q30.5 12.5 27 7 Q28.5 14 28.2 21.5 Q27.8 30 25.5 36 Z" fill="${shade(body, -10)}" opacity=".8"/>` +
+    `<path d="M24 3.5 Q27.5 6.5 29.3 11.5 Q26.8 9.5 21 9.8 Q22 6 24 3.5 Z" fill="${trim}" stroke="${o(trim)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    // 圆舷窗
+    `<circle cx="24" cy="17.5" r="4.2" fill="#bfe3f4" stroke="${o(P.blue)}" stroke-width="2"/>` +
+    `<path d="M21.8 16 Q23 14.5 24.8 14.5" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity=".9"/>` +
+    `</g>` +
+    hi(14, 14, 2.2, 1.4)
+  );
+});
+
+reg("💎", "亮宝石", () => {
+  const c = P.teal;
+  const out = o(c);
+  return (
+    gs(24, 42.5, 13) +
+    `<polygon points="14,13 34,13 41,23 24,41 7,23" fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<polygon points="14,13 19.5,23 7,23" fill="${shade(c, 16)}" opacity=".75"/>` +
+    `<polygon points="34,13 41,23 28.5,23" fill="${shade(c, -12)}" opacity=".7"/>` +
+    `<polygon points="19.5,23 24,41 7,23" fill="${shade(c, -8)}" opacity=".6"/>` +
+    `<polygon points="28.5,23 41,23 24,41" fill="${shade(c, -20)}" opacity=".7"/>` +
+    `<path d="M14 13 L19.5 23 L24 13 L28.5 23 L34 13 M7 23 L41 23" fill="none" stroke="${out}" stroke-width="1.4" opacity=".8"/>` +
+    `<ellipse cx="17" cy="17.5" rx="3.2" ry="1.9" fill="#ffffff" opacity=".6" transform="rotate(-24 17 17.5)"/>`
+  );
+});
+
+reg("🔔", "小铃铛", () => {
+  const c = P.gold;
+  const out = o(c);
+  return (
+    gs(24, 43, 13) +
+    `<circle cx="24" cy="8.5" r="2.6" fill="${c}" stroke="${out}" stroke-width="1.7"/>` +
+    `<path d="M13 26.5 Q13 11.5 24 11.5 Q35 11.5 35 26.5 Q35 30 37.5 31.5 Q38.5 32.5 37.5 33.5 L10.5 33.5 Q9.5 32.5 10.5 31.5 Q13 30 13 26.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M30 12.8 Q35 17 35 26.5 Q35 30 37.5 31.5 Q38.5 32.5 37.5 33.5 L32 33.5 Q33.5 32 32.2 30.5 Q30.5 28.5 30.8 24 Q31.2 17 30 12.8 Z" fill="${shade(c, -14)}" opacity=".75"/>` +
+    `<circle cx="24" cy="37" r="3.2" fill="${P.brown}" stroke="${o(P.brown)}" stroke-width="1.6"/>` +
+    hi(18, 16, 2.6, 1.6)
+  );
+});
+
+reg("🏁", "终点旗", () => {
+  // FLIPPABLE ▲：旗杆在左、方格旗面全幅甩向右，剪影左右非对称
+  const cream = "#fdf6ee";
+  const dark = "#4a4458";
+  const cells: string[] = [];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      if ((r + c) % 2 === 0) {
+        cells.push(`<rect x="${14 + c * 6.3}" y="${8.5 + r * 5.5}" width="6.3" height="5.5" fill="${dark}"/>`);
+      }
+    }
+  }
+  return (
+    gs(20, 44, 11) +
+    `<g transform="rotate(-5 14 8)">` +
+    `<rect x="14" y="8.5" width="25.2" height="16.5" fill="${cream}" stroke="${o("#c8bfae")}" stroke-width="2"/>` +
+    cells.join("") +
+    `</g>` +
+    `<path d="M12.5 6 L12.5 43" stroke="${o(P.wood)}" stroke-width="4.6" stroke-linecap="round"/>` +
+    `<path d="M12.5 6 L12.5 43" stroke="${P.wood}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<circle cx="12.5" cy="5" r="2.2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.4"/>` +
+    hi(17.5, 12, 2, 1.3)
+  );
+});
+
+reg("⌛", "沙漏", () => {
+  // 双胞胎 ⌛↔⏱️ 的区分位：细沙腰 + 上下木框（⏱️ 是圆表盘 + 表冠）
+  const glass = "#dff3fa";
+  const gout = o("#8fb8d8");
+  const sand = P.gold;
+  return (
+    gs(24, 43.5, 12) +
+    `<path d="M15 10.5 L33 10.5 L33 14 Q33 20.5 26.8 24 Q33 27.5 33 34 L33 37.5 L15 37.5 L15 34 Q15 27.5 21.2 24 Q15 20.5 15 14 Z"` +
+    ` fill="${glass}" stroke="${gout}" stroke-width="2" stroke-linejoin="round"/>` +
+    // 上仓余沙 / 沙流 / 下仓沙堆
+    `<path d="M18 13 L30 13 Q29.5 18 24 20.5 Q18.5 18 18 13 Z" fill="${sand}" stroke="${o(sand)}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    `<path d="M24 24 L24 32" stroke="${sand}" stroke-width="1.8" stroke-dasharray="2.2 1.6" stroke-linecap="round"/>` +
+    `<path d="M17 35.5 Q24 28.5 31 35.5 Q27.5 36.5 24 36.5 Q20.5 36.5 17 35.5 Z" fill="${sand}" stroke="${o(sand)}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    // 上下木框（区分位）
+    `<rect x="12" y="6" width="24" height="4.6" rx="2.2" fill="${P.wood}" stroke="${o(P.wood)}" stroke-width="1.8"/>` +
+    `<rect x="12" y="37.4" width="24" height="4.6" rx="2.2" fill="${P.wood}" stroke="${o(P.wood)}" stroke-width="1.8"/>` +
+    `<path d="M29 15 Q30.5 18.5 27.5 21.5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity=".75"/>` +
+    hi(18, 8, 2, 1.2)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------

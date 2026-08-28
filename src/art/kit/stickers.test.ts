@@ -98,10 +98,11 @@ describe("贴纸是纯函数", () => {
   });
 
   it("查不到返回 null，不抛错", () => {
-    expect(sticker("🚀")).toBeNull();
+    // 探针换发：🚀 已在第 3 轮入册（找不同第 10 章），换用未收录的 🛸 当「查不到」样本
+    expect(sticker("🛸")).toBeNull();
     expect(sticker("")).toBeNull();
-    expect(hasSticker("🚀")).toBe(false);
-    expect(stickerName("🚀")).toBeNull();
+    expect(hasSticker("🛸")).toBe(false);
+    expect(stickerName("🛸")).toBeNull();
   });
 
   it("VS16 变体符归一：带不带 ️ 查到同一张", () => {
