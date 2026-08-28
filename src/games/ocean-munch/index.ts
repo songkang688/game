@@ -3624,7 +3624,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
 
     // 标题左有「◀ 首页」右有图鉴徽章:两钮之间塞不下 24px 标题时,
     // 整个标题块下移到按钮行下面(visual-r1 修 P-01 同类项,窄屏专用,宽屏原样)
-    const themesTitle = "🐟 海底大胃王 · 九大海域";
+    // 1.3 已是十二片海域,别再用 1.0 的「九大」旧文案(三办 R4-A 走查)
+    const themesTitle = "🐟 海底大胃王 · 十二片海域";
     ctx.font = "bold 24px sans-serif";
     const stacked = ctx.measureText(themesTitle).width > w - 126 - 90 - 12;
     ctx.fillStyle = "#2a6a9a";

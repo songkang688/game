@@ -100,7 +100,7 @@ const HOME_EXTRA_CSS = `
 .home-search{flex:1 1 190px;min-width:0;display:flex;align-items:center;gap:8px;min-height:50px;
   padding:0 12px 0 16px;
   border:3px solid #fff;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:var(--shadow-soft)}
-.home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
+.home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;min-height:44px;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
 .home-search-clear{display:grid;place-items:center;flex:0 0 auto;min-width:44px;min-height:44px;

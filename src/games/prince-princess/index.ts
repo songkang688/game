@@ -198,7 +198,8 @@ export const CSS = `
   background:linear-gradient(90deg,#F7A8C8,#9FD48C);}
 .pcp-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:14px;font-weight:900;color:#6B3A62;}
-.pcp-btn{border:none;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:900;cursor:pointer;
+.pcp-btn{border:none;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:900;cursor:pointer;
+  min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffdd;color:#7B4A72;box-shadow:0 3px 0 rgba(170,120,160,.3);}
 .pcp-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,120,160,.3);}
 .pcp-btn:focus-visible,.pcp-key:focus-visible,.pcp-mode:focus-visible{outline:3px solid #5A2E52;outline-offset:2px;}

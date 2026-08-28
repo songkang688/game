@@ -203,7 +203,8 @@ const CSS = `
 .iff-chip b{font-weight:900;}
 .iff-duo{display:inline-flex;gap:4px;align-items:center;padding:4px 9px;}
 .iff-duo-face{width:24px;height:24px;display:block;}
-.iff-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
+.iff-btn{border:none;border-radius:999px;padding:6px 13px;font-size:14px;font-weight:900;cursor:pointer;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7E6BC4,#6857AE);box-shadow:0 3px 0 #52458C;}
 .iff-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #52458C;}
 .iff-btn:focus-visible{outline:3px solid #FFB43C;outline-offset:2px;}

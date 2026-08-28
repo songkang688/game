@@ -130,7 +130,8 @@ const CSS = `
 .tkb-canvas{display:block;border-radius:14px;background:#f5ebdd;touch-action:none;
   box-shadow:0 4px 14px rgba(90,80,110,.28);}
 .tkb-mini{position:absolute;right:6px;bottom:6px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
-.tkb-mini-btn{border:none;border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:900;cursor:pointer;
+.tkb-mini-btn{border:none;border-radius:999px;padding:6px 14px;font-size:14px;font-weight:900;cursor:pointer;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:rgba(255,255,255,.88);color:#6a5b90;box-shadow:0 2px 5px rgba(70,60,90,.3);}
 .tkb-mini-cv{display:block;border-radius:8px;background:rgba(20,18,26,.55);box-shadow:0 2px 8px rgba(40,32,60,.4);}
 .tkb-over{position:absolute;inset:0;border-radius:14px;background:rgba(255,252,250,.94);display:flex;
