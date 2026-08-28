@@ -1,12 +1,19 @@
 /**
- * N-37(trio-r9):管理员权限开启态挤压 quiz 族关内。
+ * N-37(trio-r9 测试修复员 A):管理员权限开启态挤压 quiz 族关内。
  *
- * 真机实测(Chrome 无头,localStorage 种一份 permanent 会话,四款 quiz 皮肤 × root 开/关 × 五档视口):
- * 修前 915×412 开 root 后关内抬头 `.l99-stagebar` 56→106px(多出「跳过第 N 关 + 🎫 直达 + 权限小字」一行),
- * 答题器里又多出一整行 `.qz-jump`(44+6px),两笔合计 100px —— math-farm 三个答案钮
- * 整排掉到宿主自滚线下(393–457 vs 舞台底 400),宿主自滚 0→95。
- * 修后同档:抬头回到 56、舞台回到 134–400、答案钮全部在屏,四款 × 五档 线下 0 / 切半 0;
- * **root 关着时四款 × 五档逐像素与修前一致**(这条是本修法的红线,见下面的取反断言)。
+ * 上游 r12 一带已经按 `:has(.l99-jump)` 的路子收过一版抬头,本轮 A 复测发现**没收住**:
+ * 那一版给工具排写了 `width:100%`,反而把它顶成独占一行 ——
+ *
+ *   真机 Chrome 无头(localStorage 种一份 permanent 会话,四款 quiz 皮肤 × root 开/关 × 五档视口):
+ *   915×412 开 root 后 `.l99-stagebar` 56 → **100px**,舞台从 134–400 缩到 178–400,
+ *   math-farm 三颗答案钮整排落到舞台底下 **33px**,且宿主自滚 0 —— 够不着,也滚不出来。
+ *
+ * 改法:这一行别再独占。抬头整条 `flex-wrap:nowrap`,工具排改按内容宽、与题名分这一行;
+ * 题名留 120px 打省略号(全挤没了家长就不知道孩子卡在哪一关),管理件自己横向滚。
+ *
+ * 修后同一批:915×412 抬头 100→**52px**,舞台回到 130–400,四款皮肤 线下 0 / 切半 0;
+ * **root 关着时四款 × 五档逐像素与修前一致**(56 / 134–400),这条是本修法的红线,见下面的取反断言。
+ * 390×844 / 412×915 / 1024×768 / 1280×800 不进这档媒体查询,开关两态全部原样。
  *
  * 权限态是一屏(r8 模式 H 的推论):修法只允许动「管理员那两件东西怎么摆」,
  * 答题判分、直达语义、跳关授权一个字不碰。
@@ -34,62 +41,68 @@ function mediaBlock(src: string, query: string, from = 0): string {
   return src.slice(bodyStart, i + 1);
 }
 
-describe("N-37 关内抬头:矮横屏收起权限状态小字", () => {
-  const short = mediaBlock(LEVEL99, "@media (max-height:500px)");
+/** N-37 那一段:含 `:has(.l99-jump)` 的那个 max-height:500px 块 */
+function rootShortBlock(): string {
+  let from = 0;
+  for (;;) {
+    const at = LEVEL99.indexOf("@media (max-height:500px)", from);
+    expect(at, "应有 N-37 的矮屏块").toBeGreaterThanOrEqual(0);
+    const body = mediaBlock(LEVEL99, "@media (max-height:500px)", at);
+    if (body.includes(":has(.l99-jump)")) return body;
+    from = at + 1;
+  }
+}
 
-  it("关内抬头的权限小字在矮横屏收起(地图侧那句照旧显示)", () => {
-    expect(short).toMatch(/\.l99-stagebar \.l99-jump-note\s*\{\s*display:\s*none/);
-    // 收的是「关内抬头里的那一份」,不是全局的 .l99-jump-note ——
-    // 地图上的直达行还要靠它告诉家长权限状态
-    expect(short).not.toMatch(/(?<!\.l99-stagebar )\.l99-jump-note\s*\{\s*display:\s*none/);
+describe("N-37 关内抬头:管理员那一行不再独占", () => {
+  const short = rootShortBlock();
+
+  it("工具排按内容宽,和题名分同一行 —— 不许再写 width:100% 把自己顶成一行", () => {
+    expect(short).toMatch(/\.l99-stagebar:has\(\.l99-jump\)\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(short).toMatch(/\.l99-stagebar:has\(\.l99-jump\) \.l99-tools\s*\{[^}]*width:\s*auto/);
+    expect(short).not.toMatch(/\.l99-tools\s*\{[^}]*width:\s*100%/);
   });
 
-  it("抬头只收内边距与间距,按钮热区与字号一个字不动", () => {
-    expect(short).toMatch(/\.l99-stagebar\s*\{[^}]*padding:\s*6px 8px/);
-    expect(short).not.toMatch(/\.l99-back|\.l99-tool\s*\{|\.l99-jump-input/);
-    expect(short).not.toMatch(/font-size/);
+  it("题名留 120px 打省略号,不许挤成 0 宽", () => {
+    const title = /\.l99-stagebar:has\(\.l99-jump\) \.l99-stagetitle\s*\{([^}]*)\}/.exec(short);
+    expect(title, "应有题名让宽规则").not.toBeNull();
+    expect(title?.[1]).toMatch(/min-width:\s*120px/);
+    expect(title?.[1]).toMatch(/text-overflow:\s*ellipsis/);
+    // 让的是宽,不是字号:说明文字的 16px 红线矮屏也算数
+    expect(title?.[1]).not.toMatch(/font-size/);
+  });
+
+  it("关内抬头的权限小字在矮横屏收起(地图侧那句照旧显示)", () => {
+    expect(short).toMatch(/\.l99-stagebar:has\(\.l99-jump\) \.l99-jump-note\s*\{\s*display:\s*none/);
+    // 收的是「关内抬头里的那一份」,不是全局的 .l99-jump-note ——
+    // 地图上的直达行还要靠它告诉家长权限状态
+    expect(short).not.toMatch(/(?<!\.l99-stagebar:has\(\.l99-jump\) )\.l99-jump-note\s*\{\s*display:\s*none/);
   });
 
   it("取反:直达控件本身没被藏掉(藏了就等于把管理员功能删了)", () => {
     expect(short).not.toMatch(/\.l99-jump\s*\{[^}]*display:\s*none/);
     expect(short).not.toMatch(/\.l99-tools\s*\{[^}]*display:\s*none/);
     expect(short).not.toMatch(/\.l99-tool-skip\s*\{[^}]*display:\s*none/);
+    // 挤不下就横着滚,总之够得着
+    expect(short).toMatch(/\.l99-tools\s*\{[^}]*overflow-x:\s*auto/);
+  });
+
+  it("取反:整段挂在 :has(.l99-jump) 上 —— root 关着时逐像素不变", () => {
+    // 每一条选择器都必须带 :has(.l99-jump),否则会落到没开权限的孩子面上
+    for (const line of short.split("\n")) {
+      const sel = line.split("{")[0].trim();
+      if (!sel || sel.startsWith("/*") || sel.startsWith("*") || !line.includes("{")) continue;
+      if (sel.startsWith("@")) continue;
+      expect(sel, `${sel} 必须挂在 :has(.l99-jump) 上`).toContain(":has(.l99-jump)");
+    }
   });
 
   it("媒体查询挑的是矮屏,不是窄屏 —— 竖屏手机与平板不进这一档", () => {
-    expect(LEVEL99).toMatch(/@media \(max-height:500px\)/);
     expect(short).not.toMatch(/max-width/);
   });
-});
 
-describe("N-37 答题器:矮横屏让直达行浮进题号行", () => {
-  const short = mediaBlock(QUIZ99, "@media (max-height: 500px)");
-
-  it("直达行脱离纵向流,不再从答题区身上切走一整行", () => {
-    expect(short).toMatch(/\.qz-jump\s*\{[^}]*position:\s*absolute/);
-    expect(short).toMatch(/\.qz-jump\s*\{[^}]*top:\s*8px/);
-  });
-
-  it("浮起来的那条不吃点击,底下题号行两颗徽章照常可点", () => {
-    expect(short).toMatch(/\.qz-jump\s*\{[^}]*pointer-events:\s*none/);
-    expect(short).toMatch(/\.qz-jump > \*\s*\{[^}]*pointer-events:\s*auto/);
-  });
-
-  it("题号行只在直达确实存在时让出高度 —— 权限关着时逐像素不变", () => {
-    expect(short).toMatch(/\.qz-wrap:has\(\.qz-jump\) \.qz-top\s*\{[^}]*min-height:\s*44px/);
-    // 不许写成无条件的 .qz-top{min-height:44px}:那会让 root 关着的孩子面白白高 22px
-    expect(short).not.toMatch(/(?<!:has\(\.qz-jump\) )\.qz-top\s*\{[^}]*min-height/);
-  });
-
-  it("取反:直达框仍旧是 44px 热区,没被顺手压扁去腾地方", () => {
-    expect(QUIZ99).toMatch(/\.qz-jump-input\s*\{[^}]*min-height:\s*44px/);
-    expect(short).not.toMatch(/\.qz-jump-input/);
-    expect(short).not.toMatch(/\.qz-jump-go/);
-  });
-
-  it("取反:答题交互件没被这次改动碰过(L-1 那档的 46/48px 下限还在)", () => {
-    expect(short).toMatch(/\.qz-choice\s*\{[^}]*min-height:\s*46px/);
-    expect(short).toMatch(/\.qz-say\s*\{[^}]*min-height:\s*44px/);
+  it("取反:抬头里的钮没被压扁去腾地方(孩子面 44px 热区红线)", () => {
+    expect(short).not.toMatch(/\.l99-back/);
+    expect(short).not.toMatch(/min-height:\s*(?:[0-9]|[1-3][0-9]|4[0-3])px/);
   });
 });
 
@@ -97,6 +110,10 @@ describe("N-37 护栏:判分与直达语义零触碰", () => {
   it("答题器的判分入口还在原处", () => {
     expect(QUIZ99).toMatch(/export function runQuiz/);
     expect(QUIZ99).toMatch(/quizJumpIndex\(input\.value, questions\.length\)/);
+  });
+
+  it("直达框仍旧是 44px 热区(S-4 扩容不许被顺手回退)", () => {
+    expect(QUIZ99).toMatch(/\.qz-jump-input\s*\{[^}]*min-height:\s*44px/);
   });
 
   it("l99 的跳关授权与直达仍旧各走各的门", () => {

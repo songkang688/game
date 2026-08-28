@@ -637,9 +637,15 @@ const L99_CSS = `
 /* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
-  .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
-  .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
-    overflow-x:auto;gap:6px;margin:0;}
+  .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;flex-wrap:nowrap;}
+  /* r9-A 复测:width:100% 反而把工具排顶成独占一行 —— 抬头 56→100px,
+     math-farm 三颗答案钮整排掉到舞台底下 33px。改成按内容宽、跟题名分这一行。 */
+  .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:auto;flex:1 1 auto;min-width:0;
+    justify-content:flex-start;overflow-x:auto;gap:6px;margin:0;}
+  /* 题名留 120px 打省略号:全挤没了家长就不知道孩子卡在哪一关(纯让宽,字号不动) */
+  .l99-stagebar:has(.l99-jump) .l99-stagetitle{flex:0 1 auto;min-width:120px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .l99-stagebar:has(.l99-jump) .l99-admin-row{flex-wrap:nowrap;min-width:0;}
   .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
   .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;}
