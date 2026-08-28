@@ -915,9 +915,26 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     return (below > 0 ? below : 44) + 22;
   }
 
+  /**
+   * 画布真正能占的宽:量 wrap 的内容宽。视口宽减 24 在平台壳层里会超出
+   * (壳层四周还有 60px 左右的白边),画布左右各被裁十几像素,最边上的
+   * 轨道就点不着了;量不到(测试桩/还没上屏)退回视口口径。
+   */
+  function hostWidthPx(): number {
+    const cw = wrap.clientWidth;
+    if (typeof cw !== "number" || cw <= 0) return viewportWidth();
+    try {
+      const s = getComputedStyle(wrap);
+      const pad = (parseFloat(s.paddingLeft) || 0) + (parseFloat(s.paddingRight) || 0);
+      return Math.max(0, cw - pad) + 24;
+    } catch {
+      return cw + 24;
+    }
+  }
+
   /** 按舞台真实剩余空间收一次画布,保证判定线留在能点到的地方 */
   function resize(): void {
-    width = stageWidth(viewportWidth());
+    width = stageWidth(Math.min(viewportWidth(), hostWidthPx()));
     const roomy = stageHeight(width, viewportHeightPx());
     const top = canvas.getBoundingClientRect?.()?.top ?? 0;
     const bottom = clipBottomPx(wrap);
