@@ -56,6 +56,12 @@ const SHELL_CSS = `
 .jq-crest{display:inline-flex;align-items:center;gap:4px;background:#fff;border-radius:999px;padding:5px 10px;
   font-size:14px;font-weight:800;color:#5f6b4b;box-shadow:0 2px 6px rgba(120,130,100,.22);white-space:nowrap;}
 .jq-crest svg{display:block;}
+/* PT-6:平板/桌面(1024×768 实测菜单 96~422,舞台底 754,下方 332px 死白)整壳置顶难看。
+   .game-stage 是 flex 列,auto 块向外边距只吸收正剩余空间——内容超高(对局态)时自动归 0,
+   手机档不落媒体条件,零回归。 */
+@media (min-width:700px) and (min-height:600px){
+  .jq-frame{margin-block:auto;}
+}
 `;
 
 const AI_DELAY_MS = 560;
@@ -345,6 +351,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 export function mount(api: GameApi): { destroy: () => void } {
   let child: { destroy: () => void } | null = null;
   const wrap = document.createElement("div");
+  wrap.className = "jq-frame";
   const style = document.createElement("style");
   style.textContent = `${BOARD_CSS}\n${SHELL_CSS}`;
   wrap.appendChild(style);

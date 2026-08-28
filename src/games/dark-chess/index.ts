@@ -45,6 +45,12 @@ const SHELL_CSS = `
 .dc-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#7a5a34;box-shadow:0 3px 0 rgba(160,130,90,.3);}
 .dc-pick[aria-pressed="true"]{background:linear-gradient(180deg,#d99a4e,#bd7f37);color:#fff;}
+/* PT-6:平板/桌面(1024×768 实测菜单 96~424,舞台底 754,下方 330px 死白)整壳置顶难看。
+   .game-stage 是 flex 列,auto 块向外边距只吸收正剩余空间——对局态内容超高时自动归 0,
+   手机档不落媒体条件,零回归。 */
+@media (min-width:700px) and (min-height:600px){
+  .dc-frame{margin-block:auto;}
+}
 `;
 
 const AI_DELAY_MS = 520;
@@ -307,6 +313,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 export function mount(api: GameApi): { destroy: () => void } {
   let child: { destroy: () => void } | null = null;
   const wrap = document.createElement("div");
+  wrap.className = "dc-frame";
   const style = document.createElement("style");
   style.textContent = `${BOARD_CSS}\n${SHELL_CSS}`;
   wrap.appendChild(style);

@@ -157,4 +157,10 @@ export const CSS = `
   .gdh-toast{transition:none;}
   .gdh-done{animation:none;}
 }
+/* PT-6:平板/桌面(1024×768 实测入口菜单 96~346,舞台底 754,下方 408px 死白)整壳置顶难看。
+   .game-stage 是 flex 列,auto 块向外边距只吸收正剩余空间——关内/闯关态(挂 .l99-host 或
+   内容超高)时自动归 0,手机档不落媒体条件,零回归。 */
+@media (min-width:700px) and (min-height:600px){
+  .gdh-wrap{margin-block:auto;}
+}
 `;
