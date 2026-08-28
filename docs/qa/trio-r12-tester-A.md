@@ -53,13 +53,14 @@ N-16 / L-3 已由 r10-A 合入，本轮按用户「不要重做」跳过。
 
 - 页签 `.collection-tab`、`.collection-done` → `min-height:44`（关闭 44 未动）。
 - `@media (max-height:500px)` 收预览/画布，给升级/试穿让出第一屏。
-- **未改** color-fun / 竖式 / 金钩 / 对战双人。
+- **915×412**：页签 44 top 76；「知道啦」44 top **350**；第一屏「升级 / 试穿」44 top **337**，均在 412 内。
+- **未改** color-fun / 竖式 / 金钩 / 对战双人玩法。N-47 模式芯片是并行 A 已合入主干后随 merge 带进，本工位未重写坦克对局。
 
 ## 水位
 
 - `npm test`: **1134 文件 / 19395 用例**。gomoku `地狱 vs 普通` 偶发弱方 3 胜（阈值 ≤2），单测重跑即绿；与本 diff 无关。
 - `npm run build`（`tsc --noEmit && vite build`）全绿。
-- 测试只增不减。存档 key 未改。
+- 交卷 SHA:`06c54d6c`（merge 最新 `game-1.3` 后）。禁 force。
 
 ## 红线 / 交给 B
 
