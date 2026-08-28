@@ -137,7 +137,9 @@ export const CSS = `
   font-family:inherit;background:#ffffffdd;color:#5A7BA8;box-shadow:0 2px 0 rgba(120,150,200,.3);
   white-space:nowrap;flex:none;}
 .sks-opt[aria-pressed="true"]{background:#DCEBFF;color:#2F5E9B;}
-.sks-legend{align-self:center;font-size:14px;font-weight:700;color:#63799C;white-space:nowrap;flex:none;}
+/* 键盘图例只是提示:一行塞不下就省略,不许把整条 HUD 顶出屏(1024 平板上量过) */
+.sks-legend{align-self:center;font-size:14px;font-weight:700;color:#63799C;white-space:nowrap;
+  flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
 /* 方向盘排成一横条:纵版飞行最缺的就是竖着的地方,九宫格那一坨会把飞机顶出屏幕 */
 .sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:42px;flex-wrap:wrap;}
 .sks-pads[data-players="2"]{--k:36px;}
@@ -173,6 +175,10 @@ export const CSS = `
   .sks-pads[data-players="2"]{--k:34px;}
   /* 手机上是拖着飞的,键盘说明先让位给天空 */
   .sks-legend{display:none;}
+  /* 390px 手机上 HUD/模式栏改为换行:画布是固定高的,多一行只多占滚动页,
+     换来「暂停」「判定点」这些按钮永远看得见 —— 藏在横滑里孩子根本发现不了 */
+  .sks-hud{flex-wrap:wrap;overflow-x:visible;justify-content:center;}
+  .sks-modebar{flex-wrap:wrap;overflow-x:visible;}
 }
 @media (prefers-reduced-motion:reduce){
   .sks-toast{transition:none;}
@@ -469,8 +475,9 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     liftBtn.setAttribute("aria-pressed", liftOn ? "true" : "false");
     opts.sfx("tap");
   });
-  // 两个开关和键位说明都塞进 HUD 那条横条:纵版飞行最缺的就是竖着的地方,
-  // 少占一行就等于天空高一行。窄屏放不下的部分横向滑一下就能够到。
+  // 两个开关和键位说明都塞进 HUD 那条横条:宽屏一行放得下就一行放。
+  // ≤420px 手机上这条横条改为换行(见 CSS 媒体查询):画布是固定高的,
+  // 多一行只多占滚动页,换来暂停/判定点按钮永远可见,不再藏进横滑里。
   hud.append(
     coreBtn,
     liftBtn,

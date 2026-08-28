@@ -90,6 +90,13 @@ const CSS = `
 .dmz-key:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .dmz-key-blank{visibility:hidden;}
 .dmz-pause{background:#fff3d6;color:#8a6a2f;font-size:17px;}
+/* 双人局:朵朵、星星各一套方向键并排,没有键盘的手机/平板也能俩人一起玩(1.3 UX 走查修复) */
+.dmz-pads{display:flex;gap:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin-top:10px;}
+.dmz-pads .dmz-pad{margin:0;}
+.dmz-pad-col{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;}
+.dmz-pad-t{font-size:14px;font-weight:900;color:#8b7bb0;}
+.dmz-pad-star .dmz-key{color:#4560ab;box-shadow:0 3px 0 rgba(84,112,192,.3);}
+.dmz-pad-star .dmz-key:active{box-shadow:0 1px 0 rgba(84,112,192,.3);}
 .dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
 .dmz-title{font-size:19px;font-weight:900;color:#7a5da8;text-align:center;}
 .dmz-sub{font-size:14px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
@@ -110,6 +117,10 @@ const CSS = `
 @media (max-width:420px){
   .dmz-chip{font-size:14px;padding:4px 9px;}
   .dmz-title{font-size:17px;}
+  /* 360px 上两套键盘并排:格子收到 44px 下限、缝收窄,一排正好放得下 */
+  .dmz-pads{gap:8px;}
+  .dmz-pads .dmz-pad{grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;}
+  .dmz-pads .dmz-key{min-height:44px;font-size:17px;}
 }
 @media (prefers-reduced-motion:reduce){
   .dmz-key:active,.dmz-mode:active,.dmz-btn:active{transform:none;}
@@ -172,6 +183,37 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const soft = reducedMotion();
   const wrap = document.createElement("div");
   wrap.className = "dmz-wrap";
+  const duoPad = `
+    <div class="dmz-pad">
+      <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
+      <button type="button" class="dmz-key" data-dir="up" aria-label="向上">▲</button>
+      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
+      <button type="button" class="dmz-key" data-dir="left" aria-label="向左">◀</button>
+      <button type="button" class="dmz-key" data-dir="down" aria-label="向下">▼</button>
+      <button type="button" class="dmz-key" data-dir="right" aria-label="向右">▶</button>
+    </div>`;
+  // 双人局星星没有键盘就动不了:给她单独一套触屏方向键,和朵朵的并排
+  const padSection =
+    opts.starRole === "none"
+      ? duoPad
+      : `
+    <div class="dmz-pads">
+      <div class="dmz-pad-col">
+        <div class="dmz-pad-t">🌸 朵朵</div>
+        ${duoPad}
+      </div>
+      <div class="dmz-pad-col dmz-pad-star">
+        <div class="dmz-pad-t">⭐ 星星</div>
+        <div class="dmz-pad">
+          <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
+          <button type="button" class="dmz-key" data-star-dir="up" aria-label="星星向上">▲</button>
+          <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
+          <button type="button" class="dmz-key" data-star-dir="left" aria-label="星星向左">◀</button>
+          <button type="button" class="dmz-key" data-star-dir="down" aria-label="星星向下">▼</button>
+          <button type="button" class="dmz-key" data-star-dir="right" aria-label="星星向右">▶</button>
+        </div>
+      </div>
+    </div>`;
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="dmz-hud">
@@ -182,14 +224,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     </div>
     <canvas class="dmz-canvas"></canvas>
     <div class="dmz-note"></div>
-    <div class="dmz-pad">
-      <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
-      <button type="button" class="dmz-key" data-dir="up" aria-label="向上">▲</button>
-      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
-      <button type="button" class="dmz-key" data-dir="left" aria-label="向左">◀</button>
-      <button type="button" class="dmz-key" data-dir="down" aria-label="向下">▼</button>
-      <button type="button" class="dmz-key" data-dir="right" aria-label="向右">▶</button>
-    </div>`;
+    ${padSection}`;
   host.appendChild(wrap);
 
   const canvas = wrap.querySelector(".dmz-canvas") as HTMLCanvasElement;
@@ -661,6 +696,18 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     btn.addEventListener("click", handler);
     padHandlers.push(() => btn.removeEventListener("click", handler));
   }
+  // 星星那套触屏键:抢豆局转小星星,追逃局转带光圈的小幽灵(和方向键走同一条路)
+  const starPadButtons = Array.from(wrap.querySelectorAll<HTMLButtonElement>(".dmz-key[data-star-dir]"));
+  for (const btn of starPadButtons) {
+    const dir = btn.dataset.starDir as Dir;
+    const handler = (): void => {
+      if (paused) return;
+      if (star) star.next = dir;
+      else if (opts.starRole === "ghost") steerGhost(state, dir);
+    };
+    btn.addEventListener("click", handler);
+    padHandlers.push(() => btn.removeEventListener("click", handler));
+  }
 
   let touchStart: { x: number; y: number } | null = null;
   function onTouchStart(e: TouchEvent): void {
@@ -917,7 +964,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "抢豆",
-      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
+      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，手机上点各自那排按键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
       starRole: "eater",
       makeConfig: (round) => ({ ...configFor(60 + round * 9), fog: false }),
       onRoundEnd: ({ won, score, starScore }, next) => {
@@ -935,7 +982,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "追逃",
-      hint: "朵朵用 WASD 清豆，星星用方向键操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
+      hint: "朵朵用 WASD 清豆，星星用方向键（或点她那排按键）操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
       starRole: "ghost",
       makeConfig: (round) => configFor(150 + round * 7),
       onRoundEnd: ({ won, score }, next) => {

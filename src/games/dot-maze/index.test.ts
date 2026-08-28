@@ -346,6 +346,70 @@ describe("迷宫舞台", () => {
     expect(windowListenerCount(dom)).toBe(0);
   });
 
+  // 1.3 UX 走查：双人局星星原先只有键盘一条通路，手机/平板上她完全动不了
+  it("单人局不摆星星键盘，双人局才有，避免多占一排高度", async () => {
+    const { mountStage } = await import("./index");
+    const solo = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: { ...configFor(0), ghostCount: 0 },
+      starRole: "none",
+      label: "测试",
+      onEnd: () => undefined,
+    });
+    expect(dom.root.querySelectorAll(".dmz-key[data-star-dir]")).toHaveLength(0);
+    solo.destroy();
+    const duo = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: { ...configFor(60), ghostCount: 0 },
+      starRole: "eater",
+      label: "抢豆",
+      onEnd: () => undefined,
+    });
+    const starPad = dom.root.querySelectorAll(".dmz-key[data-star-dir]");
+    expect(starPad.map((b) => b.dataset.starDir).sort()).toEqual(["down", "left", "right", "up"]);
+    duo.destroy();
+    expect(dom.root.children).toHaveLength(0);
+    expect(windowListenerCount(dom)).toBe(0);
+  });
+
+  it("抢豆局点星星那排触屏键，她真的会动会吃豆", async () => {
+    const { mountStage } = await import("./index");
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: { ...configFor(60), ghostCount: 0 },
+      starRole: "eater",
+      label: "抢豆",
+      onEnd: () => undefined,
+    });
+    const score = () => dom.root.querySelector(".dmz-score")!.textContent;
+    const starKey = (d: string) =>
+      dom.root.querySelectorAll(".dmz-key[data-star-dir]").find((b) => b.dataset.starDir === d)!;
+    for (let i = 0; i < 12; i++) {
+      starKey(i % 2 === 0 ? "left" : "down").dispatch("click");
+      flushFrames(dom, 6, 60);
+    }
+    const [, , star] = /朵朵 (\d+) · 星星 (\d+)/.exec(score()) ?? [];
+    expect(Number(star)).toBeGreaterThan(0);
+    handle.destroy();
+  });
+
+  it("追逃局点星星触屏键走的是操纵小幽灵那条线，不会崩也不会替朵朵转向", async () => {
+    const { mountStage } = await import("./index");
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: { ...configFor(150), ghostCount: 4 },
+      starRole: "ghost",
+      label: "追逃",
+      onEnd: () => undefined,
+    });
+    const starKey = (d: string) =>
+      dom.root.querySelectorAll(".dmz-key[data-star-dir]").find((b) => b.dataset.starDir === d)!;
+    for (let i = 0; i < 8; i++) {
+      starKey("right").dispatch("click");
+      flushFrames(dom, 3, 60);
+    }
+    expect(dom.root.querySelector(".dmz-canvas")).not.toBeNull();
+    handle.destroy();
+    expect(dom.root.children).toHaveLength(0);
+    expect(windowListenerCount(dom)).toBe(0);
+  });
+
   it("同一局反复挂载再拆掉，window 上不会留下任何监听", async () => {
     const { mountStage } = await import("./index");
     for (let i = 0; i < 3; i++) {

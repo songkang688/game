@@ -465,6 +465,13 @@ export function mount(api: GameApi): CandySwingHandle {
       .cds-tap { min-height: 44px; min-width: 44px; font-size: 14px; padding: 8px 12px; }
       .cds-clock { color: #C2497E; }
       .cds-clock.hot { color: #E0453F; }
+      /* 平板/横屏:选关地图别缩在 400px 一条窄柱里,两边留白离谱。
+         放宽到 720px、每章 8 列;进关后画布是 3:4 定比,仍回到 400px 档(1.3 UX 走查修复) */
+      @media (min-width: 700px) {
+        .cs-wrap.cs-view-map { max-width: 720px; }
+        .cs-wrap.cs-view-map .cs-grid { grid-template-columns: repeat(8, 1fr); }
+        .cs-wrap.cs-view-map .cds-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
+      }
     </style>
     <div class="cs-map">
       <div class="cs-map-title">🍬 糖果秋千</div>
@@ -579,6 +586,8 @@ export function mount(api: GameApi): CandySwingHandle {
     renderMap();
     gameEl.classList.add("cs-hidden");
     mapEl.classList.remove("cs-hidden");
+    // 宽屏放宽只给地图页:画布是 3:4 定比,进关铺到 720px 宽会竖着装不下
+    wrap.className = "cs-wrap cs-view-map";
   }
 
   // ---------- 关卡装载 ----------
@@ -636,6 +645,7 @@ export function mount(api: GameApi): CandySwingHandle {
     screen = "play";
     mapEl.classList.add("cs-hidden");
     gameEl.classList.remove("cs-hidden");
+    wrap.className = "cs-wrap";
     level = def;
     theme = palette;
     phase = "play";

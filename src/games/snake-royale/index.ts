@@ -1286,7 +1286,26 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 进关先把模式条与皮肤架收起来并把战场滚到眼前:手机上选关格子在页面
+      // 下半段,不收的话开局画面还停在顶上的模式按钮那里,孩子以为没反应
+      // (1.3 UX 走查修复;回地图时 destroy 里再放出来)
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        skinHost.hidden = true;
+        try {
+          stage.scrollIntoView?.({ block: "start" });
+        } catch {
+          // 老浏览器不支持 options 就算了,不影响开局
+        }
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            bar.hidden = false;
+            skinHost.hidden = false;
+          }
+        };
+      },
       mapHint: "只有头碰到别人的身体才会先去休息,自己的身体永远安全。",
       grandMessage: "188 关全部拿下,长蛇杯冠军就是你！",
       guideTitle: "长蛇争霸 · 原野笔记"

@@ -49,3 +49,26 @@ export function mapRowYs(rows: number, my0: number, my1: number, maxGap: number)
 export function unlockedWithRoot(rootOpen: boolean, baseUnlocked: boolean): boolean {
   return rootOpen || baseUnlocked;
 }
+
+/**
+ * 章节地图节点排布(drawMap 与 runtime/art 测试共用同一套公式,谁也别写死坐标):
+ * 长章节(>12 关)一行 5 个,否则 4 个;蛇形折返;行距走 mapRowYs 的钳制居中。
+ */
+export function mapNodePoints(w: number, h: number, count: number): Array<{ x: number; y: number; r: number }> {
+  const cols = count > 12 ? 5 : 4;
+  const rows = Math.ceil(count / cols);
+  const mx0 = w * 0.12;
+  const mx1 = w * 0.88;
+  const my0 = 96;
+  const my1 = h - 40;
+  const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+  const rowYs = mapRowYs(rows, my0, my1, Math.max(nr * 3.2, 84));
+  const out: Array<{ x: number; y: number; r: number }> = [];
+  for (let i = 0; i < count; i++) {
+    const row = Math.floor(i / cols);
+    const colRaw = i % cols;
+    const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
+    out.push({ x: mx0 + ((mx1 - mx0) * col) / (cols - 1), y: rowYs[row], r: nr });
+  }
+  return out;
+}

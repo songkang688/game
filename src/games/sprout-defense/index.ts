@@ -120,7 +120,7 @@ import {
 import { getLevelExtras } from "../../ui/level188Contract";
 import { isRootOpen } from "../../ui/root12Contract";
 import { save } from "../../engine/save";
-import { fitLineWith, mapRowYs, unlockedWithRoot } from "./mapFit";
+import { fitLineWith, mapNodePoints, unlockedWithRoot } from "./mapFit";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -1540,23 +1540,10 @@ export function mount(api: GameAPI): SproutDefenseHandle {
     mapNodes.length = 0;
     const count = themeSize(chapterIdx);
     const base = themeOffset(chapterIdx);
-    // 1.1 长章节(22/23 关)一行放 5 个,行数不至于太多
-    const cols = count > 12 ? 5 : 4;
-    const rows = Math.ceil(count / cols);
-    const mx0 = w * 0.12;
-    const mx1 = w * 0.88;
-    const my0 = 96;
-    const my1 = h - 40;
-    const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    // 行距夹上限再整块居中:11 关 3 行的章节不再被摊满整个画布(1.3 UX 走查修复)
-    const rowYs = mapRowYs(rows, my0, my1, Math.max(nr * 3.2, 84));
-    for (let i = 0; i < count; i++) {
-      const row = Math.floor(i / cols);
-      const colRaw = i % cols;
-      const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = rowYs[row];
-      mapNodes.push({ idx: base + i, x, y, r: nr });
+    // 排布公式在 mapFit.mapNodePoints 里(行距钳制居中,1.3 UX 走查修复),
+    // runtime/art 测试也用它反推点击坐标,画与点永远对得上
+    for (const [i, p] of mapNodePoints(w, h, count).entries()) {
+      mapNodes.push({ idx: base + i, x: p.x, y: p.y, r: p.r });
     }
     // 连线改小叶片路径点:一片片叶子沿路排开,方向顺着路走
     for (let i = 0; i + 1 < mapNodes.length; i++) {

@@ -125,8 +125,9 @@ describe("sky-squad 1.2 运行时 · 拖着飞", () => {
     expect(text).toContain("✈️×");
     expect(text).toContain("💣");
     expect(text).toContain("✨");
-    // 一行:HUD 自己不换行,窄屏靠横向滚动
+    // 宽屏一行:HUD 基线不换行;≤420px 窄屏改为换行,按钮不再藏进横滑(1.3 UX 走查)
     expect(mod.CSS).toContain("flex-wrap:nowrap");
+    expect(mod.CSS).toContain(".sks-hud{flex-wrap:wrap;overflow-x:visible;justify-content:center;}");
     const sizes = [...mod.CSS.matchAll(/font-size:(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
     expect(sizes.length).toBeGreaterThan(8);
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(14);

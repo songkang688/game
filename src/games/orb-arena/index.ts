@@ -1143,7 +1143,23 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 进关先收模式条并把竞技场滚到眼前:手机上开局画面不再停在顶上的
+      // 模式按钮那里(1.3 UX 走查修复;回地图时 destroy 里再放出来)
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        try {
+          stage.scrollIntoView?.({ block: "start" });
+        } catch {
+          // 老浏览器不支持 options 就算了,不影响开局
+        }
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "越大越慢:追不上就先回头把彩豆捡干净。",
       grandMessage: "188 关全部拿下,圆圆杯冠军就是你！",
       guideTitle: "圆圆大作战 · 竞技场笔记"
