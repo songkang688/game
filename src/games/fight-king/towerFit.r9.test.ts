@@ -27,6 +27,9 @@ describe("N-25 格斗塔出战八宫格矮屏折叠", () => {
     expect(src).toContain("换人 ▾");
     expect(src).toContain(".fk-hero-compact:not(.fk-hero-open) .fk-grid{display:none;}");
     expect(src).toContain("towerRosterCompact(w, h)");
+    expect(src).toContain(".fk-tower-nav{display:none;}");
+    expect(src).toContain("fk-layout-tower");
+    expect(src).toContain("fk-short-chrome");
   });
 });
 
@@ -36,6 +39,8 @@ describe("N-31 训练场触屏键排 + 假人行 sticky", () => {
     expect(src).toContain('el("div", "fk-dock")');
     expect(src).toContain("dock.appendChild(modeRow)");
     expect(src).toContain("dock.appendChild(pads)");
+    expect(src).toContain(".fk-layout-tower .fk-dock,.fk-layout-train .fk-dock{");
+    expect(src).toContain("position:fixed;left:8px;right:8px;bottom:0;z-index:40;");
     expect(src).toContain(".fk-scroll{overflow-x:auto;max-height:min(36vh,280px);overflow-y:auto;");
     expect(src).toContain("@media (max-height:500px){.fk-scroll{max-height:22vh;}}");
   });

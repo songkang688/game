@@ -88,7 +88,7 @@ const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.sea
  * 画布显示高下限(N-1)。再矮篮子看不清，但判定仍走 backing 360×460，
  * 所以宁可略低于「装得下」也别改 CATCH_Y / isCaught。
  */
-export const MIN_CANVAS_DISPLAY_PX = 100;
+export const MIN_CANVAS_DISPLAY_PX = 80;
 
 /**
  * 钳的是 CSS 显示高，不是 backing 分辨率。
@@ -120,6 +120,14 @@ const CSS = `
 .frc-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 .frc-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFD9A0; color: #8A5A20; cursor: pointer; box-shadow: 0 4px 0 #EBBB77; touch-action: none; }
 .frc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBBB77; }
+@media (max-height: 500px) {
+  .frc-wrap { padding: 6px; }
+  .frc-msg { display: none; }
+  .frc-ctrl {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    margin: 0; padding: 6px 0 10px; background: #fff6e8ee;
+  }
+}
 .frc-msg { text-align: center; min-height: 20px; color: #D08A3E; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.45; }
 .frc-modebar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
@@ -145,9 +153,6 @@ function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text
   return node;
 }
 
-const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
-  Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
-
 function stageClipBottom(from: HTMLElement): number {
   let node: HTMLElement | null = from.parentElement ?? null;
   for (let i = 0; node && i < 10; i++) {
@@ -168,6 +173,20 @@ function stageClipBottom(from: HTMLElement): number {
 
 /** N-1：按 .game-stage 余量钳 canvas 显示高；resize 重量、jan.destroy 摘监听。 */
 function bindCanvasFit(wrap: HTMLElement, canvas: HTMLCanvasElement, jan: Janitor, isDead: () => boolean): void {
+  function chromeBelowCanvas(): number {
+    let extra = 0;
+    wrap.querySelectorAll(".frc-ctrl, .frc-msg").forEach((node) => {
+      const eln = node as HTMLElement;
+      if (typeof getComputedStyle !== "function") {
+        extra += eln.getBoundingClientRect().height;
+        return;
+      }
+      const pos = getComputedStyle(eln).position;
+      if (pos === "fixed" || pos === "sticky") return;
+      extra += eln.getBoundingClientRect().height;
+    });
+    return extra;
+  }
   function fitDisplay(): void {
     if (isDead() || !canvas.style) return;
     if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") {
@@ -179,8 +198,10 @@ function bindCanvasFit(wrap: HTMLElement, canvas: HTMLCanvasElement, jan: Janito
     canvas.style.maxWidth = "";
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
-    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    const below = chromeBelowCanvas();
+    const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? clip;
+    const room = Math.max(clip, viewH) - canvasRect.top - below - 4;
+    const px = canvasDisplayCapPx(canvasRect.height, room);
     if (px !== null) {
       canvas.style.maxHeight = `${px}px`;
       canvas.style.maxWidth = `${Math.round((px * canvas.width) / canvas.height)}px`;
@@ -188,6 +209,8 @@ function bindCanvasFit(wrap: HTMLElement, canvas: HTMLCanvasElement, jan: Janito
   }
   jan.on(window, "resize", fitDisplay);
   jan.after(0, fitDisplay);
+  jan.after(50, fitDisplay);
+  jan.after(200, fitDisplay);
 }
 
 // ---------------------------------------------------------------------------

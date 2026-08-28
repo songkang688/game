@@ -191,6 +191,20 @@ const CSS = `
 .fk-hero-compact:not(.fk-hero-open) .fk-grid{display:none;}
 .fk-hero-now{font-size:15px;font-weight:900;color:#5b4890;}
 .fk-hero-swap{min-height:44px;}
+.fk-short-chrome .fk-tower-nav{display:none;}
+.fk-short-chrome .fk-hero-compact{padding:4px 8px;margin-bottom:4px;}
+.fk-short-chrome .fk-layout-tower .fk-dock,.fk-short-chrome .fk-layout-train .fk-dock{
+  position:fixed;left:8px;right:8px;bottom:0;z-index:40;margin:0;
+  background:#f5f0ffee;border-radius:16px 16px 0 0;box-shadow:0 -6px 18px rgba(90,70,140,.22);padding:6px 8px 8px;}
+@media (max-height:500px){
+  .fk-tower-nav{display:none;}
+  .fk-hero-compact{padding:4px 8px;margin-bottom:4px;}
+  .fk-hero-compact .fk-hero-swap{min-height:36px;padding:6px 12px;}
+  .fk-layout-tower > .fk-bar{position:absolute;top:4px;right:4px;z-index:8;margin:0;background:#f5f0ffee;border-radius:12px;padding:4px;}
+  .fk-layout-tower .fk-dock,.fk-layout-train .fk-dock{
+    position:fixed;left:8px;right:8px;bottom:0;z-index:40;margin:0;
+    background:#f5f0ffee;border-radius:16px 16px 0 0;box-shadow:0 -6px 18px rgba(90,70,140,.22);padding:6px 8px 8px;}
+}
 .fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}
@@ -460,6 +474,8 @@ interface FightOptions {
   onQuit?: () => void;
   /** 顶部额外按钮 */
   extraButtons?: Array<{ label: string; onClick: () => void }>;
+  /** 格斗塔关内：矮屏把键排/暂停条浮出，避免被 l99 工具行顶出屏（N-25） */
+  towerChrome?: boolean;
 }
 
 interface FightHandle {
@@ -522,6 +538,8 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   /* ---------------- DOM ---------------- */
 
   const wrap = el("div");
+  if (o.towerChrome) wrap.classList.add("fk-layout-tower");
+  if (o.training) wrap.classList.add("fk-layout-train");
 
   const bar = el("div", "fk-bar");
   const titleChip = el("span", "fk-h", o.title);
@@ -2165,6 +2183,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       })
     );
     bar.appendChild(el("span", "fk-h", "🏯 格斗塔 188 关"));
+    bar.classList.add("fk-tower-nav");
     view.appendChild(bar);
 
     const towerHost = el("div");
@@ -2211,6 +2230,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const h = (globalThis as { innerHeight?: number }).innerHeight ?? 0;
       const compact = towerRosterCompact(w, h);
       heroRow.classList.toggle("fk-hero-compact", compact);
+      root.classList.toggle("fk-short-chrome", compact);
       if (!compact) {
         heroRow.classList.remove("fk-hero-open");
         swapBtn.textContent = "换人 ▾";
@@ -2251,6 +2271,7 @@ export function mount(api: GameApi): { destroy: () => void } {
             roundsToWin: stage.roundsToWin,
             timeLimitSec: stage.timeLimitSec,
             training: false,
+            towerChrome: true,
             // 舞台主题按章节分段：每两章换一套（樱花山道 → 星空擂台 → 海边木台 → 雪夜灯笼）
             stageIndex: Math.floor(stage.chapterIndex / 2),
             title: `🏯 第 ${ctx.level + 1} 关${stage.boss ? " · 守擂者" : ""}`,
@@ -2287,6 +2308,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     screenCleanup = () => {
       window.removeEventListener("resize", applyRosterCompact);
+      root.classList.remove("fk-short-chrome");
       currentFight?.destroy();
       currentFight = null;
       tower.destroy();
