@@ -447,7 +447,7 @@ export const SP_CSS = `
 @media (min-width:700px) and (max-height:520px){
   .sp-wrap{padding:6px 10px;}
   .sp-top{margin-bottom:4px;}
-  .sp-badge{font-size:14px;padding:3px 8px;}
+  .sp-badge{font-size:16px;padding:3px 8px;}
   .sp-corner{display:none;}
   .sp-seats > .sp-seat:only-child{display:grid;grid-template-columns:minmax(0,auto) minmax(200px,300px);
     column-gap:12px;row-gap:6px;align-items:start;justify-content:center;}

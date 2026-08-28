@@ -270,15 +270,15 @@ const CSS = `
   .se-wrap{display:grid;grid-template-columns:minmax(0,11fr) minmax(0,13fr);gap:2px 10px;
     align-items:start;align-content:start;padding:8px;}
   .se-top{grid-column:2;margin-bottom:2px;}
-  .se-badge{font-size:14px;padding:3px 8px;}
+  .se-badge{font-size:16px;padding:3px 8px;}
   .se-board-wrap{grid-column:1;grid-row:1 / span 6;align-self:start;}
   .se-seats,.se-actions,.se-msg,.se-drawer{grid-column:2;}
   .se-seats{margin-bottom:2px;}
-  .se-seat{flex:1 1 45%;padding:3px 6px;font-size:14px;}
-  .se-seat-tier{font-size:14px;}
+  .se-seat{flex:1 1 45%;padding:3px 6px;font-size:16px;}
+  .se-seat-tier{font-size:16px;}
   .se-pad{margin-top:4px;}
   .se-btn{min-height:44px;}
-  .se-msg{margin-top:2px;min-height:1.4em;font-size:14px;}
+  .se-msg{margin-top:2px;min-height:1.4em;font-size:16px;}
   .se-drawer{margin-top:4px;max-height:110px;overflow-y:auto;}
 }
 @media (prefers-reduced-motion:reduce){

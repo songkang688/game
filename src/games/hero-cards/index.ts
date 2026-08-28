@@ -199,7 +199,7 @@ export const HC_CSS = `
 .hc-keys{font-size:var(--mt-body,16px);font-weight:700;color:#7a6252;line-height:1.7;}
 /* r5 N-4:手机档手牌整排折叠线下,战况区/桌面/战报各收一号,配合 fitZones 让手牌进首屏 */
 @media (max-width:480px){
-  .hc-badge{padding:3px 8px;font-size:14px;}
+  .hc-badge{padding:3px 8px;font-size:16px;}
   .hc-top{margin-bottom:5px;}
   .hc-seats{margin-bottom:5px;}
   .hc-seat{padding:4px 6px;gap:5px;}
@@ -209,7 +209,7 @@ export const HC_CSS = `
   .hc-deck-art{width:38px;height:48px;}
   .hc-discard-art{width:34px;height:46px;}
   .hc-hero-face{width:34px;height:34px;}
-  .hc-log{min-height:2.4em;padding:6px;font-size:14px;line-height:1.5;}
+  .hc-log{min-height:2.4em;padding:6px;font-size:16px;line-height:1.5;}
   .hc-hand{padding:8px 4px 6px;row-gap:8px;}
   .hc-pad{margin-top:5px;}
   .hc-msg{min-height:1.4em;margin-top:4px;}
@@ -232,23 +232,25 @@ export const HC_CSS = `
 @media (min-width:700px) and (max-height:520px){
   .hc-wrap{padding:8px;display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,250px);
     column-gap:10px;row-gap:4px;align-items:start;}
-  .hc-top{margin-bottom:0;grid-column:2;grid-row:1;}
-  .hc-badge{padding:3px 8px;font-size:14px;}
+  .hc-top{margin-bottom:0;grid-column:2;grid-row:1;max-height:64px;overflow-y:auto;
+    align-content:start;}
+  .hc-badge{padding:3px 8px;font-size:16px;}
+  .hc-card{width:56px;min-height:78px;}
   .hc-seats{margin-bottom:0;grid-column:2;grid-row:2;flex-direction:column;flex-wrap:nowrap;
     align-content:start;}
-  .hc-seat{padding:3px 6px;min-height:38px;gap:5px;font-size:14px;}
+  .hc-seat{padding:3px 6px;min-height:38px;gap:5px;font-size:16px;}
   .hc-seat-face{flex:0 0 28px;width:28px;height:28px;}
   .hc-seat-name,.hc-seat-line{font-size:14px;}
   .hc-mid{margin:0;grid-column:1;grid-row:1;flex-wrap:nowrap;}
   .hc-deck-art{width:36px;height:46px;}
   .hc-discard-art{width:32px;height:44px;}
   .hc-hero-face{width:32px;height:32px;}
-  .hc-log{min-height:2.4em;max-height:4.5em;padding:5px 8px;font-size:14px;line-height:1.45;
+  .hc-log{min-height:2.4em;max-height:4.5em;padding:5px 8px;font-size:16px;line-height:1.45;
     grid-column:2;grid-row:3;margin:0;}
   .hc-hand{padding:4px 4px 4px;row-gap:6px;grid-column:1;grid-row:2;}
   .hc-pad{margin-top:0;grid-column:1;grid-row:3;align-self:end;}
   .hc-btn{min-height:44px;}
-  .hc-msg{margin-top:0;min-height:1.4em;font-size:14px;grid-column:2;grid-row:4;}
+  .hc-msg{margin-top:0;min-height:1.4em;font-size:16px;grid-column:2;grid-row:4;}
 }
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}

@@ -14,7 +14,10 @@ const SYNC = SRC.slice(SRC.indexOf("function syncSize()"), SRC.indexOf("function
 
 describe("寻找外星朋友 · 画布按可视余量收(C-6)", () => {
   it("syncSize 接了舞台余量口径,超高就等比收 cssW", () => {
-    expect(SRC).toContain('import { MIN_CANVAS_DISPLAY_PX, rectBottom, stageClipBottom } from "../stageFit";');
+    // r5:进关还要滚回顶(选关图自动滚到当前关会留残余滚动),多带一个 resetStageScroll
+    expect(SRC).toContain(
+      'import { MIN_CANVAS_DISPLAY_PX, rectBottom, resetStageScroll, stageClipBottom } from "../stageFit";'
+    );
     expect(SYNC).toContain("stageClipBottom(wrap)");
     expect(SYNC).toContain("Math.floor(maxH / (SCENE_H / SCENE_W))");
   });

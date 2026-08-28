@@ -262,16 +262,16 @@ export const CSS = `
   .fc-wrap{display:grid;grid-template-columns:minmax(0,11fr) minmax(0,13fr);gap:2px 10px;
     align-items:start;align-content:start;padding:8px;}
   .fc-top,.fc-goal{grid-column:1 / -1;margin-bottom:2px;}
-  .fc-goal{font-size:14px;}
+  .fc-goal{font-size:16px;}
   .fc-boardwrap{grid-column:1;grid-row:3 / span 5;align-self:center;}
   .fc-seats,.fc-actions,.fc-msg{grid-column:2;}
   .fc-seats{margin-bottom:2px;}
-  .fc-seat{flex:1 1 45%;padding:3px 6px;font-size:14px;}
-  .fc-seat-tier{font-size:14px;}
+  .fc-seat{flex:1 1 45%;padding:3px 6px;font-size:16px;}
+  .fc-seat-tier{font-size:16px;}
   .fc-hud{margin:4px 0 2px;}
   .fc-dice{width:46px;height:46px;}
   .fc-btn{min-height:44px;}
-  .fc-msg{min-height:1.6em;font-size:14px;margin-top:2px;}
+  .fc-msg{min-height:1.6em;font-size:16px;margin-top:2px;}
   .fc-keys{display:none;}
 }
 @media (prefers-reduced-motion:reduce){

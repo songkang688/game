@@ -191,7 +191,9 @@ const CSS = `
 .dvs-tierrow{display:flex;gap:6px;justify-content:center;margin:4px 0;flex-wrap:wrap;}
 .dvs-go{display:block;width:100%;margin-top:12px;border:none;border-radius:18px;padding:13px;font-size:17px;
   font-weight:900;color:#fff;cursor:pointer;font-family:inherit;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
+  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;
+  /* r5 C-9 补:矮横屏选人菜单比屏高,舞台能滚,但开打钮不该要人先滚——sticky 常驻折叠线上 */
+  position:sticky;bottom:4px;z-index:3;}
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:40px;font-size:13.5px;font-weight:900;
   cursor:pointer;background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;
