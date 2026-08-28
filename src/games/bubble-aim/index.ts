@@ -117,6 +117,8 @@ import {
   vineShadowAlpha,
 } from "./visual";
 import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
+import { isRootOpen } from "../../ui/root12Contract";
+import { unlockedWithRoot } from "./rootUnlock";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -271,7 +273,9 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
       .ba-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
+      /* 高个子屏幕别把地图钉死在 520px:下面空一大截还得多滚半天(dvh 不认的老内核走上一行兜底) */
       .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; max-height: 520px; overflow-y: auto; }
+      .ba-map { max-height: clamp(420px, calc(100dvh - 150px), 960px); }
       .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
       .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
       .ba-theme { border-radius: 14px; padding: 10px; margin-bottom: 10px; }
@@ -330,7 +334,8 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
   const endlessBtn = wrap.querySelector(".bba-endless") as HTMLButtonElement;
 
   function unlocked(i: number): boolean {
-    return i === 0 || progress.stars[i - 1] > 0;
+    // 管理员权限(kangkang)开着时选关全解锁,和 l99 框架的口径一致
+    return unlockedWithRoot(isRootOpen(), i === 0 || progress.stars[i - 1] > 0);
   }
 
   function allCleared(): boolean {
