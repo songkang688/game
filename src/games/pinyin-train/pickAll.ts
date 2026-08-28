@@ -80,6 +80,21 @@ const CSS = `
   .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
   .pk-title{font-size:18px;}
 }
+/* 矮横屏（915×412 一族）：题头 + 火车画布带（132px）常驻，把全部选票和「就挑这些」
+   一起挤到裁切线以下——挑音节这件事没有一票是能滚着点的。横向余量足，改双栏：
+   左边是「读的」（题面 / 提示 / 火车），右边是「按的」（选票 + 提交），画布带同时缩高。 */
+@media (min-width:700px) and (max-height:560px){
+  .pk-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
+    grid-template-areas:"top chips" "title chips" "hint chips" "scene bottom" "say bottom";
+    column-gap:12px;row-gap:6px;align-items:start;min-height:0;padding:10px 12px;}
+  .pk-wrap>.pk-top{grid-area:top;}
+  .pk-wrap>.pk-title{grid-area:title;}
+  .pk-wrap>.pk-hint{grid-area:hint;}
+  .pk-wrap>.pk-say-row{grid-area:say;}
+  .pk-wrap>.pyt-scene{grid-area:scene;height:96px;}
+  .pk-wrap>.pk-chips{grid-area:chips;}
+  .pk-wrap>.pk-bottom{grid-area:bottom;}
+}
 `;
 
 export function runPickAll(opts: PickAllOptions): PlayHandle {

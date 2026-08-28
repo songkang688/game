@@ -202,6 +202,37 @@ const CSS = `
   .pyt-slot{min-width:68px;}
   .pyt-view{font-size:${PINYIN_FONT_MIN + 8}px;}
 }
+/* 矮横屏（915×412 一族）：车头 + 火车画布带（132px）+ 三排车厢竖着堆，
+   三个车厢槽半截出屏、十张车票与「发车」全落在裁切线以下——拼读交互件一个都够不着。
+   横向有的是余量，改三栏：左栏读的（车头 / 火车 / 预览），中栏按的（车厢槽 + 车票排），
+   右栏发车与话。画布带同时缩高，让中栏那一列票排整排进首屏。 */
+@media (min-width:700px) and (max-height:560px){
+  .pyt-spell{display:grid;
+    grid-template-columns:minmax(0,0.8fr) minmax(300px,1.7fr) minmax(120px,0.7fr);
+    grid-template-areas:"loco slots top" "scene yard go" "view yard msg" "hint yard say";
+    column-gap:10px;row-gap:6px;align-items:start;min-height:0;padding:10px 12px;}
+  .pyt-spell>.pyt-top{grid-area:top;gap:4px;}
+  .pyt-spell>.pyt-loco{grid-area:loco;padding:6px 10px;}
+  .pyt-spell>.pyt-scene{grid-area:scene;height:76px;}
+  .pyt-spell>.pyt-slots{grid-area:slots;}
+  .pyt-spell>.pyt-view{grid-area:view;}
+  .pyt-spell>.pyt-say-row{grid-area:say;}
+  .pyt-spell>.pyt-yard{grid-area:yard;}
+  /* 发车钮 / 反馈 / 方法提示各自独立成格，才排得进右栏 */
+  .pyt-spell>.pyt-bottom{display:contents;}
+  .pyt-spell>.pyt-bottom>.pyt-go{grid-area:go;align-self:start;}
+  .pyt-spell>.pyt-bottom>.pyt-msg{grid-area:msg;}
+  .pyt-spell>.pyt-bottom>.pyt-hint{grid-area:hint;}
+  .pyt-loco-emoji{font-size:30px;}
+  .pyt-loco-word{font-size:32px;}
+  .pyt-view{font-size:${PINYIN_FONT_MIN + 6}px;min-height:30px;}
+  /* 热区下限（车厢 ${CHIP_MIN_PX}px / 拼音字号 ${PINYIN_FONT_MIN}px）一格都不让，让的是留白 */
+  .pyt-slot{min-height:${CHIP_MIN_PX}px;padding:4px 8px;}
+  .pyt-slot-val{font-size:${PINYIN_FONT_MIN + 2}px;min-height:20px;}
+  .pyt-yard{gap:4px;}
+  .pyt-chip{padding:6px 10px;}
+  .pyt-go{padding:11px 18px;}
+}
 @media (prefers-reduced-motion:reduce){
   .pyt-wobble{animation:none;}
   .pyt-loco{transition:none;}
