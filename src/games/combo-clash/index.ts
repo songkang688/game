@@ -466,7 +466,7 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 
-  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  /** 往上找平台舞台(game-stage 类,定高会裁内容)的下沿;量不到返回 NaN */
   function stageClipBottom(): number {
     let node: HTMLElement | null = wrap.parentElement ?? null;
     for (let i = 0; node && i < 10; i++) {
