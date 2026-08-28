@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitLineWith, mapRowYs, unlockedWithRoot } from "./mapFit";
+import { fitLineWith, mapCols, mapRowYs, nodeRadiusCap, unlockedWithRoot } from "./mapFit";
 import { isLevelUnlocked, isThemeUnlocked } from "./logic";
 
 /** 每个字符 10px 的假量宽器,好算账 */
@@ -39,6 +39,27 @@ describe("mapRowYs:行距夹上限、整块居中", () => {
   });
   it("单行放在正中", () => {
     expect(mapRowYs(1, 100, 300, 96)).toEqual([200]);
+  });
+});
+
+describe("mapCols / nodeRadiusCap:小章节点图不再缩在正中(r4 遗留)", () => {
+  it("11 关小章:竖屏 3 列(4 行更满),横屏 6 列(2 行)", () => {
+    expect(mapCols(11, 350, 730)).toBe(3);
+    expect(mapCols(11, 843, 322)).toBe(6);
+    expect(mapCols(11, 952, 654)).toBe(6);
+  });
+  it("22/23 关大章保持原样:竖屏 4 列,横屏 6 列", () => {
+    expect(mapCols(22, 350, 730)).toBe(4);
+    expect(mapCols(23, 843, 322)).toBe(6);
+  });
+  it("小章节点半径上限放大到 36,大章保持 28", () => {
+    expect(nodeRadiusCap(11)).toBe(36);
+    expect(nodeRadiusCap(22)).toBe(28);
+  });
+  it("竖屏 390 手机上小章节点确实能放大:3 列的列宽限制 > 36 上限", () => {
+    // drawMap 里 nr = min(cap, 列宽/2.4, 行高/2.6):350 宽 3 列时列宽约 88.7,88.7/2.4≈37>36
+    const colSpan = (350 * 0.76) / mapCols(11, 350, 730);
+    expect(colSpan / 2.4).toBeGreaterThan(36);
   });
 });
 

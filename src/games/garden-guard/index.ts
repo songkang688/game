@@ -149,7 +149,7 @@ import {
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
 import { isRootOpen } from "../../ui/root12Contract";
-import { fitLineWith, mapRowYs, unlockedWithRoot } from "./mapFit";
+import { fitLineWith, mapCols, mapRowYs, nodeRadiusCap, unlockedWithRoot } from "./mapFit";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -1667,14 +1667,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     mapNodes.length = 0;
     const base = themeOffset(chapterIdx);
     const count = themeSize(chapterIdx);
-    // 新章节 22/23 关:窄屏 4 列,宽屏 5~6 列,保证节点不挤
-    const cols = count <= 11 ? 4 : w > h * 1.1 ? 6 : 4;
+    // 大章 22/23 关:窄屏 4 列,宽屏 6 列;小章(11 关)竖屏 3 列/横屏 6 列,节点放大不再缩在正中(r4 遗留)
+    const cols = mapCols(count, w, h);
     const rows = Math.ceil(count / cols);
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
     const my1 = h - 40;
-    const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    const nr = Math.max(12, Math.min(nodeRadiusCap(count), (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
     // 行距夹上限再整块居中:11 关 3 行的章节不再被摊满整个画布(1.3 UX 走查修复)
     const rowYs = mapRowYs(rows, my0, my1, Math.max(nr * 3.2, 84));
     for (let i = 0; i < count; i++) {

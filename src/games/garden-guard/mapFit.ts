@@ -31,6 +31,23 @@ export function fitLineWith(
 }
 
 /**
+ * 关卡节点图的列数(trio-r4 遗留:小章留空较多)。
+ * 22/23 关的大章:横屏 6 列、竖屏 4 列(原样)。
+ * ≤11 关的小章原先也按 4 列排,3 行小圆点缩在画布正中显得空 ——
+ * 竖屏改 3 列(4 行,节点能放大一号),横屏改 6 列(2 行,同样更大更满)。
+ */
+export function mapCols(count: number, w: number, h: number): number {
+  const landscape = w > h * 1.1;
+  if (count <= 11) return landscape ? 6 : 3;
+  return landscape ? 6 : 4;
+}
+
+/** 节点半径上限:小章行列都少,允许放大到 36(点击区也跟着变大);大章保持 28 不挤 */
+export function nodeRadiusCap(count: number): number {
+  return count <= 11 ? 36 : 28;
+}
+
+/**
  * 关卡地图每一行的 Y 坐标(行距夹到 maxGap,整块在 [my0,my1] 里垂直居中)。
  * rows <= 1 时返回一行,放在区间正中。
  */
