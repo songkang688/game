@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { shade } from "../../art/kit/palette";
 import { DIATONIC_MIDI, PENTATONIC_MIDI } from "./tuning";
 import {
+  ANCHOR_STARS,
   CLIP_WAVE_MAX_PX,
   CLIP_WAVE_MIN_PX,
   METEOR_TAIL,
@@ -103,6 +104,22 @@ describe("音乐星星 1.3 · 星空舞台（程序化 SVG，无位图）", () =
     // 谱号是星点 + 细线连成的一笔星座
     expect(svg.match(/stroke-width="0.5"/g)?.length).toBeGreaterThanOrEqual(4);
     expect(svg).toContain('r="1.1"');
+  });
+
+  it("星轨远端有三颗静态锚点星：钉在星轨线右端、纯 fill 四角星、无动效（B 档修订清单第 8 条）", () => {
+    // 2–3 颗、全在远端（x ≥ 90）、纵坐标锚在星轨线上（不是随手撒的）
+    expect(ANCHOR_STARS.length).toBeGreaterThanOrEqual(2);
+    expect(ANCHOR_STARS.length).toBeLessThanOrEqual(3);
+    for (const [x, y] of ANCHOR_STARS) {
+      expect(x).toBeGreaterThanOrEqual(90);
+      expect(STAFF_LINE_YS).toContain(y);
+    }
+    const svg = skyStageSvg();
+    expect(svg.match(/data-anchor="1"/g)).toHaveLength(ANCHOR_STARS.length);
+    // 纯 fill 星心色、不带描边——不动线条两笔工序的既有计数（上一条用例还在钉）
+    expect(svg).toContain('fill="rgba(255,255,255,.9)"');
+    // 静态装饰：整张星空图没有任何 SMIL 动画，reduced 无关
+    expect(svg).not.toContain("<animate");
   });
 
   it("data-URI 是程序化 SVG 且色板 token 与规格一致", () => {

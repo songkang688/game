@@ -136,6 +136,24 @@ const SPRINKLE_STARS: ReadonlyArray<readonly [number, number, number]> = [
 ];
 
 /**
+ * 星轨远端的锚点星（1.3 第 3 轮 · B 档修订清单第 8 条）：三颗四角小星钉在
+ * 第 1 / 3 / 5 条星轨线的右端，让全屏等距的谱线有个「星座感」的收笔。
+ * 纯 fill 静态装饰（跟着 data-URI 走 CSS 背景），reduced 无关。
+ */
+export const ANCHOR_STARS: ReadonlyArray<readonly [number, number]> = [
+  [96, 26], [97.5, 46], [96, 66],
+];
+
+/** 一颗四角小星的路径（r 是半径，viewBox 单位；拉伸到舞台上约 2px 尖角） */
+function anchorStarPath(x: number, y: number, r: number): string {
+  const w = +(r * 0.34).toFixed(2);
+  return (
+    `M${x} ${y - r} L${x + w} ${y - w} L${x + r} ${y} L${x + w} ${y + w} ` +
+    `L${x} ${y + r} L${x - w} ${y + w} L${x - r} ${y} L${x - w} ${y - w} Z`
+  );
+}
+
+/**
  * 星空舞台的装饰 SVG（`preserveAspectRatio:none` 拉伸铺满）：
  * 五条星轨线各画两笔（宽 2 的微光晕 + 宽 0.6 的亮芯），谱号用星点 + 细线连成
  * 一笔星座，右上再撒几颗背景细星。纯装饰，进 CSS 背景，不占 DOM、不接指针。
@@ -158,9 +176,12 @@ export function skyStageSvg(): string {
   const sprinkles = SPRINKLE_STARS.map(
     ([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#ffffff" opacity=".55"/>`
   ).join("");
+  const anchors = ANCHOR_STARS.map(
+    ([x, y]) => `<path data-anchor="1" d="${anchorStarPath(x, y, 1.5)}" fill="${STAR_GLOW_INNER}" opacity=".85"/>`
+  ).join("");
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">` +
-    lines + clefLines + clefDots + sprinkles +
+    lines + clefLines + clefDots + sprinkles + anchors +
     `</svg>`
   );
 }
