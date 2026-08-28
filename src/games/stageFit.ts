@@ -41,26 +41,47 @@ export function rectBottom(r: RectLike): number {
   return Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 }
 
+/** 往上找平台舞台(.game-stage);找不到返回 null */
+function findStage(from: HTMLElement | null | undefined): HTMLElement | null {
+  let node: HTMLElement | null = from?.parentElement ?? null;
+  for (let i = 0; node && i < 12; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) return node;
+    node = node.parentElement ?? null;
+  }
+  return null;
+}
+
 /**
  * 往上找平台舞台(.game-stage,定高会裁内容)的可视下沿;量不到返回 NaN。
  * 用 clientHeight 口径(舞台有 4px 边框,rect.bottom 会多算,1.2 窗口 5 翻过车)。
  */
 export function stageClipBottom(from: HTMLElement | null | undefined): number {
-  let node: HTMLElement | null = from?.parentElement ?? null;
-  for (let i = 0; node && i < 12; i++) {
-    if (typeof node.className === "string" && node.className.includes("game-stage")) {
-      if (typeof node.getBoundingClientRect !== "function") break;
-      const r = node.getBoundingClientRect();
-      const inner =
-        typeof node.clientHeight === "number" && node.clientHeight > 0
-          ? (node.clientTop || 0) + node.clientHeight
-          : r.height;
-      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
-      break;
-    }
-    node = node.parentElement ?? null;
-  }
+  const node = findStage(from);
+  if (!node || typeof node.getBoundingClientRect !== "function") return Number.NaN;
+  const r = node.getBoundingClientRect();
+  const inner =
+    typeof node.clientHeight === "number" && node.clientHeight > 0
+      ? (node.clientTop || 0) + node.clientHeight
+      : r.height;
+  if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
   return Number.NaN;
+}
+
+/**
+ * 舞台此刻卷走了多少(scrollTop)。菜单页的「开始」钮常在折叠线下,点完
+ * 舞台还留着残余滚动——这时 rect 量出来的余量偏大,钳出来的画布回到顶端就装不下。
+ * 量不到返回 0。
+ */
+export function stageScrollTopPx(from: HTMLElement | null | undefined): number {
+  const node = findStage(from);
+  const st = node ? (node as { scrollTop?: number }).scrollTop : undefined;
+  return typeof st === "number" && Number.isFinite(st) ? Math.max(0, st) : 0;
+}
+
+/** 进桌/进关时把舞台滚回顶:不然新画面的抬头会被菜单页的残余滚动卷走 */
+export function resetStageScroll(from: HTMLElement | null | undefined): void {
+  const node = findStage(from);
+  if (node && typeof node.scrollTop === "number") node.scrollTop = 0;
 }
 
 /**
@@ -149,7 +170,9 @@ export function attachCanvasFit(
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - margin, opts.minPx);
+    // 减掉舞台残余滚动:预算按「滚回顶」的位置算,画布才装得进第一屏
+    const room = clip - canvasRect.top - stageScrollTopPx(wrap) - below - margin;
+    const px = canvasDisplayCapPx(canvasRect.height, room, opts.minPx);
     if (px === null) return;
     canvas.style.maxHeight = `${px}px`;
     // 这一族画布 CSS 都是 width:100% + 固定分辨率缓冲:光钳高会把画面压扁。

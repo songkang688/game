@@ -1,5 +1,6 @@
 import { meta } from "./meta";
 export { meta };
+import { resetStageScroll } from "../stageFit";
 
 // 朵朵星星象棋 1.2：
 //  · 残局闯关 188 课 —— 走平台的 188 关框架（课号 / 星级 / 攻略 / 跳关全归框架管），
@@ -224,7 +225,10 @@ function pieceCount(board: Board): number {
 
 function mountTable(host: HTMLElement, o: TableOpts): Table {
   const wrap = document.createElement("div");
-  wrap.className = "xq-wrap";
+  // xq-table:只有对局桌走矮横屏双栏(菜单面板同用 xq-wrap,别跟着变形)
+  wrap.className = "xq-wrap xq-table";
+  // 菜单页的「开始下棋 ▶」在折叠线下,点完舞台带着残余滚动;开桌滚回顶
+  resetStageScroll(host);
   const top = document.createElement("div");
   top.className = "xq-top";
   const redEl = document.createElement("span");
@@ -241,6 +245,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   capsEl.className = "xq-capsbar xq-hidden";
   wrap.appendChild(capsEl);
   const boardHost = document.createElement("div");
+  boardHost.className = "xq-boardhost";
   wrap.appendChild(boardHost);
   const recordEl = document.createElement("div");
   recordEl.className = "xq-record";

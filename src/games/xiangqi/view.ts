@@ -9,6 +9,7 @@
 //   · 将死时棋盘轻微变暗，胜方将帅跳起两下 + 印章盖「胜」（残局解开盖「妙手」）；
 //   · `prefers-reduced-motion`：徽章静帧、不呼吸、不滑动、不出花瓣波纹，直接落定。
 import { type Board, type Move, type Piece, type PieceType, type Pos, type Side, idx } from "./logic";
+import { attachCanvasFit } from "../stageFit";
 import { type BoardGeom, MIN_HIT_PX, hitRadius, pickPoint, pointAt } from "./session";
 import {
   ANIM_TOTAL_MS,
@@ -172,6 +173,18 @@ export const CSS = `
 @media (min-width:700px) and (max-height:840px){
   .xq-wrap{max-width:380px;}
 }
+/* r5 N-10:915×412 矮横屏 380 宽仍装不下(canvas+两排按钮折叠线下)——
+   盘左、玩家条/吃子槽/记谱/按钮右双栏,画布显示高由 attachCanvasFit 按舞台余量钳 */
+@media (min-width:700px) and (max-height:520px){
+  /* 自由对战/残局把桌子嵌在 380/460px 的外壳里,外壳不放开双栏就被勒成一条 */
+  .xq-wrap:has(> .xq-table){max-width:none;}
+  .xq-table{max-width:none;display:grid;grid-template-columns:minmax(0,auto) minmax(230px,340px);
+    column-gap:12px;row-gap:6px;align-items:start;align-content:start;justify-content:center;}
+  .xq-boardhost{grid-column:1;grid-row:1 / span 6;}
+  .xq-table .xq-top,.xq-table .xq-capsbar,.xq-table .xq-record,.xq-table .xq-btns,.xq-table .xq-msg{
+    grid-column:2;margin:0;}
+  .xq-table .xq-capsbar.xq-hidden,.xq-table .xq-btns.xq-hidden{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}
 }
@@ -227,6 +240,8 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
   canvas.height = GEOM.height;
   box.appendChild(canvas);
   host.appendChild(box);
+  // r5 N-10:915×412 矮横屏显示高超过舞台可视余量,按余量钳显示高(等比收宽,判定走 rect 换算不受影响)
+  const heightFit = attachCanvasFit(canvas, box, { minPx: 250 });
 
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
   let state = emptyState(board);
@@ -560,6 +575,7 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
     },
     destroy() {
       dead = true;
+      heightFit.detach();
       cancelAnimationFrame(raf);
       clearTimeout(badgeTimer);
       canvas.removeEventListener("pointerdown", onPointerDown);

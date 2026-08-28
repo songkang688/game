@@ -93,11 +93,17 @@ describe("棋盘视图 · 挂载", () => {
     b.view.destroy();
   });
 
-  it("一根 window 监听都不挂（滚动、快捷键全不受影响）", () => {
+  it("window 上只挂一根 resize（钳盘面显示高用），滚动、快捷键全不受影响，destroy 摘干净", () => {
     const before = windowListenerCount(dom);
     const { view } = mountView(15);
-    expect(windowListenerCount(dom)).toBe(before);
+    // r5 N-10:attachCanvasFit 要跟着转屏重量,只许 resize 这一种;
+    // keydown/scroll/touch 之类照旧一根不许挂,滚动与快捷键不受影响。
+    expect(windowListenerCount(dom) - before).toBe(1);
+    for (const [type, set] of dom.winListeners) {
+      if (set.size > 0) expect(type).toBe("resize");
+    }
     view.destroy();
+    expect(windowListenerCount(dom)).toBe(before);
   });
 });
 

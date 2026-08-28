@@ -1,5 +1,6 @@
 import { meta } from "./meta";
 export { meta };
+import { resetStageScroll } from "../stageFit";
 
 // 五子棋 1.2：
 //  · 解局学堂 188 —— 走平台的 188 关框架（关号 / 星级 / 攻略 / 跳关全归框架管），
@@ -189,7 +190,10 @@ export const CEREMONY_DELAY_MS = WIN_SWEEP_MS + WIN_JUMP_GAP_MS * 4 + WIN_JUMP_M
 
 function mountTable(host: HTMLElement, o: TableOpts): Table {
   const wrap = document.createElement("div");
-  wrap.className = "gmk-wrap";
+  // gmk-table:只有对局桌走矮横屏双栏(设置面板同用 gmk-wrap,别跟着变形)
+  wrap.className = "gmk-wrap gmk-table";
+  // 设置面板的「开始下棋 ▶」在折叠线下,点完舞台带着残余滚动;开桌滚回顶
+  resetStageScroll(host);
   const top = document.createElement("div");
   top.className = "gmk-top";
   const turnEl = document.createElement("span");

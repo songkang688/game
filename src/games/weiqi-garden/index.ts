@@ -15,6 +15,7 @@ import {
 } from "../../engine";
 import { save } from "../../engine/save";
 import { stagePlayRoom } from "../../engine/stageRoom";
+import { resetStageScroll, stageClipBottom, stageScrollTopPx } from "../stageFit";
 import guide from "./guide";
 import {
   BLACK,
@@ -332,6 +333,15 @@ export const WQ_CSS = `
 .wq-setup{display:flex;flex-direction:column;gap:8px;align-items:center;margin-bottom:8px;}
 .wq-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
 .wq-label{font-size:16px;font-weight:800;color:#7A6A50;}
+/* r5 N-10:915×412 矮横屏纵排装不下(canvas 下沿+停一手/数一数排折叠线下)——
+   盘左、徽章/工具/提示右双栏,盘宽由 hostWidth 按舞台高预算算(这一档只扣 40) */
+@media (min-width:700px) and (max-height:520px){
+  .wq-stage{display:grid;grid-template-columns:minmax(0,auto) minmax(220px,340px);
+    column-gap:12px;row-gap:6px;align-items:start;align-content:start;justify-content:center;}
+  .wq-boardhost{grid-column:1;grid-row:1 / span 6;}
+  .wq-stage .wq-hud,.wq-stage .wq-tools,.wq-stage .wq-msg,.wq-stage .wq-say,
+  .wq-stage .wq-rows,.wq-stage .wq-note{grid-column:2;margin:0;}
+}
 @media (max-width:360px){
   .wq-chip{padding:5px 9px;}
   .wq-btn{padding:8px 11px;}
@@ -510,6 +520,7 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
       destroyed = true;
       canvas.removeEventListener("pointerdown", onPointer);
       (globalThis as { removeEventListener?: typeof window.removeEventListener }).removeEventListener?.("resize", resize);
+      if (settleTimer !== null) clearTimeout(settleTimer);
       scroll.remove();
     }
   };
@@ -526,7 +537,32 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
     canvas.height = Math.round(metrics.extent * ratio);
     canvas.style.width = `${metrics.extent}px`;
     canvas.style.height = `${metrics.extent}px`;
+    fitScrollBox();
     if (lastBoard) draw(lastBoard, lastExtra);
+  }
+
+  /**
+   * r5 N-10:9 路盘按 28px 热区地板算是 263px,915×412 双栏里只剩 250px——
+   * 热区不能再小,就把 .wq-scroll(本来就 overflow:auto)钳到实际余量,
+   * 差的十几像素在盒子里拖,不再戳穿舞台下沿。竖屏纵排不钳,交给舞台滚。
+   */
+  function fitScrollBox(): void {
+    if (!scroll.style) return;
+    scroll.style.maxHeight = "";
+    const mq = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    let shortLand = false;
+    try {
+      shortLand = mq ? mq("(min-width:700px) and (max-height:520px)").matches : false;
+    } catch {
+      shortLand = false;
+    }
+    if (!shortLand || typeof scroll.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(scroll);
+    if (!Number.isFinite(clip)) return;
+    const r = scroll.getBoundingClientRect();
+    if (!Number.isFinite(r.top)) return;
+    const room = Math.floor(clip - r.top - stageScrollTopPx(scroll) - 4);
+    if (room >= 120 && metrics.extent > room) scroll.style.maxHeight = `${room}px`;
   }
 
   function ctx2d(): Ctx2D | null {
@@ -691,6 +727,9 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
   canvas.addEventListener("pointerdown", onPointer);
   (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", resize);
   resize();
+  // 挂载这一刻壳层抬头(l99 关卡条)可能还没排好版,hostWidth 会把余量估多;
+  // 抽空再量一次,矮横屏才不会差出十几像素(r5 N-10)。
+  const settleTimer = typeof setTimeout === "function" ? setTimeout(resize, 0) : null;
   return view;
 }
 
@@ -770,6 +809,8 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
   const stage = document.createElement("div");
   stage.className = "wq-stage";
   host.appendChild(stage);
+  // 菜单页的「开始 ▶」在折叠线下,点完舞台带着残余滚动;开局滚回顶,抬头别被卷走
+  resetStageScroll(host);
 
   const hud = document.createElement("div");
   hud.className = "wq-hud";
@@ -780,6 +821,7 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
   stage.appendChild(hud);
 
   const boardHost = document.createElement("div");
+  boardHost.className = "wq-boardhost";
   stage.appendChild(boardHost);
 
   const msg = document.createElement("div");
@@ -1117,8 +1159,19 @@ function hostWidth(host: HTMLElement): number {
   })();
   // 平板横屏的短边是高度:棋盘按宽度铺满会把下面的按钮顶出屏,得同时受舞台高度约束。
   // 220 是棋盘上下的徽章行 + 提示语 + 按钮排的合计;量不到舞台时退回按宽度算,行为不变。
-  const room = stagePlayRoom(host, { w: byWidth, h: byWidth + 220 });
-  return Math.max(240, Math.min(byWidth, room.h - 220));
+  // r5 N-10:915×412 矮横屏走「盘左、徽章/工具右」双栏,盘上下只剩自己的边距,
+  // 再按 220 扣就把盘压到 240 地板还是装不下——这一档只扣 40(壳层圆角与上下留白)。
+  const shortLand = (() => {
+    const mq = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    try {
+      return mq ? mq("(min-width:700px) and (max-height:520px)").matches : false;
+    } catch {
+      return false;
+    }
+  })();
+  const chrome = shortLand ? 40 : 220;
+  const room = stagePlayRoom(host, { w: byWidth, h: byWidth + chrome });
+  return Math.max(240, Math.min(byWidth, room.h - chrome));
 }
 
 // ---------------------------------------------------------------------------
@@ -1153,6 +1206,8 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
   const stage = document.createElement("div");
   stage.className = "wq-stage wq-wrap";
   host.appendChild(stage);
+  // 选关图卷到下面选的关,进关滚回顶,抬头别被卷走
+  resetStageScroll(host);
 
   const hud = document.createElement("div");
   hud.className = "wq-hud";
@@ -1163,6 +1218,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
   stage.appendChild(hud);
 
   const boardHost = document.createElement("div");
+  boardHost.className = "wq-boardhost";
   stage.appendChild(boardHost);
 
   const msg = document.createElement("div");

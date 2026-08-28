@@ -8,6 +8,7 @@
 import type { Board, Player } from "./ai";
 import { cursorLabel } from "./session";
 import type { Cell, HintArea } from "./session";
+import { attachCanvasFit } from "../stageFit";
 import { prefersReducedMotion } from "../../engine/view25d";
 import {
   HINT_GOLD_EDGE,
@@ -164,6 +165,18 @@ export const CSS = `
 .gmk-over-stoneimg{line-height:0;filter:drop-shadow(0 3px 5px rgba(120,80,40,.35));}
 .gmk-ceremony{animation:gmk-cardin .28s ease-out;}
 @keyframes gmk-cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+/* r5 N-10:915×412 矮横屏纵排装不下(悔棋/提示/确认落子排折叠线下)——
+   盘左、徽章/座位/按钮右双栏,画布显示高由 attachCanvasFit 按舞台余量钳 */
+@media (min-width:700px) and (max-height:520px){
+  /* 自由对战/连胜把桌子嵌在 420px 的外壳里,外壳不放开双栏就被勒成一条 */
+  .gmk-wrap:has(> .gmk-table){max-width:none;}
+  .gmk-table{max-width:none;display:grid;grid-template-columns:minmax(0,auto) minmax(230px,340px);
+    column-gap:12px;row-gap:6px;align-items:start;align-content:start;justify-content:center;}
+  .gmk-table .gmk-boardbox{grid-column:1;grid-row:1 / span 5;}
+  .gmk-table .gmk-top,.gmk-table .gmk-seats,.gmk-table .gmk-btns,.gmk-table .gmk-claimbar,.gmk-table .gmk-msg{
+    grid-column:2;margin:0;}
+  .gmk-table .gmk-claimbar[hidden]{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
   .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:none;}
@@ -232,6 +245,8 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
   canvas.setAttribute("role", "application");
   canvas.setAttribute("aria-label", "五子棋棋盘，方向键移动、回车落子");
   host.appendChild(canvas);
+  // r5 N-10:915×412 矮横屏显示高超过舞台可视余量,按余量钳显示高(等比收宽,判定走 rect 换算不受影响)
+  const heightFit = attachCanvasFit(canvas, host, { minPx: 250 });
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
 
   let size = opts.size;
@@ -646,6 +661,7 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
     },
     destroy() {
       destroyed = true;
+      heightFit.detach();
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointermove", onMove);
