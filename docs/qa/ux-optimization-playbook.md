@@ -1,6 +1,6 @@
 # UX 优化 playbook（学习员 #3 · 技能对照版，零 src 改动）
 
-> **第 14 轮更新**。基线：`origin/game-1.3 = 206d0522`（主干连续两轮稳）。已合只回归：红灯 N-105、N-12/N-10/N-3、N-55/N-81、C-8、N-90 判定线（§3.0）。水位 **N-109**；在途拟名 N-117…124；**勿开 N-110…116**。在途格局未变：顶栏挤扁 b255/4e78 双开、bubble-aim e75a/5f46 双开（5f46 又追测试桩兼容 `50a91a5d`）、l99 竖滚 4e78/5f46 双开——全部只等先合版；9ad5（#2）r2 进行中（N-108 领跑）；#1 仍未交卷。
+> **第 15 轮更新（配方轮）**。基线：`origin/game-1.3 = 206d0522`（主干三轮稳，在途无新伤）。本轮产出：**§八 新配方库 R-1…R-6**（scroll-margin 锚定护栏 / auto-fill 关卡格 / container query 试点 / 幽灵热区守门 / overscroll 补全 / ResizeObserver 舞台 fit）——全部锚定仓库真实先例，修 N-100/N-103/N-108/N-124 时直接抄。号池不变：水位 **N-109**，在途拟名 N-117…124，**勿开 N-110…116**；三处双开（顶栏/bubble-aim/l99 竖滚）只等先合版。
 > **定位**：与 `trio-rN-learn-notes/playbook` 的逐案抽验并行，本文是「模式层」清单。**任务号以主干 r18 playbook（主文+附录）为权威**，本文叠加 U-x 模式层与竖屏首扫。
 > **编号纪律**：本文条目一律用 **U-x**，不占 N 号。⚠️ 撞号仍在发生（A 自编 N-92/93/94、862b 的 r19 改号 N-103…N-107 又撞主干），动手前必看 **§3.0 消歧表**；新伤一律只记「文件+数字」待统编。
 > ⚠️ **U 号撞车**：并行学习员 `docs/ux-iteration-playbook.md`（在途）的 U-1…U-6 与本文定义不同。消歧：先合版为准；引用对方写「**迭代U-x**」，本文写「U-x」。#1（A）领 U-101…，#2（B）领 U-201…。
@@ -225,7 +225,7 @@
 - **回归走 UI 门**：脚本 `btn.click()` 不受视口裁切影响，会漏「门自己出屏」类伤（N-109 漏报即此因）。root 解锁等门类流程回归一律走真 UI（🔑 → 输入 → 打开），顺手验 storage 无残留。
 - **壳层静态断言**（A 侧建议项）：`.l99-host` hidden 已第 4 次复发（N-75→N-98→N-101→N-108）——补「直系内容 scrollHeight > clientHeight 时必须存在可滚层或 fixed 底栏」的守门断言，比逐游戏修省力。
 
-## 七、第 14 轮给 #1/#2 的可勾选执行清单
+## 七、第 15 轮给 #1/#2 的可勾选执行清单（新配方挂钩）
 
 任务号与独占以主干 r18/r19 playbook + 迭代 playbook（PR #83）为权威；**动手前先读 §3.0（已合清仓+封存）与 §6.9 可达性判据**。**已合只回归**：红灯 N-105、N-12/N-10/N-3、N-55/N-81、C-8、N-90 判定线——再写新份 = 打回。**仍封存**：N-99 数独（三路）、N-100 误滚（两路）、bubble-aim（e75a vs 5f46）、l99 竖滚（4e78 vs 5f46）、**顶栏游戏名挤扁（b255 vs 4e78，本轮新双开）**、模式键+胜负弹层（9ad5 交卷待合）。视口红线：**390×844 划到底 + 915×412 不裁切**，切底伤加测 1024×768。
 
@@ -233,9 +233,9 @@
 
 - [ ] **先交卷压箱货**（红灯单弃，主干已合）：「root 管理员行」`980945e8` →「密码门」`4970d8ef`（**交卷改号 N-109**，已降级，转「余力项已完成」）→「挑拣车厢」`c2a21b4c`（勿用 N-94，注明别名待统编）——**全部先 rebase 到 ≥ `206d0522` 再交**
 - [ ] **顶栏挤扁勿三开**：b255/4e78 两版在途（§3.0 新条）——动顶栏前先对账，只等先合版；另路 A 报告 `6a533420` 先合则 390/915 壳层账以其为底
-- [ ] **N-100 验收面升级**：修 `level99.ts` 一处锚定，验收 17 款跑循环脚本（清单在 `trio-r19-learn-notes.md` §四）；b255 部分修复若先合只补残余页签面
+- [ ] **N-100 验收面升级**：修法**优先走 §八 R-1**（`.l99-node` 加 scroll-margin-block 一行，比 JS 校正稳），验收 17 款跑循环脚本（清单在 `trio-r19-learn-notes.md` §四）；b255 部分修复若先合只补残余页签面
 - [ ] **封存项零动作**：N-99 先对账 4e78/b255；动 styles.css 前先 fetch 9ad5（touch-action 已交卷待合）
-- [ ] **空白项**：N-97 math-farm 深关选项 416 → 拟名 N-123 首页平板 hero（首卡 557→≤500，只加档）→ 幽灵热区抽查 quiz99 系 3 款（`elementFromPoint` 断言）→ **壳层静态断言**（§6.9 第 3 条，根治 `.l99-host` 四次复发）
+- [ ] **空白项**：N-97 math-farm 深关选项 416 → 拟名 N-123 首页平板 hero（首卡 557→≤500，只加档）→ 幽灵热区按 **§八 R-4**（断言片段+`rg "inset:0"` 静态粗筛全仓跑一遍）→ **壳层静态断言**（§6.9 第 3 条，根治 `.l99-host` 四次复发）
 - [ ] 拟名 N-117/N-118 壳层族：5f46 已带地图 680→820——对账后只做页签收纳（N-117）不重做密度；N-120 pan-y 对账 4e78/5f46 竖滚安全网
 - [ ] 结案落账：N-60/61/62/N-90/N-91 回归数字（禁再修）；降级台账 3 项不占必修位
 - [ ] U-101 竖屏首扫；U-2 横屏左右安全区（`styles.css:261`）
@@ -244,11 +244,48 @@
 **#2（B 休闲对战，r2 进行中，底座已同步 `abe8ad03`）**——按序执行：
 
 - [ ] **r1 交卷收尾**：模式键/胜负弹层/touch-action/红灯对齐四单保持可合状态，冲突时 rebase 勿 force；合入后迭代U-2 只剩 balloon-pop/duo-rush 复测
-- [ ] **r2 以 N-108 领跑**：puzzle-tiles 拼块滚不到（钳拼块边长或 `.pz-board` 内滚+热区尾款五件套 `.pz-back`30/`.pzt-eye`32/`.pzt-undo`32/`.pz-hint`34/`.pz-open`38；勿改打乱 seed/判定；=迭代U-17 已并号）
-- [ ] **后续必修（按序）**：N-98 hue-hand → N-95 xiangqi 设置屏（阻断级）→ N-94 dvs 选人 → N-101 dvs 赛中 14 键（同目录连修）→ **N-107 fruit-stack 六键**（最重）→ N-96 bomb-buddies → N-106 monster-crisis 摇杆 → N-102 bumper → N-103 ice-fire → N-104 landlord h33
+- [ ] **r2 以 N-108 领跑**：puzzle-tiles 拼块滚不到（钳拼块边长或 `.pz-board` 内滚——内滚方案按 **§八 R-5** 同行补 overscroll；+热区尾款五件套 `.pz-back`30/`.pzt-eye`32/`.pzt-undo`32/`.pz-hint`34/`.pz-open`38；勿改打乱 seed/判定；=迭代U-17 已并号）
+- [ ] **后续必修（按序）**：N-98 hue-hand → N-95 xiangqi 设置屏（阻断级；滚动盒按 R-5）→ N-94 dvs 选人 → N-101 dvs 赛中 14 键（同目录连修）→ **N-107 fruit-stack 六键**（最重）→ N-96 bomb-buddies → N-106 monster-crisis 摇杆 → N-102 bumper → **N-103 ice-fire（试点 §八 R-3 container query，成了就是 33 款 N-124 的模板）** → N-104 landlord h33
 - [ ] **647a 九伤剩余（先对账 5f46 再动）**：保龄球/飞行棋/记忆翻牌 5f46 已认领**勿双开**；仍空白的：迭代U-18 match-stars 盘（P0）、U-15 hero-cards、U-20 prince-princess、U-21 mine-garden（先并号 r14）、U-19 sky-squad（对账 N-46/N-56）；网格同族走「高度反推钳」配方
 - [ ] 已合回归落账：N-12/N-10/N-3（N-3 补平板档数字）、N-55/N-81、C-8（SKY_H 未动）各留两档数字；9efa 残余单 `20fcbec4` 先合则台球/地产回归以其为底
-- [ ] U-201 竖屏首扫；U-5 选关格抽查（bubble-aim 只等先合，剩 brave-path/candy-swing）；U-6 reduced-motion
+- [ ] U-201 竖屏首扫；U-5 选关格抽查（bubble-aim 只等先合，剩 brave-path/candy-swing——**过小就按 §八 R-2 改 auto-fill**，省整组媒体查询）；U-6 reduced-motion
 - [ ] 交卷：水位只增不减；每条两档数字（切底伤加 1024×768）；🟡/🔧 分开列；报告进当轮 tester-B 文件
 
-**两位共通**：§3.0 先读，碰「已合只回归」项 = 打回；**并号优先于开新，勿开 N-110…116**（主干水位 N-109，在途拟名到 N-124）；初见出屏先 scrollIntoView 再定性；门类流程回归走真 UI；贴线族先查壳层预算；救济档四视口覆盖、加档不改档；矮屏收缩红线 §6.6 逢改必查；撞车取先合版。
+**两位共通**：§3.0 先读，碰「已合只回归」项 = 打回；**并号优先于开新，勿开 N-110…116**（主干水位 N-109，在途拟名到 N-124）；初见出屏先 scrollIntoView 再定性；门类流程回归走真 UI；贴线族先查壳层预算；救济档四视口覆盖、加档不改档；矮屏收缩红线 §6.6 逢改必查；撞车取先合版；**修 N-100/N-103/N-108/N-124 前先读 §八对应配方**。
+
+## 八、新配方库（第 15 轮挖矿产出；全部锚定仓库真实先例，修对应号时直接抄）
+
+### R-1 scroll-margin 锚定护栏（N-100 族根治候选，17 款验收）
+
+- **缺口**：全仓 **0 处** `scroll-margin`。N-100 的病根是 `level99.ts:994` `cur.scrollIntoView({block:"center"})` 不知道上方有抬头条/工具行，center 计算把「开始冒险 ▶」顶出视口。
+- **配方**：给 `.l99-node` 加一行 `scroll-margin-block: 96px 16px`（上值 = 抬头条+工具行实高，先量再定；页签折行款取折行后高度）。浏览器计算 scrollIntoView 时自动预留，**比 JS 校正 scrollTop 稳**（不用监听、不用时序）。
+- **护栏**：滚动容器必须仍是地图盒 `.l99-view`（N-63 教训：`level99.ts:658` 注释——别让 `.game-stage` 跟着滚）；b255「当前关可见不滚」逻辑保留，两者叠加不冲突。验收跑 r19 笔记 §四的 17 款清单。
+
+### R-2 auto-fill 自适应关卡格（U-5 族 / 自带选关 UI 的游戏）
+
+- **先例**：fishing-star `index.ts:244` `.fs-dex{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}`——零断点从手机适配到平板；dot-maze/dark-chess/junqi-camp/duo-vs-star 同款写法。
+- **配方**：自带选关格的游戏（candy-swing `.cs-map`、brave-path 等）改 `repeat(auto-fill,minmax(64px,1fr))`：minmax 下限=热区红线（≥44px 格 + gap），390→1180 全视口自适应，**省掉整组媒体查询**。
+- **护栏**：**别碰 l99 主地图**（`mapColumns()` JS 内联已管列数，改它=打回）；改前 rg 该游戏守门测试是否断言 grid 原文。
+
+### R-3 container query 试点（N-124 断点空洞根治候选，33 款的出路）
+
+- **缺口**：全仓 **0 处** `@container`。33 款只写 `@media (max-height:500px)` 救济的根因：**视口高 ≠ 舞台高**——1024×768 视口不命中 500 档，但壳层吃掉 ~200px 后舞台实际只剩 ~560px，一样装不下。
+- **配方**：`.l99-stage` 声明 `container-type:size; container-name:stage`，游戏内联 CSS 把救济档改写成 `@container stage (max-height:560px){...}`——按舞台真实余高触发，视口多少无所谓，1024×768/1180×820/915×412 一条规则全吃。
+- **护栏**：`container-type:size` 要求容器有确定高（`.l99-stage` 是 flex 拉伸项，满足）；**先试点一款**——建议 B 修 N-103 ice-fire 时带上，四视口回归全绿再推广，**严禁一次改 33 款**。
+
+### R-4 幽灵热区守门断言（4e78 伤型固化为工装）
+
+- **先例**：word-garden `stageFit.test.ts:4` 已用 CDP `document.elementFromPoint(键心)` 判命中（真浏览器口径）。
+- **配方（断言片段）**：取按钮 `getBoundingClientRect` 中心 `(cx,cy)`，断言 `document.elementFromPoint(cx,cy) === btn || btn.contains(document.elementFromPoint(cx,cy))`。U-101/U-201 首扫每款 CTA 带一条。
+- **静态粗筛**：`rg "inset:0" src/games -A2 | rg -v "pointer-events"` 列出无 `pointer-events:none` 的全铺装饰层，人工确认后修（规则：纯装饰的绝对定位全铺层**必须** `pointer-events:none`）。
+
+### R-5 overscroll-behavior 补全军规（滚动链断裂预防）
+
+- **先例**：level99.ts / red-blue-tug / tank-battle / color-fun 等 8 文件已写 `overscroll-behavior:contain`。
+- **军规**：任何新开的内滚层（`overflow-y:auto`）**同一行**补 `overscroll-behavior:contain;-webkit-overflow-scrolling:touch`，防滚动穿透回壳层把地图/页面一起拖走。本轮适用点：N-108 `.pz-board` 内滚方案、N-95 xiangqi 设置屏滚动盒、N-99 数独内滚（若后合方案还要补）。
+
+### R-6 ResizeObserver 舞台驱动 fit（替代 window.resize）
+
+- **先例**：duo-rush / ice-fire-forest / puff-bros / sling-birds 已用 `ResizeObserver`；duo-rush `domStub.ts` 有现成测试桩。
+- **缺口**：多数游戏 fit 逻辑挂 `window.resize`——**壳层收窄但视口不变时不触发**（N-89 收壳后各游戏没跟着重排、5f46 保龄球「扣自家 HUD 实测高」全是这个病）。
+- **配方**：新写/重写 fit 时观察 `.l99-stage`（或游戏自己的舞台节点）尺寸而非 window；测试抄 duo-rush 的桩。与 R-3 二选一或叠加：CSS 能表达的用 R-3，要算像素的用 R-6。
