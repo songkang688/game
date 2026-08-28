@@ -192,6 +192,7 @@ const CSS = `
 .pfb-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:14px;font-weight:900;color:#33526E;white-space:nowrap;overflow:hidden;}
 .pfb-btn{border:none;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:900;cursor:pointer;
+  min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffdd;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.32);}
 .pfb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
 .pfb-btn:focus-visible,.pfb-key:focus-visible,.pfb-mode:focus-visible,.pfb-veil-btn:focus-visible,
@@ -235,7 +236,7 @@ const CSS = `
 /* display:flex 会盖掉 hidden 属性自带的 display:none,进了某个模式就得把这排按钮收起来 */
 .pfb-modebar[hidden]{display:none;}
 .pfb-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
+  min-height:${TOUCH_MIN}px;cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pfb-mode.pfb-mode-duel{background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
 .pfb-mode.pfb-mode-bot{background:linear-gradient(180deg,#B79AE6,#9375CD);box-shadow:0 4px 0 #7256A6;}
 .pfb-mode.pfb-mode-coop{background:linear-gradient(180deg,#9AD07C,#78B45B);box-shadow:0 4px 0 #5E9146;}
@@ -254,7 +255,7 @@ const CSS = `
 .pfb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
 .pfb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
 .pfb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
-.pfb-open{border:none;border-radius:16px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;
+.pfb-open{border:none;border-radius:16px;padding:10px 18px;min-height:${TOUCH_MIN}px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pfb-done{text-align:center;padding:18px 12px;font-size:16px;font-weight:800;color:#2F5A8C;line-height:1.7;}
 @media (max-width:420px){
@@ -276,9 +277,17 @@ const CSS = `
 @media (hover:none) and (max-width:420px){ .pfb-pad-name{display:none;} }
 @media (max-height:620px){
   .pfb-cv{height:170px;}
-  .pfb-pads{--k:46px;margin-top:4px;}
+  .pfb-pads{--k:${TOUCH_MIN}px;margin-top:4px;}
   .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;}
   .pfb-tip{margin-top:4px;font-size:11px;}
+}
+/* N-42 / C-8: 矮横屏把六键垫到画布右侧，暂停钮已抬到 44 */
+@media (max-height:500px) and (min-width:640px){
+  .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;}
+  .pfb-hud{grid-column:1/-1;}
+  .pfb-stagebox{grid-column:1;min-width:0;}
+  .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;}
+  .pfb-tip{grid-column:1/-1;}
 }
 @media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }
 `;
@@ -839,7 +848,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const room = bottomLimit() - boxRect.top - below - VIEW_PAD;
     // 比场地本身还高只会多出两条天空,不如把余量留给别人
     const aspect = ARENA_W / ARENA_H;
-    const h = Math.round(Math.max(VIEW_MIN, Math.min(room, availW / aspect)));
+    const cap = room > 0 ? room : VIEW_MIN;
+    const h = Math.round(Math.max(96, Math.min(cap, availW / aspect)));
     // 场地是等比缩放居中画的,画框比它宽多少,左右就空多少;
     // 干脆把画框收到跟场地一样宽,圆角正好贴着围墙
     const w = Math.round(Math.min(availW, h * aspect));

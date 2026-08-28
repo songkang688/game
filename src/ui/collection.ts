@@ -348,7 +348,6 @@ const COLLECTION_CSS = `
 .collection-head{display:flex;align-items:center;gap:10px;padding:14px 18px;background:rgba(255,255,255,.75)}
 .collection-title{flex:1 1 auto;margin:0;font-size:20px;color:#6b4d72}
 .collection-stars{flex:0 0 auto;padding:4px 12px;border-radius:999px;background:#fff3c4;color:#8a6a1f;font-weight:700}
-/* 孩子面 44px 热区红线:关闭钮 40→44,卡片「解锁 ⭐N / 试穿」36→44(trio-r9) */
 .collection-close{flex:0 0 auto;width:44px;height:44px;border:none;border-radius:50%;
   background:#ffe0ec;color:#a4557a;font-size:18px;cursor:pointer}
 .collection-note{margin:0;padding:6px 18px 0;font-size:13px;color:#8a7a93}
@@ -363,8 +362,8 @@ const COLLECTION_CSS = `
 .collection-bonus li{padding:3px 9px;border-radius:999px;background:#eaf6ff;color:#3f6d99;font-size:12px}
 .collection-main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
 .collection-tabs{display:flex;gap:8px;padding-bottom:10px}
-.collection-tab{min-height:44px;padding:0 18px;border:none;border-radius:999px;background:rgba(255,255,255,.8);
-  color:#7a6a86;font-size:15px;cursor:pointer}
+.collection-tab{padding:8px 18px;border:none;border-radius:999px;background:rgba(255,255,255,.8);
+  color:#7a6a86;font-size:15px;cursor:pointer;min-height:44px;display:inline-flex;align-items:center}
 .collection-tab[aria-selected="true"]{background:#ffb3d1;color:#fff;font-weight:700}
 .collection-grid{flex:1 1 auto;display:grid;gap:10px;overflow-y:auto;padding:2px 2px 8px;
   grid-template-columns:repeat(auto-fill,minmax(158px,1fr))}
@@ -387,6 +386,23 @@ const COLLECTION_CSS = `
 .collection-tip{flex:1 1 auto;margin:0;font-size:12px;color:#8a7a93}
 .collection-done{min-height:44px;padding:0 22px;border:none;border-radius:999px;
   background:#ffb3d1;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+/* N-59:915×412 宽屏仍走双栏,预览竖卡 230px 把升级/试穿切出 412。矮屏收预览、页签与知道啦锁 44。
+   关闭钮 44×44 不动。窄屏 max-width:640 那档纵排原样。 */
+@media (max-height:500px){
+  .collection-overlay{padding:8px;align-items:stretch}
+  .collection-panel{max-height:100%;height:100%}
+  .collection-head{padding:8px 14px;flex-shrink:0}
+  .collection-note{padding:4px 14px 0}
+  .collection-body{gap:8px;padding:8px 14px;min-height:0}
+  .collection-preview{flex:0 0 auto;flex-direction:row;align-items:center;gap:10px;
+    max-height:108px;padding:6px 8px}
+  .collection-canvas{width:72px;height:84px;flex:0 0 auto}
+  .collection-meta{flex:1 1 auto;align-items:flex-start;min-width:0}
+  .collection-outfit{text-align:left}
+  .collection-tabs{flex-shrink:0;padding-bottom:6px}
+  .collection-grid{min-height:0}
+  .collection-foot{flex-shrink:0;padding:6px 14px 10px}
+}
 @media (max-width:640px){
   .collection-overlay{padding:0}
   .collection-panel{width:100%;max-height:100%;height:100%;border-radius:0;border-width:0}
@@ -744,9 +760,31 @@ export function openCollection(scope?: string, opts?: OpenCollectionOptions): Co
 
   let offStore: () => void = () => {};
 
+  // N-48:开 🎁 后进 #/game/* overlay 曾残留。对照 S-3 parentAuth:hashchange → close。
+  const routeHosts: Array<{
+    addEventListener: (type: string, fn: () => void) => void;
+    removeEventListener: (type: string, fn: () => void) => void;
+  }> = [];
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    routeHosts.push(window);
+  }
+  const docRoute = doc as unknown as {
+    addEventListener?: (type: string, fn: () => void) => void;
+    removeEventListener?: (type: string, fn: () => void) => void;
+  };
+  if (typeof docRoute.addEventListener === "function") {
+    const sameAsWin = typeof window !== "undefined" && (docRoute as unknown) === window;
+    if (!sameAsWin) routeHosts.push(docRoute as (typeof routeHosts)[number]);
+  }
+  function onRouteChange(): void {
+    close();
+  }
+  for (const host of routeHosts) host.addEventListener("hashchange", onRouteChange);
+
   function close(): void {
     if (closed) return;
     closed = true;
+    for (const host of routeHosts) host.removeEventListener("hashchange", onRouteChange);
     doc.removeEventListener("keydown", onKeyDown, true);
     offStore();
     overlay.remove();

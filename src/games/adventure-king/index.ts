@@ -6,6 +6,7 @@ export { meta };
 // 守卫用回旋镖敲晕,集齐日纹石 / 月纹石 / 星纹石三件神器才推得开尽头的首领之门。
 // 三种玩法:188 关八大遗迹战役、无尽遗迹(一层比一层深)、计时速通(每章记录最好时间)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { corridorCanvasCssH, corridorWantH, measureClipRoomPx } from "./corridorFit";
 import { save } from "../../engine/save";
 import {
   ARTIFACT_EMOJI,
@@ -121,6 +122,13 @@ const CSS = `
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
 .ak-canvas{width:100%;display:block;border-radius:16px;background:#f6f0ff;touch-action:none;}
 .ak-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+/* N-16:矮横屏把触控键钉在画布下沿;提示行收掉。古堡走 advk- 前缀,吃不到这段。 */
+@media (max-height:500px){
+  .ak-wrap{gap:4px;max-height:100%;min-height:0;}
+  .ak-pad{position:sticky;bottom:0;z-index:2;padding:4px 0 2px;
+    background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
+  .ak-tip{display:none;}
+}
 .ak-btn{border:none;border-radius:16px;min-width:56px;min-height:52px;padding:6px 12px;font-size:20px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#6b4a2a;background:#fff3dd;
   box-shadow:0 4px 0 rgba(180,140,90,.45);}
@@ -137,7 +145,7 @@ const CSS = `
 .ak-open:active{transform:translateY(2px);box-shadow:0 2px 0 #b1642a;}
 .ak-open:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .ak-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
-  background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;}
+  background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;min-height:0;}
 .ak-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ak-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
@@ -209,6 +217,20 @@ const CSS = `
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
+/* N-30 配方 G:矮横屏 D-pad 挪房间网格右侧,工具行置顶;房间生成/钥匙判定零触碰 */
+@media (max-height:500px){
+  .ak-mode.advk-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto 1fr auto auto;
+    gap:6px;padding:6px;min-height:0;max-height:100%;overflow:hidden;}
+  .ak-mode.advk-shell > .ak-mhead{grid-column:1/-1;grid-row:1;}
+  .ak-mode.advk-shell > .advk-hud{grid-column:1/-1;grid-row:2;}
+  .ak-mode.advk-shell > .advk-tools{grid-column:1/-1;grid-row:3;}
+  .ak-mode.advk-shell > .advk-room{grid-column:1;grid-row:4;max-width:min(280px,48vw);max-height:min(64dvh,280px);
+    width:100%;align-self:center;}
+  .ak-mode.advk-shell > .advk-pad2{grid-column:2;grid-row:4;margin-top:0;align-self:center;}
+  .ak-mode.advk-shell > .advk-say{grid-column:1/-1;grid-row:5;}
+  .ak-mode.advk-shell > .advk-mini{grid-column:1/-1;}
+  .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;max-height:28dvh;overflow:auto;}
+}
 ${touchUpliftCss([".ak-open"])}
 ${bodyFontUpliftCss([".ak-tip"])}
 `;
@@ -297,7 +319,10 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
 
   function syncSize(): void {
     cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
-    cssH = clamp(Math.round(cssW * 0.9), 250, 430);
+    const want = corridorWantH(cssW);
+    const room = measureClipRoomPx(host);
+    const below = (pad.offsetHeight || 0) + (tip.offsetHeight || 0) + 16;
+    cssH = corridorCanvasCssH(want, room, below);
     scale = cssH / VIEW_H;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     const bw = Math.max(1, Math.round(cssW * dpr));
@@ -1028,7 +1053,7 @@ function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls:
 function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
   const bag = new Disposer();
   const wrap = document.createElement("div");
-  wrap.className = "ak-mode";
+  wrap.className = "ak-mode advk-shell";
   wrap.innerHTML = `<style>${CSS}</style>`;
 
   const head = document.createElement("div");

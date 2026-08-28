@@ -217,7 +217,9 @@ export const CSS = `
 .bmb-board canvas{display:block;}
 .bmb-tip{font-size:14px;font-weight:700;line-height:1.45;text-align:center;max-width:620px;color:#6a5f8c;
   background:#ffffffcc;border-radius:12px;padding:5px 10px;}
-.bmb-pads{display:flex;justify-content:center;align-items:flex-start;gap:10px;width:100%;}
+.bmb-pads{display:flex;justify-content:center;align-items:flex-start;gap:10px;width:100%;
+  position:sticky;bottom:0;z-index:4;background:linear-gradient(180deg,#f2f5fff0,#fff3f8f5);
+  padding:6px 0 2px;}
 .bmb-padwrap{display:flex;flex-direction:column;align-items:center;gap:3px;}
 .bmb-padname{font-size:12px;font-weight:900;}
 .bmb-pad{display:flex;align-items:center;gap:6px;}
@@ -310,6 +312,17 @@ export const CSS = `
 /* 再矮一点(667 那一档):提示条让位给棋盘。这句话在暂停面板和开局播报里都还在。 */
 @media (max-height:700px){
   .bmb-tip{display:none;}
+}
+@media (max-height:500px) and (min-width:700px){
+  .bmb-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;
+    grid-template-areas:"hud hud hud" "padl board padr" "tip tip tip";}
+  .bmb-hud{grid-area:hud;}
+  .bmb-board{grid-area:board;justify-self:center;}
+  .bmb-tip{grid-area:tip;}
+  .bmb-pads{display:contents;position:static;background:none;padding:0;}
+  .bmb-padwrap:first-child{grid-area:padl;}
+  .bmb-padwrap:last-child{grid-area:padr;}
+  .bmb-padwrap:only-child{grid-area:padr;}
 }
 @media (prefers-reduced-motion:reduce){
   .bmb-btn:active,.bmb-act:active,.bmb-pick:active{transform:none;}

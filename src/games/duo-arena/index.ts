@@ -288,6 +288,21 @@ const CSS = `
   .dua-start:active,.dua-pad button:active{transform:none;}
   .dua-splash .big{animation:none;}
 }
+@media (max-height:500px){
+  /* N-52:440px 壳把两块半场上下摞出 412 高;矮横屏放开宽度、半场并排,开擂/暂停钉底 */
+  .dua-wrap{max-width:min(920px,100%);}
+  .dua-chip small{display:none;}
+  .dua-title{font-size:16px;line-height:1.35;}
+  .dua-group{padding:6px 8px;}
+  .dua-panel{gap:6px;}
+  .dua-start{position:sticky;bottom:0;z-index:5;background:#FFB37E;}
+  .dua-rulesbtn{position:sticky;bottom:52px;z-index:4;}
+  .dua-game{display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:4px;}
+  .dua-top,.dua-tags,.dua-btns,.dua-msg{grid-column:1 / -1;}
+  .dua-court{height:min(186px,46dvh);margin-bottom:0;}
+  .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
+}
 `;
 
 export function mount(api: GameApi): { destroy: () => void } {

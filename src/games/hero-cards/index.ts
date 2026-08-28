@@ -208,6 +208,21 @@ export const HC_CSS = `
   .hc-discard-art{width:36px;height:50px;}
   .hc-btn{min-width:74px;font-size:15px;padding:0 8px;}
 }
+/* N-4 配方 E：手牌与出牌行钉底，战况日志收高 */
+@media (max-height:500px){
+  .hc-log{min-height:0;max-height:3.2em;}
+  .hc-hand{
+    position:sticky;bottom:52px;z-index:5;margin:0;padding:8px 4px 6px;
+    background:linear-gradient(180deg, rgba(255,248,242,.35), #FFF8F2 40%);
+  }
+  .hc-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:0;padding:6px 4px 4px;
+    background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
+  }
+  .hc-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .hc-log{max-height:2em;}
+  .hc-seats{margin-bottom:4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
   .hc-petal{display:none;}

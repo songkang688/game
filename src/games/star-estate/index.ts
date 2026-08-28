@@ -258,6 +258,19 @@ const CSS = `
   .se-btn{min-width:72px;font-size:15px;padding:0 8px;}
   .se-deed{flex:1 1 100%;}
 }
+/* N-3 配方 E：结束回合 / 掷骰钉底，棋盘按矮屏余高收方 */
+@media (max-height:500px){
+  .se-board-wrap{max-width:min(560px, calc(100dvh - 140px));}
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .se-board-wrap{max-height:min(200px,42dvh);max-width:min(200px,42dvh,calc(100dvh - 140px));flex:0 1 auto;}
+  .se-log{max-height:2.2em;}
+  .se-seats{margin-bottom:4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
   .se-coin{transition:opacity 120ms linear;}

@@ -156,12 +156,8 @@ describe("识字小花园 · 描红台 · 钳位（源码巡检）", () => {
   it("换一个字 / 开一朵花都会变高，重量一次", () => {
     expect(trace).toContain("renderGarden(false)");
     expect(trace).toContain("fit.relayout()");
-    // N-36 起这一步走 `fitPad()`：先收米字格边长再钳位，钳位那一下还在里头
     const at = trace.lastIndexOf("renderGarden(false)");
-    expect(trace.slice(at, at + 80)).toMatch(/fit\.relayout\(\)|fitPad\(\)/);
-    const padAt = trace.indexOf("function fitPad()");
-    expect(padAt, "fitPad 要么不存在，存在就必须自己把钳位做掉").toBeGreaterThan(-1);
-    expect(trace.slice(padAt, padAt + 800)).toContain("fit.relayout()");
+    expect(trace.slice(at, at + 80)).toContain("fit.relayout()");
   });
 
   it("destroy 里把 resize 那条监听拆掉", () => {

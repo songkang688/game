@@ -193,7 +193,7 @@ const CSS = `
   font-weight:900;color:#fff;cursor:pointer;font-family:inherit;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
-.dvs-back{border:none;border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
+.dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:40px;font-size:13.5px;font-weight:900;cursor:pointer;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
@@ -265,6 +265,19 @@ const CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .dvs-meter i{transition:none;}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .dvs-arena{
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:6px;
+  }
+  .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
+  .dvs-canvas{grid-column:2;max-width:100%;}
+  .dvs-pads{
+    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
+    pointer-events:none;padding:0 2px 6px;background:transparent;
+  }
+  .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
+  .dvs-pad .dvs-padname{width:auto;}
 }
 `;
 

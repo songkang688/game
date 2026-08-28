@@ -128,6 +128,18 @@ const CSS = `
   .dmz-pads .dmz-pad{grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;}
   .dmz-pads .dmz-key{min-height:44px;font-size:17px;}
 }
+@media (max-height:520px) and (orientation:landscape){
+  .dmz-wrap:has(> .dmz-canvas){
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;align-items:center;
+  }
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-hud{grid-column:1 / -1;margin-bottom:4px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-canvas{grid-column:2;grid-row:2;width:100%;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-note{grid-column:1 / -1;grid-row:3;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pad{grid-column:3;grid-row:2;margin:0;max-width:168px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads{display:contents;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:first-child{grid-column:1;grid-row:2;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:last-child{grid-column:3;grid-row:2;}
+}
 @media (prefers-reduced-motion:reduce){
   .dmz-key:active,.dmz-mode:active,.dmz-btn:active{transform:none;}
 }

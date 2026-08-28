@@ -188,6 +188,8 @@ export const SCENE_CSS = `
   100%{transform:translateY(140px) rotate(300deg);opacity:.15}}
 @keyframes pytWaveArm{0%,100%{transform:rotate(0)}25%,75%{transform:rotate(-46deg)}50%{transform:rotate(-18deg)}}
 @media (max-width:420px){.pyt-scene{height:118px;}.pyt-car{width:68px;}}
+@media (max-height:500px){.pyt-scene{height:72px;}}
+/* N-37 加重档的 44px 写在 level99 :has(.l99-jump) 上,无 root 仍 72 */
 @media (prefers-reduced-motion:reduce){
   .pyt-car-in,.pyt-train-shake,.pyt-train-depart,.pyt-train-arrive{animation:none;}
   .pyt-loco-art svg{animation:none;}

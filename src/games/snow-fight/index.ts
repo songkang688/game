@@ -245,6 +245,11 @@ const CSS = `
   .snf-chip{padding:4px 9px;font-size:14px;}
 }
 @media (prefers-reduced-motion:reduce){.snf-btn:active,.snf-btn-hold{transform:none;}}
+/* N-55:窄屏双人已是 3×2 牌,宽而矮的横屏仍上下摞十二键。并排两块牌 */
+@media (max-height:500px){
+  .snf-pads[data-duo]{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:none;flex-wrap:nowrap;}
+  .snf-pads[data-duo] .snf-pad-duo{min-width:0;}
+}
 `;
 
 // ---------------------------------------------------------------------------
@@ -755,6 +760,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   tip.textContent = opts.hint;
   const pads = document.createElement("div");
   pads.className = "snf-pads";
+  if (opts.humans === 2) pads.setAttribute("data-duo", "1");
   wrap.append(hud, board, say, tip, pads);
   host.appendChild(wrap);
 
