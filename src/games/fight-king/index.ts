@@ -147,6 +147,19 @@ export const SWAP_HINT_AFTER = 3;
 
 export const SWAP_HINT_TEXT = "连着几场没赢下来啦，上面那排换个小伙伴试试，换完还从这一关继续。";
 
+/**
+ * 塔里的「出战角色」八宫格该不该折起来。
+ *
+ * 八宫格 + 卡片留白一共吃掉约 200px，矮横屏（915×412）上它一常驻，
+ * 下面的对打画面与整排触屏按键就整块掉到裁切线以下——实时格斗滚一下等于漏一招。
+ * 判据只看**舞台真的裁没裁**：装得下的档（412×915 / 1280×800）一个像素都不动，
+ * 玩家自己点开过就永远听玩家的，绝不背着人再折回去。
+ */
+export function shouldFoldHeroGrid(cropPx: number, userOpened: boolean): boolean {
+  if (userOpened) return false;
+  return Number.isFinite(cropPx) && cropPx > 8;
+}
+
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
 /* ------------------------------------------------------------------ */
@@ -191,6 +204,7 @@ const CSS = `
 .fk-ch-n{font-size:14px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
 /* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
+.fk-towerhint{margin-bottom:8px;}
 .fk-swap{font-size:14px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
 .fk-swap:empty{display:none;}
 .fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
@@ -230,6 +244,7 @@ const CSS = `
   align-items:center;justify-content:center;gap:10px;padding:16px;z-index:6;}
 .fk-pause-t{font-size:21px;font-weight:900;color:#8a5aa8;}
 .fk-pause-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.fk-stagecol{min-width:0;}
 .fk-pads{display:flex;gap:8px;margin-top:10px;}
 .fk-pad{flex:1;min-width:0;background:#fff8fc;border-radius:16px;padding:8px;display:flex;align-items:center;gap:8px;
   box-shadow:0 3px 10px rgba(140,120,190,.14);}
@@ -287,6 +302,30 @@ const CSS = `
 @media (max-width:380px){
   .fk-hud{padding:6px 6px 0;}
   .fk-stick{width:66px;height:66px;}
+}
+/* 矮横屏（915×412 一族）：竖着堆的「画面 + 摇杆 + 教学面板」放不下，摇杆改挪到画面两侧。
+   横向有的是余量，画面高就不用再往滚动条里塞——实时格斗滚一下等于漏一招。 */
+@media (min-width:700px) and (max-height:560px){
+  .fk-fight{display:grid;column-gap:8px;align-items:start;
+    grid-template-columns:min-content minmax(0,1fr) min-content;
+    grid-template-areas:"bar bar bar" "padA stage padB" "padA train padB";}
+  .fk-fight>.fk-bar{grid-area:bar;margin-bottom:2px;}
+  /* 塔壳自己那两行(返回菜单条 + 对手提示)也各让出几个像素,画面才不用踩着 FIGHT_MIN_H 出屏 */
+  .fk-towerbar{margin-bottom:4px;}
+  .fk-towerhint{margin-bottom:4px;}
+  .fk-fight>.fk-stagecol{grid-area:stage;}
+  /* 摇杆容器让位，两块摇杆自己去当格子成员：一人一侧，单人局只留右侧那块 */
+  .fk-fight>.fk-pads{display:contents;}
+  .fk-fight>.fk-pads>.fk-pad{width:230px;margin:0;}
+  .fk-fight>.fk-pads>.fk-pad:first-child{grid-area:padA;}
+  .fk-fight>.fk-pads>.fk-pad:last-child{grid-area:padB;}
+  .fk-fight>.fk-pads>.fk-pad .fk-stick{width:74px;height:74px;}
+  .fk-fight>.fk-pads>.fk-pad .fk-stick-dot{width:28px;height:28px;margin:-14px 0 0 -14px;}
+  /* 训练场教学面板是「读」的，限高自滚；「假人：站立/蹲防/随机反击」是「按」的，钉在面板顶上 */
+  .fk-fight>.fk-card{grid-area:train;max-height:28dvh;overflow-y:auto;margin:8px 0 0;}
+  .fk-fight>.fk-card>.fk-h{display:none;}
+  .fk-fight>.fk-card>.fk-train-modes{position:sticky;top:0;z-index:1;margin:0 0 4px;
+    background:linear-gradient(180deg,#fffdff,#fffdffee);}
 }
 @media (prefers-reduced-motion:reduce){
   .fk-vig-in{transition:none;}
@@ -499,7 +538,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
   /* ---------------- DOM ---------------- */
 
-  const wrap = el("div");
+  const wrap = el("div", "fk-fight");
 
   const bar = el("div", "fk-bar");
   const titleChip = el("span", "fk-h", o.title);
@@ -517,6 +556,12 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   wrap.appendChild(bar);
 
   const stage = el("div", "fk-stage");
+  /**
+   * 画面盒子外面再套一层「画面这一栏」：`fitStage` 会把 `.fk-stage` 的宽钳窄，
+   * 钳过之后就再也量不出「这一栏本来有多宽」了。外层这个盒子不参与钳制，
+   * 于是它的宽永远是天然宽——矮横屏摇杆挪到两侧时，这个数才是画面能用的横向余量。
+   */
+  const stageCol = el("div", "fk-stagecol");
   const canvas = el("canvas", "fk-canvas");
   canvas.width = CANVAS_W;
   canvas.height = CANVAS_H_WIDE;
@@ -543,10 +588,15 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 
-  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  /**
+   * 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN。
+   *
+   * 上探层数要留够:塔模式里画面外面套着 stagecol → 对局壳 → 关内宿主 → l99 四层壳 → 塔壳,
+   * 一路数下来正好压在十层边上,少走一层就再也够不着 `.game-stage`,钳高整个静默失效。
+   */
   function stageClipBottom(): number {
     let node: HTMLElement | null = stage.parentElement ?? null;
-    for (let i = 0; node && i < 10; i++) {
+    for (let i = 0; node && i < 16; i++) {
       if (typeof node.className === "string" && node.className.includes("game-stage")) {
         if (typeof node.getBoundingClientRect !== "function") break;
         const r = node.getBoundingClientRect();
@@ -572,12 +622,16 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     if (typeof wrap.getBoundingClientRect !== "function") return;
     const clip = stageClipBottom();
     if (!Number.isFinite(clip)) return;
-    const stageRect = stage.getBoundingClientRect();
-    if (!Number.isFinite(stageRect.top)) return;
-    // 画面下面还有多高的家当(触屏摇杆两块):它们的高度不随画面高变,量一次就是稳的
-    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(stageRect));
-    const room = clip - stageRect.top - below;
-    const cssW = wrap.clientWidth || 0;
+    const colRect =
+      typeof stageCol.getBoundingClientRect === "function"
+        ? stageCol.getBoundingClientRect()
+        : stage.getBoundingClientRect();
+    if (!Number.isFinite(colRect.top)) return;
+    // 画面下面还有多高的家当(触屏摇杆两块 / 训练场教学面板):它们的高度不随画面高变,量一次就是稳的。
+    // 摇杆挪到画面两侧后它们不在「下面」了,量的是外层这一栏的下沿,侧栏再高也不会被算成占用。
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(colRect));
+    const room = clip - colRect.top - below;
+    const cssW = stageCol.clientWidth || wrap.clientWidth || 0;
     const cap = stageMaxWidthPx(cssW, canvas.height / canvas.width, room);
     if (cap === null) {
       if (stage.style.maxWidth) {
@@ -660,7 +714,8 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   pausePanel.append(pauseTitle, pauseHint, pauseBtns);
   stage.appendChild(pausePanel);
 
-  wrap.appendChild(stage);
+  stageCol.appendChild(stage);
+  wrap.appendChild(stageCol);
 
   /* ---------------- 触屏摇杆 ---------------- */
 
@@ -2130,7 +2185,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   /** `openAt` 是 0 基关号，给了就替玩家把那一层点开（锁着的层会停在能玩的最远那层） */
   function showTower(openAt = -1): void {
     clearScreen();
-    const bar = el("div", "fk-bar");
+    const bar = el("div", "fk-bar fk-towerbar");
     bar.appendChild(
       button("fk-btn", "◀ 返回菜单", () => {
         sfx("tap");
@@ -2160,6 +2215,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         sfx("pop");
         heroBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
         swapTip.textContent = "";
+        syncHeroToggle();
       });
       heroBtns.push(b);
       grid.appendChild(b);
@@ -2170,6 +2226,56 @@ export function mount(api: GameApi): { destroy: () => void } {
     const swapTip = el("div", "fk-swap");
     heroRow.appendChild(swapTip);
     view.insertBefore(heroRow, towerHost);
+
+    /* --- 八宫格折叠：矮横屏上它一常驻，对打画面与触屏按键整块掉到裁切线以下 --- */
+    let heroOpen = true;
+    /** 玩家自己点开过就永远听玩家的：自动折叠只在「从没被人碰过」时才动手 */
+    let heroUserOpened = false;
+    const heroToggle = button("fk-btn", "", () => {
+      if (!heroOpen) heroUserOpened = true;
+      sfx("tap");
+      setHeroOpen(!heroOpen);
+    });
+    bar.appendChild(heroToggle);
+
+    function syncHeroToggle(): void {
+      const name = characterById(heroId).name;
+      heroToggle.textContent = `🥊 出战：${name} ${heroOpen ? "▴" : "▾"}`;
+      heroToggle.setAttribute("aria-expanded", heroOpen ? "true" : "false");
+      heroToggle.setAttribute("aria-label", `出战角色 ${name}，${heroOpen ? "收起" : "展开"}换人格`);
+    }
+
+    function setHeroOpen(open: boolean): void {
+      heroOpen = open;
+      heroRow.hidden = !open;
+      syncHeroToggle();
+    }
+    setHeroOpen(true);
+
+    /** 往上找平台舞台，问它「这一屏裁了多少」 */
+    function stageCrop(): number {
+      let node: HTMLElement | null = view.parentElement ?? null;
+      for (let i = 0; node && i < 10; i++) {
+        if (typeof node.className === "string" && node.className.includes("game-stage")) {
+          return (node.scrollHeight || 0) - (node.clientHeight || 0);
+        }
+        node = node.parentElement ?? null;
+      }
+      return 0;
+    }
+
+    /** 只有真的在打的时候才折:选关地图是设计内的长滚页,它裁多少都不该牵连换人格 */
+    let inLevel = false;
+
+    function autoFold(): void {
+      if (!inLevel || !heroOpen) return;
+      if (shouldFoldHeroGrid(stageCrop(), heroUserOpened)) setHeroOpen(false);
+    }
+
+    const onResize = (): void => {
+      autoFold();
+    };
+    globalThis.addEventListener?.("resize", onResize);
 
     let currentFight: FightHandle | null = null;
     /** 同一关连着几场没赢下来 */
@@ -2187,12 +2293,14 @@ export function mount(api: GameApi): { destroy: () => void } {
         grandMessage: "188 关全部打完，格斗塔的塔顶归你啦！",
         playLevel: (stageEl: HTMLElement, ctx: PlayCtx) => {
           const stage = towerStage(ctx.level);
-          const hint = el("div", "fk-sub");
-          hint.style.marginBottom = "8px";
+          const hint = el("div", "fk-sub fk-towerhint");
           hint.textContent = `${stage.boss ? "👑 守擂者：" : "对手："}${characterById(stage.foeId).name} · ${AI_LABELS[stage.aiLevel]}档　${stage.hint}`;
           stageEl.appendChild(hint);
           const host = el("div");
           stageEl.appendChild(host);
+          // 进关那一刻布局才定下来:等画面铺完再问舞台裁没裁,该折的八宫格这时候折
+          inLevel = true;
+          globalThis.setTimeout?.(autoFold, 400);
           currentFight?.destroy();
           currentFight = createFight(host, {
             p1: heroId,
@@ -2220,6 +2328,9 @@ export function mount(api: GameApi): { destroy: () => void } {
               lossStreak += 1;
               if (lossStreak >= SWAP_HINT_AFTER) {
                 swapTip.textContent = SWAP_HINT_TEXT;
+                // 提示写在八宫格里,折着就等于没提:这一下把格子摊开,而且不许再自动折回去
+                heroUserOpened = true;
+                setHeroOpen(true);
                 ctx.lose(SWAP_HINT_TEXT);
                 return;
               }
@@ -2228,6 +2339,7 @@ export function mount(api: GameApi): { destroy: () => void } {
           });
           return {
             destroy: () => {
+              inLevel = false;
               currentFight?.destroy();
               currentFight = null;
             }
@@ -2237,6 +2349,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     );
 
     screenCleanup = () => {
+      globalThis.removeEventListener?.("resize", onResize);
       currentFight?.destroy();
       currentFight = null;
       tower.destroy();
