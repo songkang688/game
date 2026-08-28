@@ -366,6 +366,7 @@ export const FARM_CSS = `
 @media (max-height: 840px) and (min-height:501px) {
   .mtf-quizhost .qz-choices { position: sticky; bottom: 0; z-index: 4;
     background: linear-gradient(180deg, rgba(255, 252, 255, .35), #fff 45%); }
+  .mtf-illus:not(.mtf-illus-count) { max-height: 88px; overflow: hidden; }
 }
 
 /* ---- reduced：风车 / 云 / 蜜蜂 / 成长 / 收获动画全停，静态阶段图与反馈色保留 ---- */

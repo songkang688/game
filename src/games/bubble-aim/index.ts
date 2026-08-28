@@ -311,6 +311,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       @media (max-height:840px) and (min-height:501px) {
         .ba-wrap { padding: 8px; }
         .ba-top { margin-bottom: 6px; }
+        .ba-canvas { max-height: min(56dvh, 320px); width: auto; margin: 0 auto; }
         .ba-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 6px;
           background: linear-gradient(180deg, rgba(232,244,255,0), #E8F4FF 40%); padding-top: 4px; }
       }
