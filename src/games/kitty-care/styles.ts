@@ -195,6 +195,12 @@ export const KTC_CSS = `
 .ktc-night .ktc-msg{color:#ffe9c0;}
 .ktc-night .ktc-bubble{background:#fffdf3;}
 
+@media (max-height:840px) and (min-height:501px){
+  .ktc-washwrap{width:min(240px,70dvh,92%);}
+  .ktc-btns{position:sticky;bottom:0;z-index:4;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,236,0),#fff7ec 42%);}
+}
+
 /* 相册与小屋摆设：360px 上两列，缩略图 ≥ 100px */
 /* 矮横屏（568×320）上卡片格自己挤不出 44px，那一档由 scrollIntoStage() 退一层
    把这块板子写成滚动口；这里先把「翻起来别把整页也带着走」定下来（W5R3-CF-01） */

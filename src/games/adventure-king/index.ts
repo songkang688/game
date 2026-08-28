@@ -132,6 +132,9 @@ const CSS = `
 @media (max-height:840px) and (min-height:501px){
   .ak-pad{position:sticky;bottom:0;z-index:2;padding:4px 0 2px;
     background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
+  .advk-room{max-width:min(420px, calc(100dvh - 240px));}
+  .advk-pad2{position:sticky;bottom:0;z-index:2;padding-top:4px;
+    background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
 }
 .ak-btn{border:none;border-radius:16px;min-width:56px;min-height:52px;padding:6px 12px;font-size:20px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#6b4a2a;background:#fff3dd;
