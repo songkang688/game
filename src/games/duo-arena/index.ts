@@ -303,6 +303,11 @@ const CSS = `
   .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
 }
+@media (max-height:840px){
+  .dua-start{position:sticky;bottom:0;z-index:5;background:#FFB37E;}
+  .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
+}
 `;
 
 export function mount(api: GameApi): { destroy: () => void } {

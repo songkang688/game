@@ -192,6 +192,11 @@ const CSS = `
   }
   .fk-pick-versus .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
 }
+@media (max-height:840px){
+  .fk-pick-train .fk-dummy-go,.fk-pick-versus .fk-versus-go{
+    position:sticky;top:0;z-index:5;background:#fffdff;padding:6px 0;margin-bottom:8px;
+  }
+}
 .fk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .fk-bar[hidden]{display:none;}

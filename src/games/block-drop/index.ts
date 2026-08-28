@@ -185,6 +185,11 @@ const CSS = `
     background:linear-gradient(180deg,rgba(238,244,255,.35),#F9FBFF);}
   .bd-canvas{max-height:min(220px,52dvh);}
 }
+@media (max-height:840px){
+  .bd-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(238,244,255,.35),#F9FBFF);}
+  .bd-canvas{max-height:min(280px,56dvh);}
+}
 @media (min-width:640px) and (max-height:500px){
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
   .bd-canvas{max-height:min(260px,62dvh);}

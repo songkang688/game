@@ -324,6 +324,9 @@ export const CSS = `
   .bmb-padwrap:last-child{grid-area:padr;}
   .bmb-padwrap:only-child{grid-area:padr;}
 }
+@media (max-height:840px){
+  .bmb-pads{position:sticky;bottom:0;z-index:4;}
+}
 @media (prefers-reduced-motion:reduce){
   .bmb-btn:active,.bmb-act:active,.bmb-pick:active{transform:none;}
   .bmb-knob{transition:none;}
