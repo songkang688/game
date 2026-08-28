@@ -123,6 +123,12 @@ export function boardWidthAt(viewportWidth: number): number {
   return viewportWidth - 2 * 10 - 2 * pad + 2 * boardBleed(viewportWidth);
 }
 
+/** 棋盘盒该不该钳高：装得下返回 null，装不下返回剩余像素。 */
+export function boardBoxMaxPx(room: number, scrollH: number): number | null {
+  if (!(room > 24) || !(scrollH > room + 1)) return null;
+  return Math.floor(room);
+}
+
 export const CSS = `
 .mst-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF0F7,#F3F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
@@ -888,6 +894,43 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   raf = requestAnimationFrame(loop);
   paint();
 
+  const fitBoardBox = (): void => {
+    try {
+      const win = root.ownerDocument?.defaultView;
+      if (!win || typeof root.getBoundingClientRect !== "function") return;
+      root.style.maxHeight = "";
+      const bottoms: number[] = [];
+      for (let p = root.parentElement; p; p = p.parentElement) {
+        const cs = win.getComputedStyle(p);
+        const oy = cs.overflowY;
+        if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+          const r = p.getBoundingClientRect();
+          const bh = Number.parseFloat(cs.borderBottomWidth);
+          const clip =
+            Number.isFinite(p.clientHeight) && p.clientHeight > 0
+              ? r.top + p.clientTop + p.clientHeight
+              : r.bottom - (Number.isFinite(bh) ? bh : 0);
+          bottoms.push(clip);
+        }
+      }
+      if (!bottoms.length) return;
+      const room = Math.min(...bottoms) - root.getBoundingClientRect().top;
+      const cap = boardBoxMaxPx(room, root.scrollHeight);
+      if (cap === null) {
+        root.style.overflowY = "";
+        return;
+      }
+      root.style.maxHeight = `${cap}px`;
+      root.style.overflowY = "auto";
+      root.style.touchAction = "pan-y";
+    } catch {
+      // 单测桩没有布局盒
+    }
+  };
+  const onWinResize = (): void => fitBoardBox();
+  root.ownerDocument?.defaultView?.addEventListener?.("resize", onWinResize);
+  requestAnimationFrame(fitBoardBox);
+
   return {
     root,
     board,
@@ -920,6 +963,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       runner.clear();
       for (const t of fxTimers) clearTimeout(t);
       fxTimers.clear();
+      root.ownerDocument?.defaultView?.removeEventListener?.("resize", onWinResize);
       root.remove();
     },
   };
