@@ -176,6 +176,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       <svg class="clf-canvas" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="待涂色的线稿"></svg>
       <button type="button" class="clf-zoom" aria-label="把画放大看清楚">🔍</button>
     </div>
+    <div class="clf-ops">
     <div class="clf-chips"></div>
     <div class="clf-tools">
       <button type="button" class="clf-tool clf-undo">↩️ 撤销</button>
@@ -190,6 +191,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     </div>` : ""}
     <div class="clf-palette"></div>
     <div class="clf-msg"></div>
+    </div>
   `;
   stage.appendChild(wrap);
 

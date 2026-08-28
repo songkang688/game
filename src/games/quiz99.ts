@@ -161,6 +161,8 @@ const QUIZ_CSS = `
   .qz-prompt { font-size: 26px; min-height: 44px; padding: 6px 10px; }
   /* 题面插图(形状图/钟面这类 svg)按配方收高:选项行必须进屏,插图缩一点不影响认读 */
   .qz-prompt svg, .qz-prompt img { max-height: 64px; width: auto; }
+  /* N-44:农场竖式是 DOM(.mtf-vert)+题下作物卡(.mtf-illus),不是 svg,旧选择器漏了 */
+  .qz-prompt .mtf-vert, .qz-wrap > .mtf-illus { max-height: 64px; overflow: hidden; }
   .qz-choices { gap: 8px; }
   .qz-choice { min-height: 46px; font-size: 22px; padding: 4px 12px; }
   .qz-choice.qz-big { min-width: 84px; min-height: 48px; font-size: 26px; }

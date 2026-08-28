@@ -199,6 +199,8 @@ describe("quiz99 横屏矮屏紧凑档(三办 R5-A L-1)", () => {
 
   it("题面插图按配方收高:svg/img 有 max-height 兜底,选项行才能进屏", () => {
     expect(block).toMatch(/\.qz-prompt svg, \.qz-prompt img \{ max-height: \d+px/);
+    expect(block).toContain(".qz-prompt .mtf-vert");
+    expect(block).toContain(".qz-wrap > .mtf-illus");
   });
 
   it("正文红线不动:.qz-ask 的 17px 基准字号还在(紧凑档只收 min-height)", () => {
