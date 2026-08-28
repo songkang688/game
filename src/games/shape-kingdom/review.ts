@@ -17,7 +17,8 @@ import type { PlayCtx, PlayHandle, StorageLike } from "../level99";
 import { runQuiz, type QuizOptions, type QuizTheme } from "../quiz99";
 import { buildReviewQuestions, type ShapeQ, type ShapeQKind } from "./levels";
 import { HINT_LABELS, safeHints, type HintTrio } from "./hints";
-import { fitIntoStage } from "./draw";
+import { SHORT_SCREEN_PX, fitIntoStage } from "./draw";
+import { castleSvg } from "./kingdom";
 import { resetClippedScroll } from "./stageScroll";
 
 // ---------------------------------------------------------------------------
@@ -173,6 +174,14 @@ const REVIEW_CSS = `
    万一它就是正解，这一关直接卡死）。答题器的 .qz-wrap 是公共文件生的、本档不许动，
    但它挂在哪儿是本款说了算——给它一个本款自己的宿主，再由 fitIntoStage 钳住宿主。 */
 .shk-quizhost{min-width:0;}
+/* 问答关的王国氛围帽（B 档修订清单第 7 条）：castleSvg(0) 剪影紫静态复用。
+   lit=0 六段全剪影、不带 shk-seg-new 也没有升旗，天生静态，reduced 无关；
+   纯装饰不接指针，挂在提示条面板顶部、答题器宿主 .shk-quizhost 之外，
+   不进答题区包围盒。矮屏沿作图关同一门槛整顶藏掉，竖向空间全部还给题面。 */
+.shk-quiz-castle{display:flex;justify-content:center;pointer-events:none;min-height:0;}
+.shk-quiz-castle svg{width:min(188px,54%);height:auto;display:block;opacity:.85;
+  filter:drop-shadow(0 2px 2px rgba(120,100,160,.22));}
+@media (max-height:${SHORT_SCREEN_PX}px){.shk-quiz-castle{display:none;}}
 `;
 
 export interface ReviewOptions {
@@ -211,6 +220,12 @@ export function runQuizWithReview(opts: ReviewOptions, deps: ReviewDeps = {}): P
   const style = document.createElement("style");
   style.textContent = REVIEW_CSS;
   wrap.appendChild(style);
+  // 王国氛围帽：一处 innerHTML 静态复用 castleSvg(0)，判定与答题器一个字不碰
+  const castleHat = document.createElement("div");
+  castleHat.className = "shk-quiz-castle";
+  castleHat.setAttribute("aria-hidden", "true");
+  castleHat.innerHTML = castleSvg(0);
+  wrap.appendChild(castleHat);
   const banner = document.createElement("div");
   banner.className = "shk-banner";
   banner.style.color = theme.accent;
