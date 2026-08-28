@@ -182,6 +182,10 @@ const CSS = `
 .fdf-wrap.fdf-scroll{overscroll-behavior:contain;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
 .fdf-tools[hidden]{display:none;}
+@media (max-height:840px) and (min-height:501px){
+  .fdf-tools{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#fff8ec 40%);}
+}
 .fdf-btn{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;cursor:pointer;
   min-height:44px;color:#fff;background:linear-gradient(180deg,#74c0fc,#4dabf7);box-shadow:0 4px 0 #1c7ed6;
   font-family:inherit;white-space:nowrap;}

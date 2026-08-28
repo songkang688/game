@@ -305,6 +305,10 @@ ${RBR_TOKENS_CSS}
   .rbr-beat { animation: none; }
   .rbr-confetti { display: none; }
 }
+@media (max-height:840px) and (min-height:501px) {
+  .rbr-pads { position: sticky; bottom: 0; z-index: 5; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(232,244,224,0), #E8F4E0 42%); }
+}
 `;
 
 const ENDLESS_CSS = `
