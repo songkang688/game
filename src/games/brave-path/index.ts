@@ -178,6 +178,14 @@ const CSS = `
 .bvp-mode-em{font-size:34px;line-height:1;flex:0 0 auto;}
 .bvp-mode-t{font-size:17px;font-weight:900;display:block;margin-bottom:3px;}
 .bvp-mode-d{font-size:13px;font-weight:700;color:var(--bvp-soft);line-height:1.55;display:block;}
+/* N-86:矮横屏大厅模式卡收高两列,对战/备战不再落在 412 线下;≠ N-32 无尽战斗 */
+@media (max-height:500px){
+  .bvp-modes{grid-template-columns:1fr 1fr;gap:8px;}
+  .bvp-mode{padding:8px 10px;gap:8px;align-items:center;}
+  .bvp-mode-em{font-size:22px;}
+  .bvp-mode-t{font-size:14px;margin-bottom:0;}
+  .bvp-mode-d{display:none;}
+}
 .bvp-hero-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:800;color:var(--bvp-soft);}
 .bvp-fighter{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:0 3px 10px rgba(140,120,190,.16);margin-bottom:9px;
   position:relative;transition:transform var(--bvp-t-turn) ease-out,box-shadow var(--bvp-t-turn) ease-out;}
