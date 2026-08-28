@@ -3,6 +3,7 @@
 基线：`origin/game-1.3` @ `51803a4b`（含 `ce14c0a5` / PR #68 N-45/C-8/N-10）。
 分支：`cursor/trio-r12-tester-b-c14c`。
 范围：r11 playbook 双人新伤 N-52…N-57。未改 quiz99 / color-fun / math-farm / level99。未重做 N-45/40/41/42/25/31/1/2/3/4。测试只增。
+水位：`npm test` **1138 files / 19394 tests** 全绿（r11 A 为 1128/19369；本分支 +6 个 `*.r12.test.ts`）。
 
 配方：L=手势面 vs 壳；G=侧栏/钳。离线=`top≥412` 或 `bottom>412`。预览 `http://127.0.0.1:4182/`。视口 915×412 时浏览器窗口须同尺寸，否则 `max-height:500px` 媒体不命中。
 
