@@ -13,11 +13,15 @@
  * 可点的格子自己的「第 x 行第 y 个」标签不受影响。
  *
  * 红线：不碰 diffIdx / sameCell 判定、不碰 26px 热区、不开计时器、不加动画。
- * 第 1–3 章（水果 / 萌宠 / 海底）本轮已配齐图集；第 4–10 章贴纸挂第 3 轮，
- * 配齐一章亮一章，这个文件一行都不用再改。
+ * 第 1–3 章（水果 / 萌宠 / 海底）已配齐；第 4–10 章（甜品 / 夜空 / 玩具 /
+ * 侦探 / 灯塔 / 镜像 / 连环）贴纸图集由 stickers.ts 扩容后本表自动亮起
+ * （门控仍走 hasSticker，本文件不改判定逻辑）。
  */
 import { hasSticker, sticker } from "../../art/kit/stickers";
 import type { CellView, Scene } from "./scene12";
+
+/** 已配齐贴纸的主题下标（第 1–10 章）。门控仍只认 hasSticker，此表只给测试点名。 */
+export const STICKER_READY_THEMES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 /** 贴纸相对字号的补偿：贴纸画布带留白（软投影 / 描边），放大一点才与 emoji 等大 */
 export const STICKER_FONT_RATIO = 1.12;

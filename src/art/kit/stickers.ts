@@ -2118,6 +2118,595 @@ reg("🐚", "贝壳", () => {
 });
 
 // ---------------------------------------------------------------------------
+// L-3：find-diff 第 4–10 章盘面贴纸（甜品 / 夜空 / 玩具 / 侦探 / 灯塔 / 镜像 / 连环）
+// 工序同前：双色分面 + 2px 深描边 + 左上高光； twin 替换对各画一张，避免混排关闸。
+// ---------------------------------------------------------------------------
+
+reg("🍰", "蛋糕", () => {
+  const cream = "#fff4e0";
+  const cake = "#f4c48a";
+  return (
+    gs(24, 43, 14) +
+    `<path d="M10 36 L38 36 L36 22 L12 22 Z" fill="${cake}" stroke="${o(cake)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M36 22 L38 36 L32 36 L31 22 Z" fill="${shade(cake, -14)}" opacity=".85"/>` +
+    `<path d="M11 22 Q24 12 37 22 L12 22 Z" fill="${cream}" stroke="${o("#e8c9b0")}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<ellipse cx="24" cy="18" rx="11" ry="4.2" fill="${P.rose}" stroke="${o(P.rose)}" stroke-width="1.4"/>` +
+    `<circle cx="18" cy="17" r="1.6" fill="${P.red}"/><circle cx="24" cy="15.5" r="1.6" fill="${P.gold}"/><circle cx="30" cy="17" r="1.6" fill="${P.red}"/>` +
+    hi(16, 20)
+  );
+});
+
+reg("🧁", "纸杯蛋糕", () => {
+  const paper = "#f7d7b0";
+  const top = "#f8c4d4";
+  return (
+    gs(24, 43, 12) +
+    `<path d="M14 24 L34 24 L31 40 L17 40 Z" fill="${paper}" stroke="${o(paper)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M16 26 L18 38 M21 26 L22.2 38 M27 26 L25.8 38 M32 26 L30 38" fill="none" stroke="${o(paper)}" stroke-width="1.2" opacity=".55"/>` +
+    `<path d="M13 24 Q24 8 35 24 Z" fill="${top}" stroke="${o(top)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 8 Q28 14 35 24 Q30 22 24 22 Q18 22 13 24 Q20 14 24 8 Z" fill="${shade(top, -12)}" opacity=".35"/>` +
+    `<circle cx="24" cy="12" r="2.2" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.1"/>` +
+    hi(18, 16)
+  );
+});
+
+reg("🍩", "甜甜圈", () => {
+  const c = "#e8a06a";
+  const icing = "#f783ac";
+  return (
+    gs(24, 42, 14) +
+    `<circle cx="24" cy="24" r="15" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="24" r="13" fill="${icing}"/>` +
+    `<circle cx="24" cy="24" r="5.4" fill="#fff8f0" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M24 39 a15 15 0 0 0 13.6 -20" fill="none" stroke="${shade(c, -18)}" stroke-width="3" opacity=".35"/>` +
+    `<circle cx="15" cy="18" r="1.3" fill="${P.gold}"/><circle cx="31" cy="16" r="1.2" fill="${P.teal}"/><circle cx="33" cy="28" r="1.2" fill="${P.gold}"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("🍫", "巧克力", () => {
+  const c = "#7a4630";
+  return (
+    gs(24, 42, 13) +
+    `<rect x="8" y="12" width="32" height="24" rx="3" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M8 24 H40 M24 12 V36 M8 18 H40 M8 30 H40" fill="none" stroke="${shade(c, -20)}" stroke-width="1.4"/>` +
+    `<path d="M32 12 V36 H40 V15 Q40 12 37 12 Z" fill="${shade(c, -14)}" opacity=".8"/>` +
+    hi(13, 16)
+  );
+});
+
+reg("🍭", "棒棒糖", () => {
+  const c = P.pink;
+  return (
+    gs(24, 43, 11) +
+    `<path d="M23 26 L26 42" stroke="${P.wood}" stroke-width="3.2" stroke-linecap="round"/>` +
+    `<circle cx="24" cy="18" r="11" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M24 7 A11 11 0 0 1 35 18 A11 11 0 0 1 24 29 A8 8 0 0 0 24 13 A5 5 0 0 1 24 7" fill="${P.gold}" opacity=".85"/>` +
+    hi(18, 12)
+  );
+});
+
+reg("🎂", "生日蛋糕", () => {
+  const cake = "#f6d5a8";
+  const icing = "#fff6ea";
+  return (
+    gs(24, 43, 14) +
+    `<path d="M9 38 L39 38 L37 24 L11 24 Z" fill="${cake}" stroke="${o(cake)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M11 24 Q24 18 37 24 L11 24 Z" fill="${icing}" stroke="#e8d4c0" stroke-width="1.6"/>` +
+    `<rect x="16.5" y="11" width="2.4" height="10" rx="1" fill="${P.cream}"/>` +
+    `<rect x="29" y="11" width="2.4" height="10" rx="1" fill="${P.cream}"/>` +
+    `<ellipse cx="17.7" cy="10" rx="2.2" ry="2.6" fill="${P.orange}"/>` +
+    `<ellipse cx="30.2" cy="10" rx="2.2" ry="2.6" fill="${P.red}"/>` +
+    `<path d="M17.7 7 Q18.4 5.2 19.6 6.2 M30.2 7 Q31 5.2 32.1 6.2" fill="none" stroke="${P.orange}" stroke-width="1.2" stroke-linecap="round"/>` +
+    hi(14, 26)
+  );
+});
+
+reg("🍮", "布丁", () => {
+  const c = "#e8c36a";
+  return (
+    gs(24, 43, 12) +
+    `<path d="M12 36 Q12 18 24 16 Q36 18 36 36 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 16 Q36 18 36 36 Q32 34 24 34 Q16 34 12 36 Q12 22 24 16 Z" fill="${shade(c, -12)}" opacity=".3"/>` +
+    `<ellipse cx="24" cy="36" rx="13" ry="3.2" fill="#f4e4c4" stroke="#d8c4a0" stroke-width="1.3"/>` +
+    `<path d="M24 16 Q26 22 24 28" fill="none" stroke="#c45c3a" stroke-width="2.4" stroke-linecap="round"/>` +
+    hi(17, 22)
+  );
+});
+
+reg("🪐", "土星", () => {
+  const c = "#d9b06a";
+  return (
+    gs(24, 42, 14) +
+    `<ellipse cx="24" cy="24" rx="18" ry="5.2" fill="none" stroke="${o(P.gold)}" stroke-width="3.2"/>` +
+    `<circle cx="24" cy="24" r="10" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M24 34 a10 10 0 0 0 9 -14" fill="none" stroke="${shade(c, -16)}" stroke-width="2.4" opacity=".4"/>` +
+    `<ellipse cx="24" cy="24" rx="18" ry="5.2" fill="none" stroke="${P.gold}" stroke-width="1.6"/>` +
+    hi(18, 18)
+  );
+});
+
+reg("🌈", "彩虹", () => {
+  const arcs = [
+    [P.red, 16],
+    [P.orange, 13.2],
+    [P.gold, 10.4],
+    [P.green, 7.6],
+    [P.blue, 4.8]
+  ];
+  return (
+    gs(24, 42, 14) +
+    arcs
+      .map(
+        ([col, r]) =>
+          `<path d="M${24 - r} 32 A${r} ${r} 0 0 1 ${24 + r} 32" fill="none" stroke="${col}" stroke-width="2.6" stroke-linecap="round"/>`
+      )
+      .join("") +
+    cloudBody(12, 32, 0.7, "#ffffff") +
+    cloudBody(36, 32, 0.7, "#ffffff") +
+    hi(16, 18, 2.4, 1.4)
+  );
+});
+
+reg("🌠", "流星", () => {
+  return (
+    gs(24, 42, 12) +
+    `<path d="M8 12 L22 24" stroke="${P.gold}" stroke-width="3.2" stroke-linecap="round"/>` +
+    `<path d="M10 8 L20 22 M6 16 L22 26" stroke="#fff4c8" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>` +
+    goldStar(11, false) +
+    hi(30, 30, 2, 1.4)
+  );
+});
+
+reg("🔭", "望远镜", () => {
+  const c = P.blueDeep;
+  return (
+    gs(24, 43, 12) +
+    `<path d="M14 34 L20 18 L28 22 L22 38 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M20 18 L32 8 L38 14 L28 22 Z" fill="${P.gray}" stroke="${o(P.gray)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<circle cx="36" cy="10" r="3.4" fill="${P.blue}" stroke="${o(P.blue)}" stroke-width="1.4"/>` +
+    `<path d="M16 36 L10 42 M22 38 L26 44" stroke="${P.brown}" stroke-width="2.4" stroke-linecap="round"/>` +
+    hi(24, 16)
+  );
+});
+
+reg("🧸", "玩偶熊", () =>
+  critterFace({
+    main: "#d7a06a",
+    ear: "round",
+    earInner: "#f2c09a",
+    front: `<ellipse cx="24" cy="30" rx="5.2" ry="3.8" fill="#c88858"/><circle cx="22.2" cy="30" r="1" fill="${INK}"/><circle cx="25.8" cy="30" r="1" fill="${INK}"/>` +
+      faceDots(19, 29, 23.5, 26.5, 2.6)
+  })
+);
+
+reg("🚂", "火车", () => {
+  const c = P.red;
+  return (
+    gs(24, 43, 14) +
+    `<rect x="6" y="22" width="18" height="14" rx="2" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<rect x="24" y="16" width="16" height="20" rx="2" fill="${P.blueDeep}" stroke="${o(P.blueDeep)}" stroke-width="2"/>` +
+    `<rect x="27" y="19" width="10" height="7" rx="1" fill="${P.blue}"/>` +
+    `<rect x="32" y="8" width="4.4" height="9" fill="${P.gray}" stroke="${o(P.gray)}" stroke-width="1.3"/>` +
+    `<circle cx="12" cy="38" r="4" fill="${INK}"/><circle cx="22" cy="38" r="4" fill="${INK}"/><circle cx="34" cy="38" r="4" fill="${INK}"/>` +
+    `<circle cx="12" cy="38" r="1.6" fill="${P.gray}"/><circle cx="22" cy="38" r="1.6" fill="${P.gray}"/><circle cx="34" cy="38" r="1.6" fill="${P.gray}"/>` +
+    hi(10, 25)
+  );
+});
+
+reg("✈️", "飞机", () => {
+  const c = "#dce8f4";
+  return (
+    gs(24, 42, 14) +
+    `<path d="M24 6 L28 22 L44 26 L28 28 L24 42 L20 28 L4 26 L20 22 Z" fill="${c}" stroke="${o("#9ab0c4")}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 6 L28 22 L44 26 L32 26 L24 20 Z" fill="${P.blue}" opacity=".55"/>` +
+    hi(22, 14)
+  );
+});
+
+reg("🚁", "直升机", () => {
+  const c = P.teal;
+  return (
+    gs(24, 42, 14) +
+    `<path d="M8 14 H40" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>` +
+    `<path d="M24 14 V20" stroke="${INK}" stroke-width="2"/>` +
+    `<ellipse cx="24" cy="28" rx="12" ry="8" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<rect x="34" y="24" width="8" height="4" rx="1" fill="${o(c)}"/>` +
+    `<path d="M24 36 V42 M16 42 H32" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>` +
+    `<rect x="16" y="24" width="8" height="6" rx="1" fill="${P.blue}"/>` +
+    hi(18, 24)
+  );
+});
+
+reg("🏀", "篮球", () => {
+  const c = P.orange;
+  return (
+    gs(24, 42, 13) +
+    `<circle cx="24" cy="24" r="14" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M10 24 H38 M24 10 V38 M14 14 Q24 24 14 34 M34 14 Q24 24 34 34" fill="none" stroke="${o(c)}" stroke-width="1.6"/>` +
+    hi(16, 16)
+  );
+});
+
+reg("🎈", "气球", () => {
+  const c = P.red;
+  return (
+    gs(24, 43, 11) +
+    `<path d="M24 38 Q25 42 28 44" fill="none" stroke="${INK}" stroke-width="1.5"/>` +
+    `<ellipse cx="24" cy="20" rx="11" ry="14" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M24 34 L21 38 L27 38 Z" fill="${o(c)}"/>` +
+    hi(18, 12)
+  );
+});
+
+reg("🥁", "鼓", () => {
+  const c = P.red;
+  return (
+    gs(24, 43, 13) +
+    `<ellipse cx="24" cy="18" rx="14" ry="6" fill="#f8ecd4" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M10 18 V32 Q10 38 24 38 Q38 38 38 32 V18" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M14 8 L30 28 M34 8 L18 28" stroke="${P.wood}" stroke-width="2.2" stroke-linecap="round"/>` +
+    hi(16, 16)
+  );
+});
+
+reg("🔍", "放大镜", () => {
+  return (
+    gs(24, 43, 12) +
+    `<circle cx="20" cy="20" r="11" fill="#d7ecfa" stroke="${o(P.blueDeep)}" stroke-width="3"/>` +
+    `<path d="M28 28 L38 40" stroke="${P.brown}" stroke-width="4.2" stroke-linecap="round"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("🧩", "拼图", () => {
+  const c = P.lav;
+  return (
+    gs(24, 42, 13) +
+    `<path d="M10 12 H22 Q24 8 26 12 H36 V22 Q40 24 36 26 V36 H26 Q24 40 22 36 H10 V26 Q6 24 10 22 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M36 12 V22 Q40 24 36 26 V36 H30 V26 Q34 24 30 22 V12 Z" fill="${shade(c, -14)}" opacity=".75"/>` +
+    hi(16, 16)
+  );
+});
+
+reg("🗝️", "钥匙", () => {
+  const c = P.gold;
+  return (
+    gs(24, 43, 12) +
+    `<circle cx="16" cy="16" r="8" fill="none" stroke="${c}" stroke-width="4"/>` +
+    `<path d="M22 20 L38 36 M32 30 L38 30 M30 34 L36 34" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>` +
+    hi(12, 12)
+  );
+});
+
+reg("📜", "卷轴", () => {
+  const paper = "#f4e4c4";
+  return (
+    gs(24, 42, 13) +
+    `<rect x="12" y="10" width="24" height="28" rx="2" fill="${paper}" stroke="${o(paper)}" stroke-width="2"/>` +
+    `<ellipse cx="12" cy="24" rx="4" ry="14" fill="${P.wood}" stroke="${o(P.wood)}" stroke-width="1.6"/>` +
+    `<ellipse cx="36" cy="24" rx="4" ry="14" fill="${P.wood}" stroke="${o(P.wood)}" stroke-width="1.6"/>` +
+    `<path d="M18 18 H30 M18 24 H30 M18 30 H28" stroke="${o(paper)}" stroke-width="1.4"/>` +
+    hi(18, 14)
+  );
+});
+
+reg("🕯️", "蜡烛", () => {
+  const wax = "#fff4e0";
+  return (
+    gs(24, 43, 11) +
+    `<rect x="18" y="16" width="12" height="24" rx="2" fill="${wax}" stroke="${o("#e8d4b0")}" stroke-width="2"/>` +
+    `<ellipse cx="24" cy="16" rx="6" ry="2.4" fill="#fff"/>` +
+    `<path d="M24 6 Q27 11 24 16 Q21 11 24 6 Z" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width="1.3"/>` +
+    hi(20, 20)
+  );
+});
+
+reg("🎩", "礼帽", () => {
+  const c = "#4a4458";
+  return (
+    gs(24, 42, 14) +
+    `<ellipse cx="24" cy="32" rx="16" ry="5" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<rect x="14" y="10" width="20" height="22" rx="3" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<rect x="14" y="24" width="20" height="5" fill="${P.gold}"/>` +
+    hi(18, 14)
+  );
+});
+
+reg("🧭", "指南针", () => {
+  const ring = P.gold;
+  return (
+    gs(24, 42, 13) +
+    `<circle cx="24" cy="24" r="14" fill="#fff8ec" stroke="${o(ring)}" stroke-width="3"/>` +
+    `<path d="M24 12 L28 24 L24 36 L20 24 Z" fill="${P.red}"/>` +
+    `<path d="M12 24 L24 20 L36 24 L24 28 Z" fill="${P.blueDeep}" opacity=".85"/>` +
+    `<circle cx="24" cy="24" r="2.2" fill="${ring}"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("📒", "黄本", () => {
+  const c = P.gold;
+  return (
+    gs(24, 42, 12) +
+    `<rect x="12" y="8" width="24" height="32" rx="2" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<rect x="12" y="8" width="5" height="32" fill="${shade(c, -18)}"/>` +
+    `<path d="M20 16 H32 M20 22 H32 M20 28 H28" stroke="${o(c)}" stroke-width="1.4"/>` +
+    hi(20, 12)
+  );
+});
+
+reg("📕", "红本", () => {
+  const c = P.red;
+  return (
+    gs(24, 42, 12) +
+    `<rect x="12" y="8" width="24" height="32" rx="2" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<rect x="12" y="8" width="5" height="32" fill="${shade(c, -18)}"/>` +
+    `<rect x="20" y="14" width="12" height="8" rx="1" fill="${P.gold}" opacity=".85"/>` +
+    hi(20, 12)
+  );
+});
+
+reg("🌀", "漩涡", () => {
+  const c = P.blue;
+  return (
+    gs(24, 42, 13) +
+    `<path d="M24 8 C38 8 40 22 30 26 C18 30 18 14 28 16 C34 17 32 24 24 24 C14 24 12 34 22 36 C34 38 38 28 32 26" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round"/>` +
+    `<circle cx="24" cy="24" r="3" fill="${P.blueDeep}"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("🚦", "红绿灯", () => {
+  const box = "#4a4458";
+  return (
+    gs(24, 43, 10) +
+    `<rect x="16" y="6" width="16" height="34" rx="4" fill="${box}" stroke="${o(box)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="14" r="4" fill="${P.red}"/><circle cx="24" cy="23" r="4" fill="${P.gold}"/><circle cx="24" cy="32" r="4" fill="${P.green}"/>` +
+    hi(20, 10)
+  );
+});
+
+reg("🛟", "救生圈", () => {
+  const c = P.red;
+  return (
+    gs(24, 42, 14) +
+    `<circle cx="24" cy="24" r="14" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="24" r="7" fill="#fff8f0" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M24 10 A14 14 0 0 1 38 24 L31 24 A7 7 0 0 0 24 17 Z" fill="#ffffff" opacity=".9"/>` +
+    `<path d="M24 38 A14 14 0 0 1 10 24 L17 24 A7 7 0 0 0 24 31 Z" fill="#ffffff" opacity=".9"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("⚓", "锚", () => {
+  const c = P.blueDeep;
+  return (
+    gs(24, 43, 12) +
+    `<circle cx="24" cy="10" r="4" fill="none" stroke="${c}" stroke-width="2.6"/>` +
+    `<path d="M24 14 V36 M16 22 H32" stroke="${c}" stroke-width="3" stroke-linecap="round"/>` +
+    `<path d="M10 28 Q10 38 24 40 Q38 38 38 28" fill="none" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>` +
+    hi(20, 18)
+  );
+});
+
+reg("🪁", "风筝", () => {
+  const c = P.rose;
+  return (
+    gs(24, 43, 12) +
+    `<path d="M24 6 L38 22 L24 30 L10 22 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 6 L24 30 M10 22 L38 22" stroke="${o(c)}" stroke-width="1.4"/>` +
+    `<path d="M24 30 Q28 36 24 42 Q20 36 24 30" fill="none" stroke="${P.gold}" stroke-width="1.6"/>` +
+    hi(18, 12)
+  );
+});
+
+reg("🎐", "风铃", () => {
+  const glass = "#a8e0ea";
+  return (
+    gs(24, 43, 11) +
+    `<path d="M24 6 V12" stroke="${P.wood}" stroke-width="2"/>` +
+    `<path d="M14 12 Q24 8 34 12 L30 28 Q24 32 18 28 Z" fill="${glass}" stroke="${o(glass)}" stroke-width="2"/>` +
+    `<path d="M24 30 V40" stroke="${P.gold}" stroke-width="1.6"/>` +
+    `<path d="M20 40 H28" stroke="${P.red}" stroke-width="2" stroke-linecap="round"/>` +
+    hi(18, 16)
+  );
+});
+
+reg("🌪️", "龙卷风", () => {
+  const c = P.gray;
+  return (
+    gs(24, 43, 13) +
+    `<path d="M10 10 Q24 6 38 12 Q24 16 12 18 Q24 22 36 24 Q24 28 16 30 Q24 34 32 36 Q24 40 20 42" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round"/>` +
+    `<path d="M12 12 Q24 10 34 14" fill="none" stroke="#ffffff" stroke-width="1.6" opacity=".7"/>` +
+    hi(16, 12)
+  );
+});
+
+reg("🛶", "独木舟", () => {
+  const c = P.wood;
+  return (
+    gs(24, 43, 14) +
+    `<path d="M6 28 Q24 18 42 28 Q24 38 6 28 Z" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<path d="M12 28 Q24 24 36 28" fill="none" stroke="${o(c)}" stroke-width="1.5"/>` +
+    `<path d="M22 16 L26 30" stroke="${P.brown}" stroke-width="2.2" stroke-linecap="round"/>` +
+    hi(16, 24)
+  );
+});
+
+reg("🧿", "蓝眼睛", () => {
+  return (
+    gs(24, 42, 13) +
+    `<circle cx="24" cy="24" r="14" fill="${P.blueDeep}" stroke="${o(P.blueDeep)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="24" r="9" fill="${P.blue}"/>` +
+    `<circle cx="24" cy="24" r="4.4" fill="${INK}"/>` +
+    `<circle cx="22" cy="22" r="1.4" fill="#ffffff"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("🪞", "镜子", () => {
+  const frame = P.gold;
+  return (
+    gs(24, 43, 12) +
+    `<rect x="12" y="6" width="24" height="32" rx="4" fill="${frame}" stroke="${o(frame)}" stroke-width="2"/>` +
+    `<rect x="15" y="9" width="18" height="26" rx="2" fill="#d7ecfa"/>` +
+    `<path d="M18 12 L28 28" stroke="#ffffff" stroke-width="2.4" opacity=".7"/>` +
+    `<path d="M22 40 H26" stroke="${frame}" stroke-width="3" stroke-linecap="round"/>` +
+    hi(18, 12)
+  );
+});
+
+reg("🫧", "泡泡", () => {
+  const mk = (cx: number, cy: number, r: number): string =>
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#d7ecfa" fill-opacity=".65" stroke="${P.blue}" stroke-width="1.6"/>` +
+    `<ellipse cx="${cx - r * 0.3}" cy="${cy - r * 0.3}" rx="${r * 0.28}" ry="${r * 0.18}" fill="#ffffff" opacity=".8"/>`;
+  return gs(24, 42, 13) + mk(18, 22, 9) + mk(32, 16, 6) + mk(30, 32, 7);
+});
+
+reg("🌊", "海浪", () => {
+  const c = P.blue;
+  return (
+    gs(24, 43, 14) +
+    `<path d="M4 30 Q12 18 20 28 Q28 38 36 22 Q40 16 44 20 L44 40 L4 40 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M4 34 Q14 24 22 32 Q30 40 40 26" fill="none" stroke="#ffffff" stroke-width="2" opacity=".7"/>` +
+    hi(14, 24)
+  );
+});
+
+reg("🪷", "莲花", () => {
+  const c = P.pink;
+  return (
+    gs(24, 43, 13) +
+    `<ellipse cx="24" cy="36" rx="14" ry="4" fill="${P.green}" stroke="${o(P.green)}" stroke-width="1.5"/>` +
+    `<path d="M24 34 Q12 24 16 14 Q24 20 24 34 M24 34 Q36 24 32 14 Q24 20 24 34 M24 34 Q24 8 24 8 Q30 18 24 34 Q18 18 24 8" fill="${c}" stroke="${o(c)}" stroke-width="1.7" stroke-linejoin="round"/>` +
+    `<circle cx="24" cy="22" r="3" fill="${P.gold}"/>` +
+    hi(18, 16)
+  );
+});
+
+reg("🪸", "珊瑚", () => {
+  const c = P.rose;
+  return (
+    gs(24, 43, 12) +
+    `<path d="M24 40 V22 M24 28 Q16 18 12 12 M24 26 Q32 16 36 10 M24 32 Q18 30 14 28 M24 32 Q30 30 34 28" fill="none" stroke="${c}" stroke-width="4.2" stroke-linecap="round"/>` +
+    `<circle cx="12" cy="12" r="3" fill="${c}" stroke="${o(c)}" stroke-width="1.3"/>` +
+    `<circle cx="36" cy="10" r="3" fill="${c}" stroke="${o(c)}" stroke-width="1.3"/>` +
+    `<circle cx="14" cy="28" r="2.4" fill="${c}"/><circle cx="34" cy="28" r="2.4" fill="${c}"/>` +
+    hi(20, 20)
+  );
+});
+
+reg("⏱️", "秒表", () => {
+  const c = P.gray;
+  return (
+    gs(24, 42, 12) +
+    `<circle cx="24" cy="26" r="13" fill="#fff8ec" stroke="${o(c)}" stroke-width="3"/>` +
+    `<rect x="21" y="6" width="6" height="6" rx="1" fill="${o(c)}"/>` +
+    `<path d="M24 26 L24 16 M24 26 L32 30" stroke="${P.red}" stroke-width="2" stroke-linecap="round"/>` +
+    `<circle cx="24" cy="26" r="2" fill="${INK}"/>` +
+    hi(18, 18)
+  );
+});
+
+reg("🏅", "奖牌", () => {
+  const c = P.gold;
+  return (
+    gs(24, 43, 12) +
+    `<path d="M16 8 L24 16 L32 8" fill="none" stroke="${P.red}" stroke-width="3"/>` +
+    `<circle cx="24" cy="28" r="12" fill="${c}" stroke="${o(c)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="28" r="7" fill="#fff4d0"/>` +
+    `<path d="M24 22 L26 26 H30 L27 29 L28 34 L24 31 L20 34 L21 29 L18 26 H22 Z" fill="${c}"/>` +
+    hi(18, 20)
+  );
+});
+
+reg("🎯", "靶心", () => {
+  return (
+    gs(24, 42, 13) +
+    `<circle cx="24" cy="24" r="14" fill="${P.red}" stroke="${o(P.red)}" stroke-width="2"/>` +
+    `<circle cx="24" cy="24" r="9" fill="#ffffff"/>` +
+    `<circle cx="24" cy="24" r="5" fill="${P.red}"/>` +
+    `<circle cx="24" cy="24" r="2" fill="${P.gold}"/>` +
+    hi(16, 14)
+  );
+});
+
+reg("🎲", "骰子", () => {
+  const c = "#f8f4ee";
+  const dot = (x: number, y: number): string => `<circle cx="${x}" cy="${y}" r="1.8" fill="${INK}"/>`;
+  return (
+    gs(24, 42, 13) +
+    `<rect x="10" y="12" width="24" height="24" rx="4" fill="${c}" stroke="${o("#d0c8bc")}" stroke-width="2"/>` +
+    `<path d="M34 12 L40 18 L40 38 L34 36 Z" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.6"/>` +
+    dot(18, 20) +
+    dot(26, 20) +
+    dot(18, 28) +
+    dot(26, 28) +
+    hi(14, 16)
+  );
+});
+
+reg("🚀", "火箭", () => {
+  const c = P.gray;
+  return (
+    gs(24, 43, 12) +
+    `<path d="M24 6 Q32 18 32 30 L16 30 Q16 18 24 6 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<circle cx="24" cy="20" r="3.2" fill="${P.blue}"/>` +
+    `<path d="M16 30 L10 38 L16 34 Z M32 30 L38 38 L32 34 Z" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.4"/>` +
+    `<path d="M20 32 Q24 42 28 32" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width="1.3"/>` +
+    hi(20, 12)
+  );
+});
+
+reg("💎", "钻石", () => {
+  const c = P.blue;
+  return (
+    gs(24, 42, 12) +
+    `<path d="M24 8 L36 18 L24 40 L12 18 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M12 18 H36 L24 8 Z" fill="#e8f4ff"/>` +
+    `<path d="M24 8 L24 40 M12 18 L24 40 L36 18" fill="none" stroke="${o(c)}" stroke-width="1.3" opacity=".7"/>` +
+    hi(18, 14)
+  );
+});
+
+reg("🔔", "铃铛", () => {
+  const c = P.gold;
+  return (
+    gs(24, 43, 12) +
+    `<path d="M16 20 Q16 10 24 10 Q32 10 32 20 L34 30 Q24 34 14 30 Z" fill="${c}" stroke="${o(c)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<ellipse cx="24" cy="32" rx="12" ry="4" fill="${c}" stroke="${o(c)}" stroke-width="1.6"/>` +
+    `<circle cx="24" cy="36" r="2.4" fill="${P.red}"/>` +
+    `<path d="M24 8 V10" stroke="${o(c)}" stroke-width="2"/>` +
+    hi(18, 16)
+  );
+});
+
+reg("🏁", "旗子", () => {
+  return (
+    gs(24, 43, 12) +
+    `<path d="M12 6 V42" stroke="${P.brown}" stroke-width="3" stroke-linecap="round"/>` +
+    `<path d="M14 8 H38 L34 16 H14 Z M14 16 H38 L34 24 H14 Z" fill="#ffffff" stroke="${INK}" stroke-width="1.4"/>` +
+    `<path d="M18 8 H26 V16 H18 Z M30 8 H38 V16 H30 Z M14 16 H22 V24 H14 Z M26 16 H34 V24 H26 Z" fill="${INK}"/>` +
+    hi(16, 10)
+  );
+});
+
+reg("⌛", "沙漏", () => {
+  const glass = "#d7ecfa";
+  const sand = P.gold;
+  return (
+    gs(24, 43, 11) +
+    `<path d="M16 8 H32 L24 24 L32 40 H16 L24 24 Z" fill="${glass}" stroke="${o(P.blue)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M18 10 H30 L24 22 Z" fill="${sand}"/>` +
+    `<path d="M18 38 H30 L24 28 Z" fill="${sand}" opacity=".7"/>` +
+    `<rect x="14" y="6" width="20" height="4" rx="1" fill="${P.wood}"/>` +
+    `<rect x="14" y="38" width="20" height="4" rx="1" fill="${P.wood}"/>` +
+    hi(18, 12)
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
 

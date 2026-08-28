@@ -16,7 +16,29 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CLK_TOKENS, HOUR_HAND_SHAPE, MINUTE_HAND_SHAPE, arrowHandD } from "./house";
 import { LIFT_ATTR, liftFaceBody, liftFacesIn } from "./faceLift";
+import { hourHandAngle, minuteHandAngle, type Quarter } from "./logic";
 import { buildQuestions, clockSVG } from "./levels";
+
+/** 1.1 细线钟面（liftFaceBody 的入料夹具；产品 clockSVG 已换装） */
+function oldClockSVG(hour: number, quarter: Quarter, size: number, label = "钟面，自己读一读"): string {
+  const cx = 50, cy = 50;
+  const hA = ((hourHandAngle(hour, quarter) - 90) * Math.PI) / 180;
+  const mA = ((minuteHandAngle(quarter) - 90) * Math.PI) / 180;
+  let ticks = "";
+  for (let i = 0; i < 12; i++) {
+    const a = ((i * 30 - 90) * Math.PI) / 180;
+    const nx = cx + Math.cos(a) * 36;
+    const ny = cy + Math.sin(a) * 36;
+    ticks += `<text x="${nx.toFixed(1)}" y="${(ny + 3.4).toFixed(1)}" font-size="9" font-weight="800" text-anchor="middle" fill="#5c4a7d">${i === 0 ? 12 : i}</text>`;
+  }
+  return `<svg data-h="${hour}" data-q="${quarter}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${label}">
+    <circle cx="${cx}" cy="${cy}" r="46" fill="#fff" stroke="#845ef7" stroke-width="5"/>
+    ${ticks}
+    <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(hA) * 20).toFixed(1)}" y2="${(cy + Math.sin(hA) * 20).toFixed(1)}" stroke="#e8590c" stroke-width="6" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(mA) * 30).toFixed(1)}" y2="${(cy + Math.sin(mA) * 30).toFixed(1)}" stroke="#1971c2" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="3.4" fill="#5c4a7d"/>
+  </svg>`;
+}
 
 /** 老钟面里两根细线的针尖坐标（宽 6 = 时针，宽 4 = 分针） */
 function lineTips(svg: string): { hour: [number, number]; minute: [number, number] } {
@@ -28,7 +50,7 @@ function lineTips(svg: string): { hour: [number, number]; minute: [number, numbe
 }
 
 describe("W8R1-07 · liftFaceBody 换装工序", () => {
-  const face = clockSVG(4, 1, 120);
+  const face = oldClockSVG(4, 1, 120);
   const lifted = liftFaceBody(face);
 
   it("时针/分针换 arrowHandD 箭头：针尖 = 老 line 端点，色 = 规格 token", () => {
@@ -64,11 +86,11 @@ describe("W8R1-07 · 前 99 关全量扫", () => {
       for (const q of buildQuestions(level)) {
         for (const html of [q.promptHTML, ...q.choices]) {
           if (!html.includes("data-h=")) continue;
-          const lifted = liftFaceBody(html);
-          expect(lifted, `第 ${level + 1} 关`).not.toContain("<line");
-          expect(lifted, `第 ${level + 1} 关`).toContain("clk-lift-hour");
-          expect(lifted, `第 ${level + 1} 关`).toContain("clk-lift-minute");
-          expect(lifted, `第 ${level + 1} 关`).toContain('class="clk-hub"');
+          expect(html, `第 ${level + 1} 关`).not.toContain("<line");
+          expect(html, `第 ${level + 1} 关`).toContain("clk-lift-hour");
+          expect(html, `第 ${level + 1} 关`).toContain("clk-lift-minute");
+          expect(html, `第 ${level + 1} 关`).toContain('class="clk-hub"');
+          expect(liftFaceBody(html), `第 ${level + 1} 关幂等`).toBe(html);
         }
       }
     }
@@ -99,7 +121,7 @@ describe("W8R1-07 · 运行时接线", () => {
   }
 
   it("liftFacesIn：首趟全换 + 打标记，第二趟 0 面（幂等）", () => {
-    const face = clockSVG(9, 3, 82, "钟面");
+    const face = oldClockSVG(9, 3, 82, "钟面");
     const inner = face.slice(face.indexOf(">") + 1, face.lastIndexOf("</svg>"));
     const faces = [new FakeSvg(inner), new FakeSvg(inner)];
     const host = fakeHost(faces);

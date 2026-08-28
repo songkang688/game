@@ -990,7 +990,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       buttons.push({ label: "下一关 ▶", onClick: () => startLevel(level + 1) });
     }
     buttons.push({ label: "🔁 再玩一次", ghost: true, onClick: () => startLevel(level) });
-    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap() });
+    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) });
 
     const buddy = level % 2 === 0 ? AVATAR_URLS.duoduoCheer : AVATAR_URLS.xingxingRun;
     const buddyAlt = level % 2 === 0 ? "朵朵在为你庆祝" : "星星在为你欢呼";
@@ -1021,7 +1021,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
        <div class="l99-ov-sub">${word}</div>`,
       [
         { label: "🔁 再试本关", onClick: () => startLevel(level) },
-        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap() }
+        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) }
       ]
     );
     speak(settleSpeechLine("lose", level, word));
@@ -1050,7 +1050,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     back.textContent = "🗺️ 选关";
     back.addEventListener("click", () => {
       api.play("tap");
-      showMap();
+      showMap(true);
     });
     const title = document.createElement("div");
     title.className = "l99-stagetitle";
@@ -1097,7 +1097,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     }
   }
 
-  showMap();
+  showMap(true);
 
   return {
     destroy() {

@@ -7,9 +7,11 @@
 //  1. 题型补齐到 8 类：分钟级读钟面 / 拨指针、跨中午的经过时间、时分秒换算、作息表；
 //  2. 第 100 关往后的题型由 `kinds.ts` 那张「关号 → 题型权重」表驱动，不再是 if-else 阶梯；
 //  3. 错题回顾：`makeReviewQuestions` 用新种子出一批同类题，换数字不换套路。
+import { shade } from "../../art/kit/palette";
 import { TOTAL_LEVELS, mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Chapter } from "../level99";
 import type { QuizQuestion, QuizTheme } from "../quiz99";
 import { FACE_LABEL, faceSVG } from "./clockface";
+import { CLK_TOKENS, HOUR_HAND_SHAPE, MINUTE_HAND_SHAPE, arrowHandD, hubSVG } from "./house";
 import { tableKinds, type ClockKind, type ClockType, typeOfKind } from "./kinds";
 import {
   DAY_MINUTES,
@@ -74,24 +76,31 @@ export const CHAPTER_THEMES: QuizTheme[] = [
  *
  * `label` 是读屏标签，默认那句不含时刻的 `FACE_LABEL`：钟面就是题目本身，
  * 标签写成「4 点」等于把答案摆在读屏用户面前。
+ *
+ * L-2：指针换 house.ts 的 arrowHandD 胖/细箭头、轴心换 hubSVG、刻度 11px。
+ * 针尖仍按原角度公式 × 原长度（时针 20 / 分针 30），data-h / data-q 一字不动。
  */
 export function clockSVG(hour: number, quarter: Quarter, size: number, label: string = FACE_LABEL): string {
   const cx = 50, cy = 50;
   const hA = ((hourHandAngle(hour, quarter) - 90) * Math.PI) / 180;
   const mA = ((minuteHandAngle(quarter) - 90) * Math.PI) / 180;
+  const hx = Number((cx + Math.cos(hA) * 20).toFixed(1));
+  const hy = Number((cy + Math.sin(hA) * 20).toFixed(1));
+  const mx = Number((cx + Math.cos(mA) * 30).toFixed(1));
+  const my = Number((cy + Math.sin(mA) * 30).toFixed(1));
   let ticks = "";
   for (let i = 0; i < 12; i++) {
     const a = ((i * 30 - 90) * Math.PI) / 180;
     const nx = cx + Math.cos(a) * 36;
     const ny = cy + Math.sin(a) * 36;
-    ticks += `<text x="${nx.toFixed(1)}" y="${(ny + 3.4).toFixed(1)}" font-size="9" font-weight="800" text-anchor="middle" fill="#5c4a7d">${i === 0 ? 12 : i}</text>`;
+    ticks += `<text x="${nx.toFixed(1)}" y="${(ny + 3.4).toFixed(1)}" font-size="11" font-weight="800" text-anchor="middle" fill="#5c4a7d">${i === 0 ? 12 : i}</text>`;
   }
   return `<svg data-h="${hour}" data-q="${quarter}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${label}">
     <circle cx="${cx}" cy="${cy}" r="46" fill="#fff" stroke="#845ef7" stroke-width="5"/>
     ${ticks}
-    <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(hA) * 20).toFixed(1)}" y2="${(cy + Math.sin(hA) * 20).toFixed(1)}" stroke="#e8590c" stroke-width="6" stroke-linecap="round"/>
-    <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(mA) * 30).toFixed(1)}" y2="${(cy + Math.sin(mA) * 30).toFixed(1)}" stroke="#1971c2" stroke-width="4" stroke-linecap="round"/>
-    <circle cx="${cx}" cy="${cy}" r="3.4" fill="#5c4a7d"/>
+    <path class="clk-lift-hour" d="${arrowHandD(50, 50, hx, hy, HOUR_HAND_SHAPE)}" fill="${CLK_TOKENS.hourOrange}" stroke="${shade(CLK_TOKENS.hourOrange, -30)}" stroke-width="1.4" stroke-linejoin="round"/>
+    <path class="clk-lift-minute" d="${arrowHandD(50, 50, mx, my, MINUTE_HAND_SHAPE)}" fill="${CLK_TOKENS.minuteTeal}" stroke="${shade(CLK_TOKENS.minuteTeal, -30)}" stroke-width="1.4" stroke-linejoin="round"/>
+    ${hubSVG()}
   </svg>`;
 }
 
