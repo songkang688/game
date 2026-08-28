@@ -544,6 +544,8 @@ const L99_CSS = `
 .l99-wrap{max-width:680px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   user-select:none;-webkit-user-select:none;position:relative;width:100%;height:100%;min-height:0;
   display:flex;flex-direction:column;box-sizing:border-box;}
+/* 平板 768/1024：卡略拉宽、格约 100px；760 仍走 7 列。矮横屏(<600h)保持 680，不抬高格子。 */
+@media (min-width:760px) and (min-height:600px){.l99-wrap{max-width:760px;}}
 .l99-view{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;
   overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
   touch-action:pan-y;overscroll-behavior:contain;}
@@ -739,7 +741,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     return typeof w === "number" && w > 0 ? w : 480;
   }
 
-  /** N-118:列数按地图容器宽,不按 innerWidth——680px max-width 的格子不该用 915 视口去排 8 列。 */
+  /** N-118:列数按地图容器宽,不按 innerWidth——max-width 680/760 的格子不该用 915 视口去排 8 列。 */
   function mapLayoutWidth(): number {
     const map = view.querySelector(".l99-map") as { clientWidth?: number } | null;
     const cw = map?.clientWidth || wrap.clientWidth;
