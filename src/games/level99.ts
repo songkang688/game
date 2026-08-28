@@ -651,6 +651,16 @@ const L99_CSS = `
   .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
   .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
 }
+/* r18(N-92):root 开着时管理员行(跳过+直达)曾在关内独占第二行,矮横屏把 .l99-stage
+   压掉 44px,视奏/答题区被 overflow:hidden 裁切。宽横屏把整条 stagebar 收成一行:
+   标题让位可省略,工具行不再强制占满整行。窄竖屏(<640px)不进,root 关着无 .l99-jump 零改动。 */
+@media (max-height:500px) and (min-width:640px){
+  .l99-stagebar:has(.l99-jump){flex-wrap:nowrap;}
+  .l99-stagebar:has(.l99-jump) .l99-stagetitle{min-width:0;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .l99-stagebar:has(.l99-jump) .l99-tools{width:auto;flex:0 1 auto;}
+  .l99-stagebar:has(.l99-jump) .l99-admin-row{flex-wrap:nowrap;width:auto;}
+}
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
