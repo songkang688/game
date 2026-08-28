@@ -319,7 +319,7 @@ const ENDLESS_CSS = `
 .rbe-open-versus:active { box-shadow: 0 2px 0 #953336; }
 .rbe-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E7F4FF, #FFF1E6); border-radius: 20px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; overflow: hidden; }
 .rbe-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.rbe-back { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #2C6349; box-shadow: 0 3px 0 rgba(60,120,90,.3); min-height: 36px; }
+.rbe-back { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #2C6349; box-shadow: 0 3px 0 rgba(60,120,90,.3); min-height: 44px; }
 .rbe-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(60,120,90,.3); }
 .rbe-back:focus-visible { outline: 3px solid #21402F; outline-offset: 3px; }
 .rbe-chip { background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 800; color: #2C6349; box-shadow: 0 2px 6px rgba(110,160,130,.24); }

@@ -140,7 +140,7 @@ const CSS = `
   background:linear-gradient(180deg,#f6f2ff,#fff4f8);display:flex;flex-direction:column;gap:8px;}
 .as-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .as-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
+  min-height:44px;font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
 .as-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
 .as-chip{background:#fff;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:800;color:#63528c;
   box-shadow:0 2px 6px rgba(150,140,180,.25);}

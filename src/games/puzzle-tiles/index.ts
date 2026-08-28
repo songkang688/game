@@ -107,7 +107,7 @@ const CSS = `
 .pz-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #544BA4; }
 .pz-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .pz-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.pz-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); }
+.pz-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); min-height: 44px; }
 .pz-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,100,200,.3); }
 .pz-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(130,130,210,.25); }

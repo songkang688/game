@@ -107,7 +107,7 @@ const CSS = `
 .frc-modebar[hidden] { display: none; }
 .frc-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFE0B8; color: #A05C1E; cursor: pointer; box-shadow: 0 3px 0 #EFC291; }
 .frc-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFC291; }
-.frc-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
+.frc-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; min-height: 44px; }
 .frc-over { text-align: center; padding: 14px 8px; }
 .frc-over h3 { margin: 0 0 6px; font-size: 19px; color: #A05C1E; }
 .frc-over p { margin: 4px 0; font-size: 14px; color: #6B5B4A; line-height: 1.5; }
