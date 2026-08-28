@@ -1601,6 +1601,12 @@ button {
   min-height: 44px;
 }
 
+/* N-201：上面分组与 .btn 同优先级，后写把 58 压成 44。暂停/结算主按钮列在 390
+   上量出来只有 44，看起来扁。地板仍是 44，.btn 自己回到 58。不改 dialogs.ts。 */
+.btn {
+  min-height: 58px;
+}
+
 .icon-btn,
 .guide-close {
   min-width: 44px;
@@ -1708,8 +1714,11 @@ html {
   max-width: min(1080px, 100%);
 }
 
+/* N-201：.tabs 是设计内 overflow-x:auto 横滑条。touch-action 沿祖先取交集，
+   整页只写 pan-y 时，分类页签（对战/学习/动手在 390 上溢出）手指横划不动。
+   竖滑首页仍走 html 的 overflow-y:auto；横滑只发生在页签条自己的 scrollLeft。 */
 .home-screen {
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
 }
 
 .game-topbar,
