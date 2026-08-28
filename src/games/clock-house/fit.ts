@@ -28,6 +28,31 @@ export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]
 }
 
 /**
+ * 一层裁切祖先真正的那条裁切线：**padding box 的下沿**，不是 border box 的。
+ *
+ * 滚动口是 padding box，下边框那几像素照不进内容；`getBoundingClientRect().bottom`
+ * 给的却是 border box 的下沿。`.game-stage` 写着 `border:4px solid #fff`，
+ * 于是钳出来的天花板**恒定比真裁切线低 4px**——第 3 轮测试员 A7 在 81 / 112 格宿主上
+ * 逐格量到的就是这个固定差值，最底下那颗选项少露 4px（W5R3-TA-05）。
+ *
+ * 优先走 `clientHeight` 口径（`rect.top + clientTop + clientHeight`，横向滚动条也一并算掉）；
+ * 量不出来（用例里的桩节点 / SSR）才退回「减掉下边框宽度」，再不行就照原样返回。
+ * 那圈 4px 边框本身在 `src/styles.css`（禁改），交窗口1；这里改的只是**自己量的那把尺子**。
+ */
+export function clipBottomPx(
+  rect: { top: number; bottom: number },
+  clientTop: number,
+  clientHeight: number,
+  borderBottomWidth: string
+): number {
+  if (Number.isFinite(clientTop) && Number.isFinite(clientHeight) && clientHeight > 0) {
+    return rect.top + clientTop + clientHeight;
+  }
+  const w = Number.parseFloat(borderBottomWidth);
+  return Number.isFinite(w) && w > 0 ? rect.bottom - w : rect.bottom;
+}
+
+/**
  * 要把 `[top, bottom]` 这一段带进可视段，宿主的 `scrollTop` 该写多少。
  *
  * 滚**最小的那一段**：只要下沿进来就收手，题面尽量留在眼前。
@@ -81,8 +106,11 @@ export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose:
     host.scrollTop = 0;
     const bottoms: number[] = [];
     for (let p = host.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
-      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+      const cs = view.getComputedStyle(p);
+      const oy = cs.overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+        bottoms.push(clipBottomPx(p.getBoundingClientRect(), p.clientTop, p.clientHeight, cs.borderBottomWidth));
+      }
     }
     const room = visibleRoomPx(host.getBoundingClientRect().top, bottoms);
     if (!Number.isFinite(room) || room <= 0) return;

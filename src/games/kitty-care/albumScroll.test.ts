@@ -83,13 +83,23 @@ describe("萌猫小屋 · 相册那一格自己挂滚动条（W5R2-C-03）", () 
     expect(visibleRoomPx(100, [])).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it("已经整块被顶到裁切线以下时不许钳——钳了会压成一条缝，比不钳还糟", () => {
+  /**
+   * 这一条原先钉的是「可视段矮于 160px 就别钳」，而那条早退恰恰是 W5R3-C-04 的病灶本身：
+   * 横屏 640×360 上 `.ktc-grid` 的可视段只有 130px，于是一格都没钳，
+   * 2809px 的卡片墙压在一个 `overflow:visible` 的盒子里，24 颗兑换钮 0/24 够得着。
+   * 收官轮据实改判：矮到连一颗兑换钮的中心点都塞不进去（44px）才真的不值得钳。
+   */
+  it("矮到连一颗兑换钮都塞不下才不许钳；130px 那一档照样得钳（W5R3-C-04 据实改判）", () => {
     const squashed = fakeList({ top: 600, clipBottom: 622, content: 2592 });
     fitIt(squashed);
-    expect(squashed.style.maxHeight).toBe("");
-    expect(LIST_MIN_ROOM).toBeGreaterThanOrEqual(120);
-    // 连一张卡片（缩略图 100 + 名字 18 + 说明 17 + 兑换钮 44）都露不全的高度就别钳
-    expect(LIST_MIN_ROOM).toBeGreaterThanOrEqual(100 + 18 + 17 + 44 - 40);
+    expect(squashed.style.maxHeight, "只剩 22px，钳了也是一条缝").toBe("");
+    // 兑换钮自己就是 44px 热区，滚动口至少得放得下它的中心点
+    expect(LIST_MIN_ROOM).toBeGreaterThanOrEqual(44);
+    // 横屏那一档：130px 一次只看得见半张卡片，但翻得到全部——比一颗都点不着强
+    const landscape = fakeList({ top: 219, clipBottom: 349, content: 1724 });
+    fitIt(landscape);
+    expect(landscape.style.maxHeight).toBe("130px");
+    expect(landscape.style.overflowY).toBe("auto");
   });
 
   it("重排会先还原再量，不然越量越小", () => {

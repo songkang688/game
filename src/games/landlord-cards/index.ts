@@ -24,6 +24,8 @@ import {
 } from "./anim";
 import {
   HINT_MODE_NAMES,
+  PASS_BUTTON_LABEL,
+  PASS_WORD,
   groupsSummary,
   nextHintMode,
   playableGroups,
@@ -166,7 +168,11 @@ const CSS = `
 .ld-say{font-size:13px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:19px;}
 .ld-say-oops{color:#c2557f;}
 .ld-mehead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;}
-.ld-fanbox{position:relative;width:100%;touch-action:none;}
+/* 手牌全是 position:absolute,这一格的 min-content 高度是 0;它又是 .ld-wrap 这根弹性列的
+   一员,壳层一钳出天花板(第三档兜底)它就被压成 0 高,而牌还照着 JS 写死的偏移画出去,
+   整扇手牌直接盖在出牌那一排上——真机 844×390 量到 fanbox 0px、牌却铺到 y=404,
+   elementFromPoint 打中的全是 .ld-card(W5R3-TA-01)。inline height 是量出来的,不许压。 */
+.ld-fanbox{position:relative;width:100%;touch-action:none;flex:0 0 auto;}
 /* 牌面的点数与花色一律缩在左上角:扇形手牌只露出左边窄窄一条,角标必须待在那一条里 */
 .ld-card{position:absolute;border-radius:7px;background:#fff;border:1.5px solid #cfc4e4;overflow:hidden;
   box-shadow:0 2px 5px rgba(120,105,160,.3);transform-origin:50% 88%;transition:transform .12s ease;}
@@ -292,6 +298,12 @@ const CSS = `
 .ldc-tighter .ldc-table{min-height:24px;padding:2px 7px;}
 .ldc-tighter .ld-say{font-size:11px;min-height:14px;}
 .ldc-tighter .ldc-hintline{font-size:10px;padding:2px 6px;}
+/* 第三档兜底（fit.ts 两档收紧全用尽之后才挂，W5R3-TA-01）：这一桌自己滚。
+   横屏 640×360 / 844×390 上叫地主那一排四颗 + 「⏸ 暂停」原本 5/5 全压在裁切线以下，
+   而且一个可滚祖先都没有——真手指慢拖一趟纹丝不动。
+   手牌扇自己写着 touch-action:none，落在牌上的手指只框选、不带着壳滚，
+   「横着划一道选好几张」那一手一分没变。天花板与 overflow 由 fit.ts 按实测像素写内联。 */
+.ldc-scroll{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 @media (prefers-reduced-motion:reduce){
   .ldc-card-move{transition:none;}
 }
@@ -390,12 +402,17 @@ function keySetOf(keys: 0 | 1): typeof KEYS_P1 {
   return keys === 0 ? KEYS_P1 : KEYS_P2;
 }
 
+/**
+ * 键位提示。最后那一格印的必须是牌桌底下那颗键上的字（`PASS_WORD`＝「不出」）——
+ * 这一行是**在教孩子这颗键叫什么**，写「不要」就等于教了一个屏幕上不存在的名字
+ * （W5R3-A-01 只改了 `hint.ts`，这里是补上的那一半，W5R3-TA-04）。
+ */
 function keyHint(seat: SeatCfg): string {
   const k = keySetOf(seat.keys);
   const dirs = seat.keys === 0 ? "A / D" : "← / →";
   const pick = seat.keys === 0 ? "W" : "↑";
   const clear = seat.keys === 0 ? "S" : "↓";
-  return `${seat.name}:${dirs} 挑牌 · ${pick} 选中 · ${clear} 清空 · ${k.play.toUpperCase()} 出牌 · ${k.pass.toUpperCase()} 不要`;
+  return `${seat.name}:${dirs} 挑牌 · ${pick} 选中 · ${clear} 清空 · ${k.play.toUpperCase()} 出牌 · ${k.pass.toUpperCase()} ${PASS_WORD}`;
 }
 
 function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void } {
@@ -618,7 +635,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       const b = bubbles[i];
       const bubbleHTML = b
         ? b.passed
-          ? `<span class="ld-bubble">不要～</span>`
+          ? `<span class="ld-bubble">${PASS_WORD}～</span>`
           : `<span class="ld-mini">${miniCardsHTML(b.cards)}</span>`
         : `<span class="ld-mini" aria-hidden="true"></span>`;
       box.innerHTML = `${face}
@@ -659,7 +676,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       if (tableShown) {
         const who = opts.seats[tableShown.seat].name;
         table.innerHTML = tableShown.passed
-          ? `<span class="ldc-table-who">${who}</span><span class="ldc-table-pass">不要～</span>`
+          ? `<span class="ldc-table-who">${who}</span><span class="ldc-table-pass">${PASS_WORD}～</span>`
           : `<span class="ldc-table-who">${who} 出</span><span class="ld-row">${miniCardsHTML(tableShown.cards)}</span>`;
       } else {
         table.innerHTML = `<span class="ldc-table-pass">牌桌空着,等这一手落下来…</span>`;
@@ -779,7 +796,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       }
     } else if (phase === "play") {
       // 底部固定一行三钮:不出 / 提示 / 出牌,热区都在 48px 以上
-      btnsEl.appendChild(mkBtn("🙅 不出", "", doPass, !iAct || !state?.prev));
+      btnsEl.appendChild(mkBtn(PASS_BUTTON_LABEL, "", doPass, !iAct || !state?.prev));
       btnsEl.appendChild(mkBtn("💡 提示", "", doHint, !iAct));
       btnsEl.appendChild(mkBtn("✅ 出牌", "ld-btn-go", doPlay, !iAct || selected.size === 0));
       subEl.appendChild(mkBtn(HINT_MODE_NAMES[hintMode], "", cycleHintMode, paused));

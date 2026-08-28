@@ -99,6 +99,25 @@ export const RBG_CSS = `
 .rbg-wrap.rbg-tight .rbg-field,
 .rbg-wrap.rbg-tight .rbg-meters { margin-bottom: 4px; }
 .rbg-wrap.rbg-tight .rbg-msg { margin-top: 4px; }
+/* 空隙减半也不够的那一档（320×568 后段章节：机关胶囊排到三行）。
+   真机实测第 188 关：这一屏 403px、可视段只有 332px，.rbg-msg 整条 0px 可见
+   （「按住蓄力、松手换气…」孩子看不到就不知道这一关怎么玩），
+   两颗大按钮也被切掉 25px，第二行「按住 F / 空格」压没了。W5R3-B-02
+   这一档收的是字号与内边距，不是热区：.rbg-toggle 的 44px 一格不动，
+   两颗大按钮由 fit.ts 逐档扣到 MIN_PULL_H=56 为止，仍在 44 以上。
+   important 标记是必需的：胶囊和提示行的字号是 JS 按视口算完写成内联样式的，
+   不加就压不过内联值（--rbg-pull-h 那条同理）。 */
+.rbg-wrap.rbg-tighter .rbg-gear { gap: 5px; min-height: 0; margin-bottom: 3px; }
+.rbg-wrap.rbg-tighter .rbg-chip { padding: 2px 8px; font-size: 12px !important; gap: 4px; }
+.rbg-wrap.rbg-tighter .rbg-msg { font-size: 13px !important; min-height: 16px; line-height: 1.25; margin-top: 3px; }
+.rbg-wrap.rbg-tighter .rbg-meter-cap { font-size: 12px; margin-bottom: 2px; }
+.rbg-wrap.rbg-tighter .rbg-meter { height: 12px; }
+.rbg-wrap.rbg-tighter .rbg-meters { gap: 8px; }
+.rbg-wrap.rbg-tighter .rbg-pull { height: var(--rbg-pull-h, auto) !important; font-size: 17px; }
+/* 四档收紧全用尽仍装不下时（横屏两档、320×568 后段章节）由 fit.ts 挂上这一档。
+   overscroll-behavior:contain 挡住「翻到底就把整页也带着走」；
+   两颗大按钮自己写着 touch-action:none，按住蓄力那一下不会被当成滚动手势。 */
+.rbg-wrap.rbg-scroll { overscroll-behavior: contain; }
 @media (prefers-reduced-motion: reduce) {
   .rbg-beat, .rbg-team, .rbg-rope { transition: none !important; }
 }

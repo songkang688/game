@@ -2,7 +2,7 @@
  * 形状王国 · 作图题（1.2 新增，第 100–188 关里的动手关）。
  *
  * 三类动手题，判定**全部**走纯函数，界面只负责收集孩子摆出来的格子：
- *  ① `rect`   —— 在点阵上拖两个点画长方形，按给定的周长或面积判定；
+ *  ① `rect`   —— 在点阵上点两个点（或者按住拖）画长方形，按给定的周长或面积判定；
  *  ② `symfill`—— 图形沿竖直对称轴补全另一半，判定是「格子集合相等」；
  *  ③ `tiling` —— 几块多联骨牌拼满目标轮廓，判定是「并集等于轮廓且互不重叠」。
  *
@@ -28,6 +28,7 @@ import { mulberry32, pick, randInt, type PlayCtx, type PlayHandle } from "../lev
 import type { QuizTheme } from "../quiz99";
 import { HINT_LABELS, safeHints, trio, type HintTrio } from "./hints";
 import { resetClippedScroll } from "./stageScroll";
+import { applyTightDock, showBoard, TIGHT_DOCK_CSS } from "./dockTight";
 
 // ---------------------------------------------------------------------------
 // 尺寸与吸附（纯函数，360px 下限靠它守住）
@@ -352,8 +353,8 @@ function makeRectTask(rand: () => number, hard: boolean): RectTask {
   const target = goal === "area" ? got.area : got.perimeter;
   const ask =
     goal === "area"
-      ? `拖两个点，画一个面积是 ${target} 平方厘米的长方形`
-      : `拖两个点，画一个周长是 ${target} 厘米的长方形`;
+      ? `点两个点（或者按住拖），画一个面积是 ${target} 平方厘米的长方形`
+      : `点两个点（或者按住拖），画一个周长是 ${target} 厘米的长方形`;
   const hints =
     goal === "area"
       ? trio(
@@ -541,7 +542,7 @@ export const DRAW_CSS = `
   .shk-hint{padding:4px 8px;}
 }
 @media (prefers-reduced-motion:reduce){.shk-castle-grow{animation:none;}}
-`;
+${TIGHT_DOCK_CSS}`;
 
 export interface DrawRoundOptions {
   stage: HTMLElement;
@@ -662,6 +663,17 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   resetClippedScroll(wrap);
   // 进 DOM 之后立刻钳一次：矮屏上作图台比舞台看得见的那一段高，钳完才滚得到交卷键
   const fit = fitIntoStage(wrap);
+  // 钳完再量一次常驻那一摞：它盖住图形就收薄一档（W5R3-B-01）。
+  // 顺序不能反——收薄看的是钳完的可视段，拿没钳的高度量出来的结论是错的。
+  const tighten = (): void => {
+    applyTightDock(wrap);
+    // 收完再滚一次：收薄之后才存在「看得全整张点阵」的那个位置，
+    // 可落地的 scrollTop 是 0，孩子不会自己先把屏幕推上去（W5R3-B-03）
+    showBoard(wrap);
+  };
+  const winRef = wrap.ownerDocument?.defaultView ?? null;
+  // fitIntoStage 自己也挂了一条 resize；这条后挂，于是总在它重算完之后才跑
+  winRef?.addEventListener("resize", tighten);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -1044,6 +1056,7 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
     paintHeader();
     // 换一道题内容就换一批，高度跟着变，钳位重算一次
     fit.relayout();
+    tighten();
   }
 
   function finish(): void {
@@ -1105,6 +1118,7 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       destroyed = true;
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      winRef?.removeEventListener("resize", tighten);
       fit.dispose();
       wrap.remove();
     },

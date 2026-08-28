@@ -29,7 +29,9 @@ import {
   createDisposer,
   padMetrics,
   canvasRoomPx,
+  showPad,
   stageRoomPx,
+  wrapRoomPx,
   parseLevelParam,
   resolveInitialLevel,
 } from "./runtime";
@@ -197,8 +199,12 @@ export const PH_CSS = `
   .ph-tip{font-size:11px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .ph-pad-name{font-size:10px;}
 }
-/* 触屏设备用不上键盘提示,省下的高度留给画面 */
+/* 触屏设备用不上键盘提示,省下的高度留给画面。
+   横过来拿的时候宽度上去了(640/844)、高度反而只剩 360/390——上面那条 max-width:420px
+   这时候不成立,说明行又冒出来白占 18px,而横屏正是最挤的那一档,
+   于是这里按屏高再补一条(W5R3-C-03)。 */
 @media (hover:none) and (max-width:420px){ .ph-pad-name{display:none;} }
+@media (hover:none) and (max-height:480px){ .ph-pad-name{display:none;} }
 @media (max-height:620px){
   .ph-cv{height:138px;}
   .ph-wrap[data-players="2"] .ph-cv{height:224px;}
@@ -513,12 +519,25 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   wrap.appendChild(tip);
   host.appendChild(wrap);
 
-  /** 舞台矮到摇杆掉出裁切线时,把超出的那一截从画布身上扣掉 */
+  /**
+   * 舞台矮到摇杆掉出裁切线时,先把超出的那一截从画布身上扣掉;
+   * 画布已经趴在底线上还是装不下,就让 `.ph-wrap` 自己滚——
+   * 不然三色桶图例与提示行会永远停在裁切线以下(W5R3-C-01)。
+   */
   function fitCanvas(): void {
     canvas.style.height = "";
-    const next = canvasRoomPx(wrap.scrollHeight, canvas.offsetHeight, stageRoomPx(wrap));
-    if (next === null) return;
-    canvas.style.height = `${next}px`;
+    wrap.style.maxHeight = "";
+    wrap.style.overflowY = "";
+    const room = stageRoomPx(wrap);
+    const next = canvasRoomPx(wrap.scrollHeight, canvas.offsetHeight, room);
+    if (next !== null) canvas.style.height = `${next}px`;
+    // 扣完再量一次:还超就交给滚动，一行都不许留在裁切线以下
+    const clamp = wrapRoomPx(wrap.scrollHeight, room);
+    if (clamp === null) return;
+    wrap.style.maxHeight = `${clamp}px`;
+    wrap.style.overflowY = "auto";
+    // 钳完只是「有得滚」。横屏上手柄仍排在折线以下,顺手把它送进眼里(W5R3-C-03)
+    showPad(wrap);
   }
   fitCanvas();
   bag.listen(window, "resize", fitCanvas);

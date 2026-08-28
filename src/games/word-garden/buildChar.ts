@@ -9,6 +9,7 @@
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
+import { fitQuizHost } from "./fit";
 import type { BuildCharRound, BuildCharTask } from "./levels";
 
 export interface BuildCharOptions {
@@ -72,6 +73,17 @@ const CSS = `
   .bc-slot{width:62px;height:62px;font-size:30px;}
   .bc-pick{min-width:70px;min-height:62px;font-size:27px;}
 }
+/* 320 宽的旧手机上四选一会折成 3+1 两行，第二行整颗落在舞台裁切线以下（W5R3-A-02）。
+   工坊已经接了 fitQuizHost 的钳位兜底，但能一行排下就别让孩子先滚一次屏才看得见第四个字。
+   预算不能拿屏宽算：舞台自己就比屏窄（320 机上 .game-stage 只有 300px），
+   再减掉壳与工坊的内边距，真机量到工坊内容宽 = 252px（padding 收到 10px 之后）。
+   最宽的一档 4×54 + 3×6 = 234px，还余 18px。
+   竖直方向一动不动——热区还是 62px 高、54px 宽（下限 44px），只收左右和字号。 */
+@media (max-width:340px){
+  .bc-wrap{padding:10px;}
+  .bc-choices{gap:6px;}
+  .bc-pick{min-width:54px;font-size:24px;}
+}
 @media (prefers-reduced-motion:reduce){.bc-pick.bc-good{animation:none;}}
 `;
 
@@ -123,6 +135,11 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
     <div class="bc-msg" style="color:${theme.accent}"></div>
   `;
   stage.appendChild(wrap);
+  // 舞台是定高 + overflow:hidden（平台文件，禁改），工坊一高就被硬裁，这条链上一层能滚的都没有。
+  // 真机 320×568 第 188 关实测：四选一折成 3+1 两行，第二行那颗「讠」整颗在裁切线以下 59px，
+  // 键心 elementFromPoint 命中的是舞台外的空白——四选一少一个选项，题就可能答不了（W5R3-A-02）。
+  // 答题屏那半边第 2 轮已经用 fitQuizHost 钳过了（W5R2-F-A-02），工坊漏了；这里补上同一套。
+  const fit = fitQuizHost(wrap);
 
   const progressEl = wrap.querySelector(".bc-progress") as HTMLElement;
   const lifeEl = wrap.querySelector(".bc-life") as HTMLElement;
@@ -171,6 +188,8 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
       btn.addEventListener("click", () => onPick(btn, opt));
       choicesEl.appendChild(btn);
     }
+    // 换一步选项个数和提示行高矮都会变，钳位重算一次，顺手把选字那排带进眼里
+    fit.relayout();
   }
 
   function onPick(btn: HTMLButtonElement, opt: string): void {
@@ -230,6 +249,7 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
       stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      fit.dispose();
       wrap.remove();
     },
   };

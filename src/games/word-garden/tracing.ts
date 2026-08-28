@@ -13,6 +13,7 @@
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
+import { fitQuizHost } from "./fit";
 import {
   GRID,
   judgeTrace,
@@ -54,6 +55,14 @@ export const WGD_CSS = `
 .wgd-say:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,120,160,.3);}
 .wgd-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;}
 .wgd-msg{min-height:26px;text-align:center;font-size:15px;font-weight:800;line-height:1.5;}
+/* 钳出滚动条那一档（收紧器挂上 wgd-scroll，W5R3-TA-03）：「这一笔该怎么描」粘到可视区下沿。
+   真机 320×568 / 360×640 / 640×360 / 844×390 四档上这句原本 26px **露 0px**——
+   滚动条早就有了，缺的是「钳完之后把该看的送进眼里」这一步。
+   为什么不靠滚：滚到底就把顶上「正在描第 N 笔」那行顶出去了，两句都要。
+   只在真钳住时才粘：装得下的高屏上宿主不滚，那时粘性会拿整个视口当参照物，
+   这句话会跑到屏幕最底下去。 */
+.wgd-trace.wgd-scroll .wgd-msg{position:sticky;bottom:0;z-index:3;background:#fffffff2;
+  border-radius:12px;padding:3px 8px;box-shadow:0 -2px 8px rgba(120,120,160,.14);}
 .wgd-flowers{text-align:center;font-size:22px;letter-spacing:2px;min-height:28px;}
 .wgd-pad:focus-visible,.wgd-say:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (max-width:400px){
@@ -131,6 +140,18 @@ export function runTracing(opts: TraceOptions): PlayHandle {
     <div class="wgd-msg" style="color:${theme.accent}"></div>
   `;
   stage.appendChild(wrap);
+  // 描红台是本款第三条入口（答题屏 W5R2-F-A-02、组字工坊 W5R3-A-02 都接过了，这条漏着）。
+  // 真机 320×568 / 360×640 第 117 关实测：`.wgd-msg`「田字格里按顺序描一描，描错顺序也没关系～」
+  // 45px 高、**0px 可见**，田字格自己也被切掉 18px；这条链上一个能滚的祖先都没有。
+  // 那句话是描红的规则说明，看不见就不知道笔顺要按顺序来（W5R3-A-03）。
+  //
+  // 第 3 轮复测（W5R3-TA-03）：钳位接上了，`.wgd-msg` 却仍旧 **26px 露 0px**——
+  // 缺的不是滚动条，是「钳完之后把该看的送进眼里」那一步。本款答题屏与组字工坊早就做了，
+  // 描红台漏着。两件事一起补：`fit.ts` 认得 `.wgd-padwrap` 了，钳住时会把田字格送进
+  // 「减掉粘住那一行之后的净空间」；这句提示则由 `.wgd-scroll` 那条规则粘到可视区下沿。
+  // 为什么不干脆滚到底：滚到底就把顶上「正在描第 N 笔」那行顶出去了，两句都要。
+  // `.wgd-pad` 写着 `touch-action:none`，落在格子上的手指只描红、不带着壳一起滚。
+  const fit = fitQuizHost(wrap);
 
   const progressEl = wrap.querySelector(".wgd-progress") as HTMLElement;
   const countEl = wrap.querySelector(".wgd-count") as HTMLElement;
@@ -202,6 +223,8 @@ export function runTracing(opts: TraceOptions): PlayHandle {
     });
     flowersEl.textContent = Array.from({ length: done }, (_, i) => FLOWERS[i % FLOWERS.length]).join("");
     flowersEl.className = "wgd-flowers wgd-bloom";
+    // 换一个字、开一朵花，这一屏都会变高，钳位重算一次
+    fit.relayout();
   }
 
   function padPoint(ev: PointerEvent): Point {
@@ -303,6 +326,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       pad.removeEventListener("pointercancel", onUp);
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      fit.dispose();
       wrap.remove();
     },
   };

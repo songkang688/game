@@ -32,6 +32,7 @@ import {
   chaseHint,
   cureBack,
   cureHint,
+  type CureState,
   cureMessage,
   curePick,
   curePlan,
@@ -160,6 +161,20 @@ export class Arena {
   private spec: TaskSpec | null = null;
   private onDone: (() => void) | null = null;
   private dead = false;
+  /**
+   * 看病这一步走到哪儿了（W5-L-36）。
+   *
+   * 为什么非得存在实例上：`renderCure()` 每被叫一次就新建一份渲染闭包，
+   * 进度原先是那份闭包里的 `let state`——**重画一次等于从第 1 步重开**。
+   * 而重画的路不止一条：猫躲进纸箱、安抚三次探出头（`renderSoothe()` → `renderTask()`），
+   * 多猫关里点一下目标猫（`select()` → `renderTask()`），都会走到这儿。
+   * 真机第 157 关实测：躲之前「1.🐾 看看小爪子 → 2.❓ 动手照顾」已经绿了第一步，
+   * 出来之后退回「1.❓ 先看一看 → 2.· · ·」，刚做对的那一步凭空没了。
+   *
+   * 只在**同一件事**（同一个 `spec`）的重画之间接着走；
+   * `startTask()` 换一件新事就清空，绝不把上一件事的进度带过来。
+   */
+  private cure: { spec: TaskSpec; state: CureState } | null = null;
   /**
    * 当前这件事自己起的循环（现在只有哄睡的拍子灯）。
    * 换一件事、拆舞台都要先把它们停掉——`Life` 是整局共用的，
@@ -406,6 +421,8 @@ export class Arena {
     if (this.dead) return;
     this.spec = spec;
     this.onDone = onDone;
+    // 换一件新事就把上一件的看病进度丢掉，绝不带过来（W5-L-36）
+    this.cure = null;
     this.safetyEl.hidden = spec.task !== "cure";
     this.planEl.hidden = true;
     if (this.cats.length > 1) {
@@ -785,8 +802,16 @@ export class Arena {
   // -- ⑥ 看病：先看一看，再动手，随时能退一步 -------------------------------
 
   private renderCure(spec: TaskSpec): void {
-    const round = buildCureRound(spec.seed, spec.cureSteps, Math.min(spec.options + 1, 6));
-    let state = cureStart(round);
+    // 同一件事重画就接着上次走；换了一件事才从头来（W5-L-36）
+    const kept = this.cure && this.cure.spec === spec ? this.cure.state : null;
+    let state = kept ?? cureStart(buildCureRound(spec.seed, spec.cureSteps, Math.min(spec.options + 1, 6)));
+    const round = state.round;
+    this.cure = { spec, state };
+    /** 进度只认这一个入口，写漏一处就又回到「重画即清零」 */
+    const keep = (next: CureState): void => {
+      state = next;
+      this.cure = { spec, state };
+    };
     const name = this.cats[this.targetCat()].name;
     this.bubble(`${round.symptom.emoji} ${name}${round.symptom.name}`);
     this.planEl.hidden = false;
@@ -810,7 +835,7 @@ export class Arena {
         this.life.on(b, "click", () => {
           if (this.dead || !this.lockedOnTarget()) return;
           const res = curePick(state, tool.name);
-          state = res.state;
+          keep(res.state);
           this.settle(res, row);
           // 心情掉光时 settle 已经把舞台换成安抚按钮了，别再画回护理台把它盖掉
           if (!res.done && !this.cats[this.targetCat()].hiding) draw(res.note, res.miss);
@@ -825,7 +850,7 @@ export class Arena {
       this.life.on(back, "click", () => {
         if (this.dead) return;
         const res = cureBack(state);
-        state = res.state;
+        keep(res.state);
         if (res.acted) this.sfx("tap");
         draw(res.note);
       });

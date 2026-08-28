@@ -43,6 +43,38 @@ const SKINS = [
 /** 道具点：❄️ 冻住对手一会儿，🧲 把下一个点直接吸过来 */
 const POWER_SKIN = { freeze: "❄️", magnet: "🧲" };
 
+/**
+ * 「横过来拿」的门槛：这条线以下的屏幕，竞技场上下那几行得各让一档（`W5R3-BT-03`）。
+ *
+ * 640×360 / 740×360 / 844×390 全在线内，360×640 / 320×568 全在线外——
+ * 竖屏那几档本来就装得下，一个字节都不该动它们。
+ */
+export const SHORT_LANDSCAPE_PX = 420;
+
+/** 横屏矮档上，提示行与竞技场之间的留白（竖屏是 10px） */
+export const MSG_TIGHT_GAP_PX = 4;
+
+/** 横屏矮档上，提示行自己的行高（14px 字号排一行的高度，竖屏是 22px） */
+export const MSG_TIGHT_MIN_PX = 18;
+
+/** 横屏矮档上芯片的字号：收这一档是为了让四颗芯片在 640px 宽上排回一行 */
+export const CHIP_TIGHT_FONT_PX = 12;
+
+/**
+ * 横屏矮档上，「本关新玩法」那一行**整行**要占掉多少像素。
+ *
+ * `fitArena()` 收场地的时候要把这一截先让出来（`belowPx()` 量的就是它），
+ * 让不出来的时候 `arenaBoxPx()` 会守住 `ARENA_FLOOR_PX = 80` 的下限，
+ * 于是这一行整个被顶到裁切线以下——而这一款**没有滚动条**（连点游戏，
+ * 能滚就会「想点却滚走了」），顶出去就是真的看不见。
+ *
+ * 真机 640×360 上收紧之前是 `10 + 22 = 32`，余量只剩 73，比下限差 **7px**；
+ * 收到 `${MSG_TIGHT_GAP_PX} + ${MSG_TIGHT_MIN_PX}` 正好把那 7px 让回来。
+ */
+export function msgBudgetPx(): number {
+  return MSG_TIGHT_GAP_PX + MSG_TIGHT_MIN_PX;
+}
+
 const CSS = `
 .rbt-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F0FF, #FFE9F0); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
 .rbt-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
@@ -80,6 +112,26 @@ const CSS = `
   .rbt-gear { gap: 4px; margin-bottom: 4px; min-height: 0; }
   .rbt-chip { padding: 2px 8px; font-size: 12px; }
   .rbt-msg { margin-top: 4px; min-height: 18px; font-size: 14px; }
+}
+/* 横过来拿（640×360 / 740×360 / 844×390）：竞技场下面那行「本关新玩法」被切掉了。
+   fitArena() 本来就替它留了位置（belowPx()），可留出来还是不够时
+   arenaBoxPx() 会守住 ARENA_FLOOR_PX = 80 的下限——一整颗点，让不得——
+   于是那一行整个掉到裁切线以下，而这一款没有滚动条，划也划不出来。
+   真机量到：640×360 / 740×360 五关全中，能看见 15/22px；L181 更狠，四颗芯片
+   在 640px 宽上折成两行，把竞技场又往下顶了 27px，那一行 0/22 全没了。
+
+   缺的 7px 从这一款自己的留白里省，不碰下限也不加滚动条：
+   芯片排收一档（顺带让四颗排回一行，L181 那 27px 就回来了），提示行收一档。
+   .rbt-dot 的热区一分不动——那是这一款唯一的操作对象。 */
+@media (max-height: ${SHORT_LANDSCAPE_PX}px) {
+  .rbt-top { margin-bottom: 4px; }
+  .rbt-badge { padding: 3px 9px; font-size: 14px; }
+  .rbt-badge.rbt-me { padding: 3px 9px 3px 3px; }
+  .rbt-badge.rbt-ai { padding: 3px 3px 3px 9px; }
+  .rbt-ava { width: 24px; height: 24px; }
+  .rbt-gear { gap: 4px; margin-bottom: 4px; min-height: 0; }
+  .rbt-chip { padding: 2px 8px; font-size: ${CHIP_TIGHT_FONT_PX}px; }
+  .rbt-msg { margin-top: ${MSG_TIGHT_GAP_PX}px; min-height: ${MSG_TIGHT_MIN_PX}px; font-size: 14px; }
 }
 `;
 

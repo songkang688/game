@@ -289,6 +289,9 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     el.style.overflowY = "auto";
     // 打个记号：提示行这时候要粘在滚动口下沿，不然「这一关要干什么」滚不到就看不见
     el.classList.add("ktc-scroll");
+    // 挂上滚动条就必须顺手滚一次：落地的 scrollTop 是 0，而动手层排在小屋最底下，
+    // 那一片正好被刚粘上去的提示行盖着，孩子看不见也点不着（W5R3-C-02）
+    showPlayRow(el);
   };
   relayout();
   let live = true;
@@ -321,8 +324,135 @@ function nextFrame(view: (Window & typeof globalThis) | null, fn: () => void): v
   raf.call(view, () => fn());
 }
 
-/** 长列表钳到这个高度以下就不值得再钳了——再矮连一张卡片都露不全 */
-export const LIST_MIN_ROOM = 160;
+// ---------------------------------------------------------------------------
+// 挂上滚动条之后，得把「这一关真正要动手的那一层」送到孩子眼前
+// ---------------------------------------------------------------------------
+
+/**
+ * 动手层的选择器，按优先级排。`.ktc-play` 是喂饭 / 逗猫 / 打扮 / 搓澡这些交互层的外壳，
+ * 找不到它（早期关卡结构不同）就退而求其次直接找里面那几块。
+ */
+export const PLAY_ROW_SELECTORS = [".ktc-play", ".ktc-tray", ".ktc-btns", ".ktc-field", ".ktc-wash", ".ktc-beats"];
+
+/**
+ * 要把 `[top, bottom]` 这一段送进眼前，`scrollTop` 该写多少。
+ *
+ * `client` 是滚动口的高，`pinned` 是**粘在下沿常驻**的那条提示行的高——
+ * 它盖住的那一条不算「看得见」，不减掉就会把动手层正好停在提示行底下。
+ * 这一段比剩下的窗口还高就从它的上沿开始露，先看得见头。
+ * 量不出数、或者根本没得滚，就返回 0，不平白往 DOM 上写一个 `scrollTop`。
+ */
+export function scrollToShowPx(
+  top: number,
+  bottom: number,
+  client: number,
+  max: number,
+  pinned = 0,
+): number {
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return 0;
+  if (!(client > 0) || !(max > 0)) return 0;
+  const room = Math.max(0, client - Math.max(0, Number.isFinite(pinned) ? pinned : 0));
+  if (room <= 0) return 0;
+  const want = bottom - top > room ? top : bottom - room;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
+/**
+ * 小屋一旦变成滚动容器，就把动手层送到孩子眼前（W5R3-C-02）。
+ *
+ * 缺陷长什么样：真机 360×640 第 188 关（三只猫 + 喂饭），猫已经收到最小的 92px 还是装不下，
+ * `fitIntoStage()` 于是挂上滚动条。**孩子落地时 `scrollTop` 是 0**，
+ * 而食物托盘排在小屋最底下 y=560（屏高 640、滚动口下沿更靠上），
+ * 那一片正好被粘在下沿的 `.ktc-msg` 盖着——五颗食物 `elementFromPoint` 命中的全是提示行，
+ * 逐档量下来 0% 处 0/5 够得着、50% 处 4/5、只有滚到底才 5/5。
+ * 第 117 关（两只猫）更绝：0% 与 50% 处都是 0/4。
+ * 喂饭是这一关唯一的主动玩法，落地就点不着 = 这一关不知道怎么开始，按阻断记。
+ *
+ * 修法和 `word-garden/fit.ts` 的 `showChoices` 同源：钳完顺手滚一次，
+ * 滚**最小的那一段**（只要动手层的下沿进来就收手），上面的猫尽量留在眼里。
+ *
+ * 挑哪一层是有讲究的（W5R3-C-06）：`.ktc-play` 是整个交互层的外壳，
+ * 打扮 / 逗猫关里它还套着一整片场地，横屏 640×360 上量到 **214px > 滚动口 190px**。
+ * 一段比滚动口还高，`scrollToShowPx()` 只能从它的上沿开始露——露出来的是场地，
+ * 排在它最底下的托盘照旧被切：四颗 58×58 打扮件只露出上半截，
+ * 名字那一行（`.ktc-drag small`）**`vis 0/15`，一个像素都看不见**。
+ * 所以外壳装不下时就往里退一层，挑真正要用手指去碰的那一排（`.ktc-tray` / `.ktc-btns`）。
+ */
+export function showPlayRow(el: HTMLElement): number {
+  if (typeof el.querySelector !== "function" || typeof el.getBoundingClientRect !== "function") return 0;
+  const msgFirst = el.querySelector(".ktc-msg");
+  const pinnedFirst = msgFirst && typeof msgFirst.getBoundingClientRect === "function"
+    ? msgFirst.getBoundingClientRect().height
+    : 0;
+  const budget = Math.max(0, el.clientHeight - pinnedFirst);
+  let row: Element | null = null;
+  let fallback: Element | null = null;
+  for (const sel of PLAY_ROW_SELECTORS) {
+    const found = el.querySelector(sel);
+    if (!found || typeof found.getBoundingClientRect !== "function") continue;
+    fallback ??= found;
+    // 装得进滚动口的第一层就是最外那一层，直接用；装不进就继续往里找
+    if (budget <= 0 || found.getBoundingClientRect().height <= budget) {
+      row = found;
+      break;
+    }
+  }
+  row ??= fallback;
+  if (!row) return 0;
+  const pinned = pinnedFirst;
+  const hostTop = el.getBoundingClientRect().top;
+  const r = row.getBoundingClientRect();
+  const top = r.top - hostTop + el.scrollTop;
+  const next = scrollToShowPx(
+    top,
+    top + r.height,
+    el.clientHeight,
+    el.scrollHeight - el.clientHeight,
+    pinned,
+  );
+  el.scrollTop = next;
+  return next;
+}
+
+/**
+ * 长列表钳到这个高度以下就不值得再钳了——滚动口再矮也得放得下一颗
+ * 「⭐N 换回来」的中心点，比 44px 还矮才真的没救。
+ *
+ * 这个数原先是 160（「一张卡片都露不全就别钳」）。真机横屏上量到的是它的反面
+ * （W5R3-C-04，640×360 相册）：`.ktc-grid` 的可视段只有 **130px**，
+ * 于是这一条早退直接生效——`max-height:none / overflow:visible`，
+ * 2809px 的卡片一格都没钳，**24 颗兑换钮 0/24 够得着，一个可滚祖先都没有**，
+ * 真手指慢拖八趟纹丝不动。844×390 上 159.x px 同样卡在这一条上。
+ *
+ * 130px 的滚动口一次只看得见半张卡片，确实不好看；
+ * 可「看得见半张、翻得到全部」和「一颗都点不着」不是同一个量级的事。
+ */
+export const LIST_MIN_ROOM = 44;
+
+/**
+ * 这一格自己有没有地方滚；没有的话外面那层壳还有没有（W5R3-CF-01）。
+ *
+ * `LIST_MIN_ROOM` 从 160 改判成 44 只是把悬崖从 160 挪到了 44，**没有把它填掉**：
+ * 把手机横过来拿得再矮一点（568×320，也就是把 320×568 那台机器转 90°），
+ * 舞台看得见 170px，而卡片格上面还压着「◀ 回选关」+ 四个摆放位置 + 一行说明——
+ * `.ktc-grid` 自己的可视段只剩 40 来 px，`< 44` 于是那条早退照旧生效：
+ * 1724px 的卡片墙一格没钳、一个可滚祖先都没有，真手指慢拖 30 趟
+ * **24 颗兑换钮逐档累计 0/24**，`.game-stage` 下裁死的有字叶子 **93 个**。
+ *
+ * 卡片格自己挤不出一颗兑换钮的中心点时就往外退一层，把整块相册板钳进可视段。
+ * 退路（「◀ 回选关」）跟着一起滚了，这是代价；可「翻得到全部」比
+ * 「退路永远钉在眼前、卡片一张都够不着」值钱。
+ * **卡片格自己有地方的时候一个字节都不变**——`who === "list"`，只钳那一格。
+ */
+export function listOrShellRoom(
+  listRoom: number,
+  shellRoom: number,
+  minRoom = LIST_MIN_ROOM,
+): { who: "list" | "shell" | "none"; room: number } {
+  if (Number.isFinite(listRoom) && listRoom >= minRoom) return { who: "list", room: Math.floor(listRoom) };
+  if (Number.isFinite(shellRoom) && shellRoom >= minRoom) return { who: "shell", room: Math.floor(shellRoom) };
+  return { who: "none", room: 0 };
+}
 
 /**
  * 把一块**本来就该翻着看**的长列表钳进舞台看得见的那一段，并给它自己挂一条滚动条。
@@ -337,24 +467,37 @@ export const LIST_MIN_ROOM = 160;
  * 24 颗 `⭐N 换回来` 里 20–22 颗永远点不着。星星兑换是相册唯一的主动玩法（W5R2-C-03 阻断）。
  *
  * 装得下就把值原样还回去，免得高屏上凭空多出一个滚动容器。
+ *
+ * `shell` 是这一格外面那层壳（相册传的是 `.ktc-album`），只在**这一格自己挤不出
+ * `minRoom`** 时才轮到它上场（W5R3-CF-01）。不传就是改判前的老行为，一个字节不差。
  */
-export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { relayout: () => void; dispose: () => void } {
+export function scrollIntoStage(
+  el: HTMLElement,
+  minRoom = LIST_MIN_ROOM,
+  shell: HTMLElement | null = null,
+): { relayout: () => void; dispose: () => void } {
   const view = el.ownerDocument?.defaultView ?? null;
   const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const shellOk = !!shell && typeof shell.getBoundingClientRect === "function";
   const reset = (): void => {
     if (!measurable) return;
     el.style.maxHeight = "";
     el.style.overflowY = "";
+    if (shellOk && shell) {
+      shell.style.maxHeight = "";
+      shell.style.overflowY = "";
+    }
   };
   const relayout = (): void => {
     if (!measurable || !view) return;
     reset();
-    const room = stageRoomPx(el);
-    // 量不到裁切线（高屏）或已经整块在裁切线以下（这时候钳只会把它压成一条缝）就不管
-    if (!Number.isFinite(room) || room < minRoom) return;
-    if (el.scrollHeight <= room + 1) return;
-    el.style.maxHeight = `${Math.floor(room)}px`;
-    el.style.overflowY = "auto";
+    // 量不到裁切线（高屏）或两层都矮到连一颗兑换钮的中心点都塞不进去就不管
+    const pick = listOrShellRoom(stageRoomPx(el), shellOk && shell ? stageRoomPx(shell) : Number.NaN, minRoom);
+    if (pick.who === "none") return;
+    const host = pick.who === "list" ? el : (shell as HTMLElement);
+    if (host.scrollHeight <= pick.room + 1) return;
+    host.style.maxHeight = `${pick.room}px`;
+    host.style.overflowY = "auto";
   };
   relayout();
   let live = true;
