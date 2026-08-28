@@ -29,6 +29,7 @@ import {
   POWER_CHARGES_MAX,
   TILE,
   boardHeightBudget,
+  clampBoardBudget,
   computeLight,
   computePower,
   formatClock,
@@ -964,7 +965,16 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
   function layout(): void {
     const availW = Math.max(200, (stage.clientWidth || 340) - 8);
-    const budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
+    // N-103:壳标题 + HUD + 换人条吃掉的高度也要从预算里扣,画布底才进得了 412
+    let roomH = Number.NaN;
+    if (typeof board.getBoundingClientRect === "function") {
+      const top = board.getBoundingClientRect().top;
+      if (Number.isFinite(top) && top > 0) roomH = (window.innerHeight || 667) - top - 6;
+    }
+    const budgetH = clampBoardBudget(
+      boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667),
+      roomH
+    );
     const fit = Math.min(availW / level.w, budgetH / level.h);
     // 小于 MIN_CELL 就不再压缩,改由摄像机跟随 —— 贴边看不清前方比看不见全图更难受
     baseCell = Math.max(MIN_CELL, Math.min(fit, MAX_CELL));

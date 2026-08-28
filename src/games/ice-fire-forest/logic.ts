@@ -926,3 +926,18 @@ export function boardHeightBudget(viewportW: number, viewportH: number): number 
   const floor = sidePads ? 120 : 150;
   return Math.min(MAX_BOARD_H, Math.max(floor, h * ratio));
 }
+
+/**
+ * N-103:预算再按「画布顶到视口底」的实际余量钳一刀。
+ *
+ * `boardHeightBudget` 只看视口高,不知道画布顶上的壳标题 + HUD + 换人条
+ * 已经吃掉多少 —— 915×412 上画布顶落在 232,239px 的预算装不进剩下的
+ * 180px,底边切出去 59px。余量拿真实 rect 量;量不到(jsdom / 首帧)或
+ * 余量比预算还宽就原样放行。画布只缩显示视窗,摄像机跟随会补看不到的部分,
+ * 关卡网格与双人判定零触碰。
+ */
+export function clampBoardBudget(budget: number, roomPx: number, min = 120): number {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return budget;
+  if (roomPx >= budget) return budget;
+  return Math.max(min, Math.floor(roomPx));
+}
