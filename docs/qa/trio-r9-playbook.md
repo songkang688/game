@@ -110,3 +110,9 @@
 2. `npm test` / `npm run build` 全绿,用例水位只增不减（进场 = **1095 文件 / 19288 用例**）;每条修复有配套测试或取反断言;**B 合入后全库只留一份 modebar 守门测试**。
 3. 本轮新伤 N-39 与 N-37 加重档在 915×412 复测截图或数字留档;N-39 验收样本含 hop-pads(头部最高);「开/关对照」验收一律每档隔离 context。
 4. 报告按既有命名续档,对账本 playbook 与 r4–r8 playbook 六方编号;与并行批次撞车的按「先合版」纪律记录明细。
+
+---
+
+## r10 对账标注
+
+并行续抽见 `trio-r10-learn-notes.md` / `trio-r10-playbook.md`。主干仍无 N-33…N-38 代码；A 在途 `trio-r9-tester-a-7779`、`tester-a-r7-fixes-def4` 与 B `casual-duo-fit-r5-b-4683` 合入前不要按「未动」重做。新伤 N-40 color-fun 全关型 / N-41 math-farm 竖式 / N-42 gold-hook 商店 veil。
