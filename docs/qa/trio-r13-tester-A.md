@@ -1,7 +1,7 @@
 # 三人组第 13 轮 · 测试修复员 A 交卷
 
 角色：壳层 + 闯关学习。分支 `cursor/trio-r13-tester-a-65de`。  
-进场主干：`b6698b76`（派 r13 模式条 N-63 与推理关）。
+进场：`git fetch origin game-1.3`。开发基线 `5cbb6a80`（r14 学习笔记）；收尾 rebase 前主干已到 `9176155d`（r15 学习笔记）。
 
 ## 禁止重做
 
@@ -39,4 +39,4 @@
 
 ## 水位
 
-收尾全库数字写在交卷 SHA 说明。
+进场主干 `5cbb6a80`；收尾 rebase `9176155d`。全库 **1154 files / 19431 tests**（一次跑有 gomoku 胜率 / snake-snack / bomb-buddies 5s 既有 flake，单测重跑全绿）。`npm run build` 绿。无 915×412 真机 CDP。未重做 N-59/48/58。
