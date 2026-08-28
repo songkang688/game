@@ -107,10 +107,10 @@ const HOME_EXTRA_CSS = `
   border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
 .tabs.cat-tabs{margin-bottom:2px}
 .tabs.mode-chips{margin:0;padding-top:0;gap:10px}
-.mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.mode-chips .tab{min-height:46px;min-width:44px;padding:0 18px;font-size:17px}
 .mode-chips .tab-emoji{font-size:19px}
 .tabs.platform-chips{margin:0 0 4px;padding-top:0;gap:10px}
-.platform-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.platform-chips .tab{min-height:46px;min-width:44px;padding:0 18px;font-size:17px}
 .platform-chips .tab-emoji{font-size:19px}
 /* 管理员入口:大人才用,做得不显眼,但热区仍是 44×44 */
 .icon-btn--admin{opacity:.55;font-size:17px}

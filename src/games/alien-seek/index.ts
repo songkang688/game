@@ -168,23 +168,23 @@ const CSS = `
 .als-tool:disabled{opacity:.5;cursor:default;box-shadow:none;}
 .als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
-/* C-6:矮横屏画布按宽拉到 ~0.64×宽,工具+D-pad(推理关再加线索盒)整排线下。
-   宽屏双栏:场景左、线索/工具/垫右;钳高见 stageFit.canvasDisplayCapPx。判定零触碰。 */
+/* C-6:矮横屏画布按宽拉高会把工具+D-pad(推理关再加线索)顶出裁切线。
+   宽屏双栏:场景左、线索/工具/垫右 sticky;钳高见 stageFit.canvasDisplayCapPx。判定零触碰。 */
 @media (max-height:500px){
   .as-wrap{gap:4px;}
-  .as-clues{padding:5px 8px;gap:2px;max-height:88px;overflow:auto;}
-  .as-clue{font-size:13px;line-height:1.35;}
+  .as-clues{padding:5px 8px;gap:2px;}
   .as-tip{min-height:0;margin:0;font-size:12px;line-height:1.3;}
   .als-list{padding:2px 0;}
 }
 @media (max-height:500px) and (min-width:640px){
-  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;}
-  .as-canvas{grid-column:1;grid-row:1 / span 4;max-height:100%;}
-  .as-clues{grid-column:2;grid-row:1;max-width:260px;max-height:min(120px,40vh);}
-  .als-list{grid-column:1 / -1;grid-row:auto;}
-  .als-tools{grid-column:2;}
-  .as-pads{grid-column:2;}
-  .as-tip{grid-column:1 / -1;}
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    gap:4px 10px;align-items:start;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:calc(100dvh - 64px);}
+  .as-wrap>.as-clues{grid-column:2;max-height:28dvh;overflow:auto;padding:6px 8px;gap:3px;}
+  .as-wrap>.als-list{grid-column:2;max-height:56px;}
+  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
+  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:2;margin:0;}
+  .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}

@@ -169,7 +169,8 @@ const CSS = `
 .tkb-act-on{background:#e7dcff;color:#4d3a86;}
 .tkb-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
 .tkb-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7f9a5e,#65803f);box-shadow:0 4px 0 #4d6630;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7f9a5e,#65803f);box-shadow:0 4px 0 #4d6630;
+  min-height:44px;display:inline-flex;align-items:center;}
 .tkb-open.tkb-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
 .tkb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #4d6630;}
 /* align-items 用 stretch 而不是 center:居中会让每个孩子按 max-content 撑宽,

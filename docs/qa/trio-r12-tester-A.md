@@ -16,6 +16,7 @@ preview:`npx vite preview --host 127.0.0.1 --port 4181`。主档 **915×412**。
 | gold-hook / duo-arena / tank 双人 | B 目录 | **零碰** |
 
 N-16 / L-3 已由 r10-A 合入，本轮按用户「不要重做」跳过。
+并行 r11 剩余 A（`6a013600`）已把 S-4 直达钮与 C-6 双栏合入主干；本分支 **merge** 后保留其 sticky 双栏 + 本工位 `stageFit` 余量钳高与 N-48/N-59。
 
 ## 修了什么
 
@@ -43,10 +44,16 @@ N-16 / L-3 已由 r10-A 合入，本轮按用户「不要重做」跳过。
 
 ### N-48 收藏册 overlay 跨路由 ✅
 
-- 学习员 C 改号：**N-48**（绝不用 N-42 puff、也不占 N-46 sky-squad）。
+- 学习员 C / r12 playbook 号：**N-48**（绝不用 N-42 puff、也不占 N-46 sky-squad）。
 - 学 S-3：`hashchange → close()`，`close` 里摘监听。
 - **测试**:`collection.n48.test.ts` 源码钉 + `collection.test.ts` FakeDoc 放火。
 - **浏览器**:首页 🎁 开册 overlay=1；`hash=#/game/clock-house` 后 overlay=**0**。
+
+### N-59 收藏册 915 矮屏预览 + 页签 44 ✅（与 N-48 同 PR）
+
+- 页签 `.collection-tab`、`.collection-done` → `min-height:44`（关闭 44 未动）。
+- `@media (max-height:500px)` 收预览/画布，给升级/试穿让出第一屏。
+- **未改** color-fun / 竖式 / 金钩 / 对战双人。
 
 ## 水位
 

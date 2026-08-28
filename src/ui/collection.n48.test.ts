@@ -20,3 +20,13 @@ describe("N-48 收藏册 overlay 跨路由", () => {
     expect(closeBody).toContain('removeEventListener("hashchange"');
   });
 });
+
+describe("N-59 收藏册矮横屏页签/完成钮 44", () => {
+  it("页签与知道啦钉 44,关闭钮 44 不动", () => {
+    expect(SRC).toMatch(/\.collection-tab\{[^}]*min-height:44px/);
+    expect(SRC).toMatch(/\.collection-done\{[^}]*min-height:44px/);
+    expect(SRC).toMatch(/\.collection-close\{[^}]*width:44px/);
+    expect(SRC).toContain("@media (max-height:500px)");
+    expect(SRC).toContain(".collection-preview{flex:0 0 132px");
+  });
+});

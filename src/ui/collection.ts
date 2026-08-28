@@ -363,7 +363,7 @@ const COLLECTION_CSS = `
 .collection-main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
 .collection-tabs{display:flex;gap:8px;padding-bottom:10px}
 .collection-tab{padding:8px 18px;border:none;border-radius:999px;background:rgba(255,255,255,.8);
-  color:#7a6a86;font-size:15px;cursor:pointer}
+  color:#7a6a86;font-size:15px;cursor:pointer;min-height:44px;box-sizing:border-box}
 .collection-tab[aria-selected="true"]{background:#ffb3d1;color:#fff;font-weight:700}
 .collection-grid{flex:1 1 auto;display:grid;gap:10px;overflow-y:auto;padding:2px 2px 8px;
   grid-template-columns:repeat(auto-fill,minmax(158px,1fr))}
@@ -384,7 +384,7 @@ const COLLECTION_CSS = `
 .card-btn[disabled]{opacity:.5;cursor:not-allowed}
 .collection-foot{display:flex;align-items:center;gap:10px;padding:10px 18px 14px}
 .collection-tip{flex:1 1 auto;margin:0;font-size:12px;color:#8a7a93}
-.collection-done{min-height:42px;padding:0 22px;border:none;border-radius:999px;
+.collection-done{min-height:44px;padding:0 22px;border:none;border-radius:999px;
   background:#ffb3d1;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
 @media (max-width:640px){
   .collection-overlay{padding:0}
@@ -396,6 +396,13 @@ const COLLECTION_CSS = `
   .collection-outfit{text-align:left}
   .collection-bonus{justify-content:flex-start}
   .collection-grid{overflow:visible;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
+@media (max-height:500px){
+  .collection-panel{max-height:100dvh;height:100dvh;border-radius:0}
+  .collection-preview{flex:0 0 132px;padding:6px;gap:4px}
+  .collection-canvas{width:96px;height:110px}
+  .collection-head{padding:8px 12px}
+  .collection-note{display:none}
 }
 `;
 

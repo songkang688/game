@@ -45,7 +45,7 @@ describe("C-6 接线与推理关验收样本", () => {
 
   it("矮横屏双栏,线索与 D-pad 在右栏,不是 duo-arena 那套垫", () => {
     expect(INDEX).toContain("@media (max-height:500px) and (min-width:640px)");
-    expect(INDEX).toContain(".as-pads{grid-column:2;}");
+    expect(INDEX).toContain(".as-pads{grid-column:2;");
     expect(INDEX).toContain(".as-clues{grid-column:2;");
     expect(INDEX).not.toContain("duo-arena");
   });
