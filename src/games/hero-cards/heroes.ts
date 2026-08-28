@@ -76,6 +76,19 @@ export interface Skill {
   onEvent: (state: GameState, event: HeroEvent, self: number) => Effect[];
 }
 
+/**
+ * 1.3 视觉升级新增的纯外观字段:只给 `cardart.ts` 的 `heroPortrait` 画头像用,
+ * 引擎、技能、AI 一个字都不读它,改配色不会改变任何胜负数值。
+ */
+export interface HeroLook {
+  /** 主色:头饰与小身子 */
+  primary: string;
+  /** 副色:脸与浅面 */
+  secondary: string;
+  /** 头饰 id,`heroPortrait` 按这个挑造型(将军盔/云朵/糖串……全部原创) */
+  hat: string;
+}
+
 export interface Hero {
   id: string;
   name: string;
@@ -84,6 +97,8 @@ export interface Hero {
   vigor: number;
   /** 一句话人设,给界面用 */
   blurb: string;
+  /** 纯外观:头像配色与头饰(见 HeroLook) */
+  look: HeroLook;
   skills: Skill[];
   /** 适合当主公候选 */
   lordCandidate?: boolean;
@@ -107,6 +122,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🌷",
     vigor: 4,
     blurb: "把最好的一枝花留给同桌的人。",
+    look: { primary: "#e8608a", secondary: "#ffe9f0", hat: "tulip" },
     lordCandidate: true,
     skills: [
       {
@@ -126,6 +142,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🔭",
     vigor: 4,
     blurb: "抬头看一眼星象,再决定躲不躲。",
+    look: { primary: "#4a5f9e", secondary: "#e8ecf8", hat: "scope" },
     skills: [
       {
         id: "starlight",
@@ -144,6 +161,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🫛",
     vigor: 4,
     blurb: "手一扬,红花直接落到对面头上。",
+    look: { primary: "#6da85e", secondary: "#eef7e6", hat: "helm" },
     skills: [
       {
         id: "boldThrow",
@@ -162,6 +180,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "☁️",
     vigor: 4,
     blurb: "谁扯掉他一片云,他就顺走谁一张牌。",
+    look: { primary: "#7fb5e0", secondary: "#f0f7ff", hat: "cloud" },
     skills: [
       {
         id: "cloudHerd",
@@ -181,6 +200,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🍡",
     vigor: 3,
     blurb: "软软地一挡,顺手再摸一张。",
+    look: { primary: "#e89ab0", secondary: "#fff3ee", hat: "dango" },
     skills: [
       {
         id: "softStep",
@@ -199,6 +219,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🗿",
     vigor: 4,
     blurb: "站定了就是一座小石墩,风吹不动。",
+    look: { primary: "#8d8d99", secondary: "#f0f0f2", hat: "rock" },
     skills: [
       {
         id: "ironPier",
@@ -226,6 +247,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "✨",
     vigor: 3,
     blurb: "一闪就晃到别处去了,盾也能当花用。",
+    look: { primary: "#f2c14e", secondary: "#fff8e2", hat: "spark" },
     skills: [
       {
         id: "flashStep",
@@ -253,6 +275,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🌱",
     vigor: 4,
     blurb: "藤蔓伸得比手长,隔一个位子也够得着。",
+    look: { primary: "#58b06e", secondary: "#eaf8ec", hat: "sprout" },
     skills: [
       {
         id: "vine",
@@ -271,6 +294,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🐤",
     vigor: 3,
     blurb: "啾一声,随便什么都能挡一下。",
+    look: { primary: "#f5c33b", secondary: "#fff6da", hat: "chick" },
     skills: [
       {
         id: "chirp",
@@ -289,6 +313,8 @@ export const HEROES: readonly Hero[] = [
     emoji: "⭐",
     vigor: 4,
     blurb: "许个愿多摸一张,代价是留不住太多牌。",
+    // 与共享 kit 的 CHAR_COLORS.xingxing 同色(cardart 画头像时直接 import kit 取色)
+    look: { primary: "#ffcf4d", secondary: "#fff2c4", hat: "star" },
     skills: [
       {
         id: "starWish",
@@ -308,6 +334,8 @@ export const HEROES: readonly Hero[] = [
     emoji: "🌸",
     vigor: 4,
     blurb: "花瓣掉光了也还能再开一次。",
+    // 与共享 kit 的 CHAR_COLORS.duoduo 同色(cardart 画头像时直接 import kit 取色)
+    look: { primary: "#ff8fbf", secondary: "#ffeaf3", hat: "flower" },
     skills: [
       {
         id: "bloomAgain",
@@ -328,6 +356,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🍁",
     vigor: 4,
     blurb: "一片霜叶压下来,一张盾是接不住的。",
+    look: { primary: "#c9563c", secondary: "#fdeee6", hat: "maple" },
     skills: [
       {
         id: "frostEdge",
@@ -346,6 +375,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "💧",
     vigor: 3,
     blurb: "判定牌翻出来之前,先给它换一颗露珠。",
+    look: { primary: "#6fc3d8", secondary: "#f2fbfd", hat: "dew" },
     skills: [
       {
         id: "dewTurn",
@@ -364,6 +394,7 @@ export const HEROES: readonly Hero[] = [
     emoji: "🎐",
     vigor: 3,
     blurb: "桌上掉一件装备,她的铃就响一声。",
+    look: { primary: "#9a7fd1", secondary: "#f4effc", hat: "chime" },
     skills: [
       {
         id: "chime",

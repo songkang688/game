@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeCanvas, FakeEl, installCanvasDom, type DomHarness } from "../__tests__/canvasDom";
+import { accessoryFor } from "./art";
 import guide from "./guide";
 import { endlessConfig, levelConfig, type SnakeLevel } from "./levels";
 import { SKINS, SKIN_KEY } from "./skins";
@@ -285,5 +286,122 @@ describe("无尽一波打完之后", () => {
   it("过场停顿是看得清但不磨叽的一段", () => {
     expect(WAVE_BREAK_MS).toBeGreaterThanOrEqual(800);
     expect(WAVE_BREAK_MS).toBeLessThanOrEqual(2500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约(整帧):drawPane 不再是「圆和线」两种图元
+// ---------------------------------------------------------------------------
+
+describe("1.3 视觉契约:整帧绘制", () => {
+  beforeEach(() => {
+    dom = installCanvasDom();
+  });
+  afterEach(() => dom.restore());
+
+  /** ops 里找一段连续 lineTo 的最大长度:只有五角星这种多顶点路径才拉得长 */
+  function longestLineToRun(ops: { op: string }[]): number {
+    let cur = 0;
+    let best = 0;
+    for (const o of ops) {
+      if (o.op === "lineTo") {
+        cur++;
+        if (cur > best) best = cur;
+      } else {
+        cur = 0;
+      }
+    }
+    return best;
+  }
+
+  it("一帧的绘制调用数远超旧阈值,画面密度上来了", () => {
+    const { stage, handle } = run({ cfg: tinyLevel({ food: 240 }) });
+    const canvas = stage.byClass("sr-canvas")[0] as FakeCanvas;
+    dom.tick(2);
+    expect(canvas.ctx.painted).toBeGreaterThan(40);
+    handle.destroy();
+  });
+
+  it("星光豆带渐变与五角星路径,不再是单次 arc+fill", () => {
+    const { stage, handle } = run({ cfg: tinyLevel({ food: 240 }) });
+    const canvas = stage.byClass("sr-canvas")[0] as FakeCanvas;
+    dom.tick(2);
+    const ops = canvas.ctx.ops;
+    expect(ops.some((o) => o.op === "createRadialGradient")).toBe(true);
+    expect(longestLineToRun(ops)).toBeGreaterThanOrEqual(9);
+    handle.destroy();
+  });
+
+  it("P1 与 P2 的头饰走不同分支(形状+颜色双通道)", () => {
+    expect(accessoryFor("duo")).toBe("bow");
+    expect(accessoryFor("star")).toBe("cap");
+    expect(accessoryFor(undefined)).toBeNull();
+  });
+
+  it("soft(prefers-reduced-motion)关掉罗盘扫描线等动效分支", () => {
+    const owners: Owner[] = [{ id: "me", name: "朵朵", color: "#F5A9C8", human: "duo", skin: SKINS[0] }];
+    const g = globalThis as { matchMedia?: (q: string) => { matches: boolean } };
+    const saved = g.matchMedia;
+    g.matchMedia = () => ({ matches: true });
+    let softRotates = 0;
+    try {
+      const softRun = run({ cfg: tinyLevel({ fog: true }) }, owners);
+      dom.tick(2);
+      const ops = (softRun.stage.byClass("sr-canvas")[0] as FakeCanvas).ctx.ops;
+      softRotates = ops.filter((o) => o.op === "rotate").length;
+      softRun.handle.destroy();
+    } finally {
+      if (saved === undefined) delete g.matchMedia;
+      else g.matchMedia = saved;
+    }
+    const fullRun = run({ cfg: tinyLevel({ fog: true }) }, owners);
+    dom.tick(2);
+    const fullOps = (fullRun.stage.byClass("sr-canvas")[0] as FakeCanvas).ctx.ops;
+    const fullRotates = fullOps.filter((o) => o.op === "rotate").length;
+    fullRun.handle.destroy();
+    // 每帧:蛇头椭圆 1 次 rotate;非 soft 再加罗盘扫描线的 rotate
+    expect(softRotates).toBeGreaterThan(0);
+    expect(fullRotates).toBeGreaterThan(softRotates);
+  });
+
+  it("死亡蛇走 X 眼分支且 fade 淡出仍生效:fade 期间还在画,fade 完才消失", () => {
+    // 两条人类蛇相向直行,必然头对头一起退场
+    const owners: Owner[] = [
+      { id: "me", name: "朵朵", color: "#F5A9C8", human: "duo", skin: SKINS[0] },
+      { id: "star", name: "星星", color: "#A9C8F5", human: "star", skin: SKINS[3] }
+    ];
+    const { stage, handle, sounds } = run({ cfg: tinyLevel({ food: 0 }) }, owners);
+    const canvas = stage.byClass("sr-canvas")[0] as FakeCanvas;
+    // 头对头相撞前最多推 4 秒(50ms 一帧)
+    for (let i = 0; i < 80 && !sounds.includes("oops"); i++) dom.tick(1, 50);
+    expect(sounds).toContain("oops");
+    // fade 期间(FADE_SEC=0.34s):两颗带 X 眼的头仍然在画 → 每帧 2 次 rotate
+    canvas.ctx.ops.length = 0;
+    dom.tick(1, 50);
+    const fadingRotates = canvas.ctx.ops.filter((o) => o.op === "rotate").length;
+    expect(fadingRotates).toBe(2);
+    // fade 走完之后蛇消失,但原野照画
+    dom.tick(10, 50);
+    canvas.ctx.ops.length = 0;
+    dom.tick(1, 50);
+    expect(canvas.ctx.ops.filter((o) => o.op === "rotate").length).toBe(0);
+    expect(canvas.ctx.painted).toBeGreaterThan(0);
+    handle.destroy();
+  });
+
+  it("结算结果带上长度曲线采样,给奖杯页画曲线", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { results, handle } = run({ cfg: tinyLevel({ timeSec: 0.02 }) });
+      dom.tick(3, 20);
+      vi.advanceTimersByTime(400);
+      expect(results).toHaveLength(1);
+      expect(Array.isArray(results[0].curve)).toBe(true);
+      expect(results[0].curve.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].curve[results[0].curve.length - 1]).toBeGreaterThan(0);
+      handle.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

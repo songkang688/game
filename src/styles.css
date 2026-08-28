@@ -449,7 +449,7 @@ button {
   /* 逐项写死而不是 all:`all` 会把 outline-color 也一起过渡,
      键盘 Tab 过去时焦点圈会先是白色再慢慢变深,那半秒里根本看不清落点 */
   transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease,
-    border-color 0.15s ease, box-shadow 0.15s ease;
+    border-color 0.15s ease, box-shadow 0.15s ease, border-radius 0.15s ease;
 }
 
 .tab:hover {
@@ -462,13 +462,16 @@ button {
   line-height: 1;
 }
 
+/* 选中态的形状变化(不只变色):胶囊长成一片花瓣(左下收尖),再弹一下落座 */
 .tab--active {
   background: linear-gradient(135deg, var(--pink-strong) 0%, var(--pink-deep) 100%);
   border-color: #ffeaf4;
   color: #fff;
   box-shadow: 0 8px 18px rgba(242, 105, 159, 0.4);
+  border-radius: 26px 26px 26px 10px;
   transform: translateY(-2px) scale(1.04);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  animation: press-pop 0.3s ease;
 }
 
 /* 首页分区标题(最近玩过 / 全部页签的分类小节) */
@@ -579,24 +582,100 @@ button {
   gap: 18px;
 }
 
+/* 1.3 第 1 步 B:卡片改三层 —— 封面区(渐变 + 分类图形)/ 标题行 / 元信息行 */
 .game-card {
   --card-color: var(--pink-soft);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 22px 14px 18px;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
   border: 4px solid #fff;
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.9) 0%, transparent 52%),
-    linear-gradient(180deg, var(--card-color) 0%, #ffffff 72%);
+  background: linear-gradient(180deg, #ffffff 0%, #fffcfe 100%);
   box-shadow: var(--shadow);
   text-align: center;
+  overflow: hidden; /* 封面图形不许溢出圆角 */
   transition: transform 0.16s ease, box-shadow 0.16s ease;
   /* 错峰浮现(prefers-reduced-motion 时由全局规则关闭) */
   animation: card-in 0.4s ease backwards;
   animation-delay: calc(var(--card-i, 0) * 45ms);
+}
+
+/* 第一层:封面区。主题色渐变打底,右上一枚柔光斑,分类图形语言盖在 ::before 上 */
+.card-cover {
+  position: relative;
+  display: block;
+  height: 86px;
+  /* 表情贴纸骑在封面下沿,给它让出探出来的那一截 */
+  margin-bottom: 46px;
+  background:
+    radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.6) 0%, transparent 36%),
+    linear-gradient(165deg, var(--card-color) 0%, rgba(255, 255, 255, 0.55) 145%);
+}
+
+.card-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  transition: opacity 0.16s ease;
+}
+
+/* 分类图形语言:同一分类的卡片共享一种底纹,孩子扫一眼就能认出「这排是什么」 */
+.card-cover--action::before {
+  /* 冲刺速度线 */
+  background: repeating-linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.55) 0 8px,
+    transparent 8px 30px
+  );
+}
+
+.card-cover--casual::before {
+  /* 糖果波点 */
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.7) 5px, transparent 6px);
+  background-size: 30px 30px;
+  background-position: 5px 7px;
+}
+
+.card-cover--party::before {
+  /* 游园帐篷条纹 */
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.5) 0 14px,
+    transparent 14px 34px
+  );
+}
+
+.card-cover--edu::before {
+  /* 作业本横线 */
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.6) 0 2px,
+    transparent 2px 14px
+  );
+}
+
+.card-cover--create::before {
+  /* 画布棋盘格 */
+  background: conic-gradient(
+    from 45deg,
+    rgba(255, 255, 255, 0.5) 25%,
+    transparent 0 50%,
+    rgba(255, 255, 255, 0.5) 0 75%,
+    transparent 0
+  );
+  background-size: 26px 26px;
+}
+
+/* 第二层 + 第三层的容器:标题行 / 元信息行 */
+.card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 18px;
 }
 
 @keyframes card-in {
@@ -610,9 +689,14 @@ button {
   }
 }
 
+/* 悬停浮起:位移封顶 4px(宪法七;reduced 时只变阴影不位移,见末尾降级块) */
 .game-card:hover {
-  transform: translateY(-6px) rotate(-1.2deg);
-  box-shadow: 0 16px 38px rgba(242, 105, 159, 0.24);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 38px rgba(242, 105, 159, 0.26);
+}
+
+.game-card:hover .card-cover::before {
+  opacity: 0.8;
 }
 
 .game-card:hover .card-emoji {
@@ -626,17 +710,24 @@ button {
 }
 
 .game-card:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
 }
 
+/* 表情贴纸:绝对定位骑在封面下沿(左右 margin 居中,不占用 transform,
+   card-wiggle 的旋转动画才不会把它甩偏) */
 .card-emoji {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -40px;
+  margin: 0 auto;
   display: grid;
   place-items: center;
   width: 92px;
   height: 92px;
   border-radius: 50%;
-  background: radial-gradient(circle at 38% 30%, #ffffff 0%, rgba(255, 255, 255, 0.55) 100%);
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9), 0 6px 14px rgba(0, 0, 0, 0.06);
+  background: radial-gradient(circle at 38% 30%, #ffffff 0%, rgba(255, 255, 255, 0.72) 100%);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9), 0 6px 14px rgba(0, 0, 0, 0.08);
   font-size: 54px;
   line-height: 1;
 }
@@ -677,9 +768,9 @@ button {
   box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.4);
 }
 
-/* 99 关进度徽章(只读 l99 存档) */
+/* 99 关进度徽章(只读 l99 存档)。字号 1.3 起抬到控件下限 14px,只升不降 */
 .card-progress {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
   padding: 4px 10px;
   border-radius: 999px;
@@ -688,6 +779,36 @@ button {
   background: rgba(255, 255, 255, 0.9);
   box-shadow: inset 0 0 0 2px rgba(203, 178, 255, 0.55);
   white-space: nowrap;
+}
+
+/* 元信息行的胶囊 + 图形徽章(玩法 / 设备,与筛选芯片同一套符号语言) */
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+.card-badge-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.card-badge--mode {
+  /* 白底 8.1:1(与进度徽章同一支薰衣草紫) */
+  color: #5f3f8f;
+  box-shadow: inset 0 0 0 2px rgba(203, 178, 255, 0.55);
+}
+
+.card-badge--platform {
+  /* 白底 7.0:1(与星星胶囊同一支蜂蜜金) */
+  color: #7a520a;
+  box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.5);
 }
 
 /* 空状态 */
@@ -2145,5 +2266,218 @@ html {
   .game-topbar,
   .home-footer {
     padding-bottom: var(--mt-safe-bottom);
+  }
+}
+
+/* ==========================================================================
+   1.3 第 1 步 B · 壳层布局动效(只增不删,追加在最后)
+   时序常量与 src/ui/motion.ts 对账:INTRO_HOLD_MS / INTRO_LEAVE_MS /
+   STAR_BASE_MS / STAR_STEP_MS / SCORE_ROLL_MS / PRESS_POP_PEAK。
+   ========================================================================== */
+
+/* ---------- 按压回弹(motion.ts:springScale,峰值 ≤ PRESS_POP_PEAK = 1.08) ----------
+   用独立的 scale 属性而不是 transform,不会盖掉元素自己的 translate/rotate;
+   不认识 scale 属性的老 WebView 会静默跳过,只是少一下回弹,不碎。 */
+@keyframes press-pop {
+  0% {
+    scale: 0.96;
+  }
+  55% {
+    scale: 1.06;
+  }
+  80% {
+    scale: 0.99;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+/* ---------- 页签 / 芯片横向滚动的渐隐提示 ----------
+   右端 30px 渐隐示意「后面还有」;尾部补足内边距,滚到底时最后一颗不被雾住。 */
+.tabs {
+  padding-inline-end: 36px;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 30px), transparent 100%);
+}
+
+/* ---------- 关卡壳 · 入场卡(motion.ts:INTRO_HOLD_MS = 600 后让位) ---------- */
+.level-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  /* 纯展示:一毫秒也不许挡孩子的手 */
+  pointer-events: none;
+}
+
+.level-intro-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(86vw, 340px);
+  padding: 20px 34px 18px;
+  border: 4px solid #fff;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 209, 102, 0.25) 0%, transparent 38%),
+    radial-gradient(circle at 85% 20%, rgba(203, 178, 255, 0.22) 0%, transparent 40%),
+    linear-gradient(180deg, #fff9fc 0%, #ffffff 60%);
+  box-shadow: 0 18px 44px rgba(91, 74, 85, 0.26);
+  text-align: center;
+  animation: intro-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.level-intro-decor {
+  font-size: 44px;
+  line-height: 1;
+}
+
+.level-intro-level {
+  font-size: clamp(26px, 6vw, 34px);
+  font-weight: 900;
+  line-height: 1.2;
+  color: var(--pink-deep);
+}
+
+.level-intro-goal {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* 让位:INTRO_LEAVE_MS = 240 内缩小淡出(motion.ts 对账) */
+.level-intro--leave .level-intro-card {
+  animation: intro-leave 0.24s ease forwards;
+}
+
+/* reduced:立即静态显示,不弹入;让位时由壳层直接摘掉,不播离场动画 */
+.level-intro--static .level-intro-card {
+  animation: none;
+}
+
+@keyframes intro-pop {
+  from {
+    transform: scale(0.6) translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes intro-leave {
+  to {
+    transform: scale(0.92) translateY(-14px);
+    opacity: 0;
+  }
+}
+
+/* ---------- 结算舞台 · 分数滚动(motion.ts:SCORE_ROLL_MS = 800,数字由壳层驱动) ----------
+   星级逐颗点亮的延迟同样由壳层写内联(STAR_BASE_MS + i·STAR_STEP_MS ≈ 250ms 一颗),
+   .star--on 的弹出姿势沿用上面的 star-pop 关键帧。 */
+.result-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  margin: 6px auto 0;
+  min-width: 96px;
+  padding: 6px 20px;
+  border-radius: 999px;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--pink-deep);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 3px rgba(255, 209, 102, 0.5);
+  /* 数字滚动时宽度不跳:等宽数字 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* .result-content 是纵向文档流,胶囊是行内元素时要自己站中间 */
+.result-content .result-score {
+  display: flex;
+  width: fit-content;
+}
+
+/* ---------- 关卡壳 · HUD 排布规范(供第 2–26 步的游戏往里放自己的 HUD) ----------
+   统一口径:半透明白底 + 圆角胶囊 + 一行排布;信息 ≤ 3 组,不喧宾夺主。 */
+.shell-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  /* 容器不接手势,只有真按钮自己接 */
+  pointer-events: none;
+}
+
+.shell-hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-soft);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+/* ---------- 顶栏暂停键:圆钮改圆角胶囊(热区仍 ≥ 44×44) ---------- */
+.icon-btn--pause {
+  width: 64px;
+  border-radius: 999px;
+}
+
+/* ---------- 小屏适配:封面区与表情贴纸跟着缩 ---------- */
+@media (max-width: 420px) {
+  .card-cover {
+    height: 74px;
+    margin-bottom: 40px;
+  }
+
+  .card-emoji {
+    bottom: -34px;
+  }
+
+  .icon-btn--pause {
+    width: 56px;
+  }
+}
+
+/* ---------- 动画弱化:1.3 新增动效全部静态降级 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  /* 入场卡:直接静态显示、直接消失 */
+  .level-intro-card,
+  .level-intro--leave .level-intro-card {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1;
+  }
+
+  /* 选中页签的回弹、封面亮度过渡 */
+  .tab--active {
+    animation: none !important;
+    scale: none;
+  }
+
+  .card-cover::before,
+  .game-card:hover .card-cover::before {
+    transition: none;
   }
 }

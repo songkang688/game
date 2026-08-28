@@ -48,7 +48,39 @@ import {
   type Zone
 } from "./logic";
 import { AI_TIER_LABELS, aiSteer, type AiRival, type AiTier } from "./ai";
-import { CHAPTERS, endlessConfig, goalLine, goalTarget, levelConfig, levelWon, starsFor, type SnakeLevel } from "./levels";
+import {
+  CHAPTERS,
+  chapterIndexOf,
+  endlessConfig,
+  goalLine,
+  goalTarget,
+  levelConfig,
+  levelWon,
+  starsFor,
+  type SnakeLevel
+} from "./levels";
+import {
+  FENCE_WARN_PX,
+  accessoryFor,
+  beanPhase,
+  drawBodyNode,
+  drawCompassRadar,
+  drawFence,
+  drawFieldBackground,
+  drawGemDrop,
+  drawNameTag,
+  drawShrinkZone,
+  drawSnakeHead,
+  drawStarBeanFast,
+  drawSummary,
+  fieldTheme,
+  makeBeanSprites,
+  makeStardustPool,
+  patternFamily,
+  type FieldThemeKind,
+  type RadarDot
+} from "./art";
+import { tint } from "../../art/kit";
 import {
   BOT_COLORS,
   SKINS,
@@ -73,7 +105,8 @@ export const SR_CSS = `
 .sr-panes{display:flex;flex-direction:column;gap:6px;}
 .sr-panes.sr-split{flex-direction:column;}
 .sr-canvas{width:100%;border-radius:14px;display:block;background:#F1FAEC;touch-action:none;}
-.sr-board{position:absolute;top:46px;right:14px;background:#ffffffdb;border-radius:12px;padding:6px 9px;
+.sr-board{position:absolute;top:46px;right:14px;background:linear-gradient(180deg,#ffffffe8,#f3fbf1e0);
+  border:1px solid #d4ecd4;border-radius:12px;padding:6px 9px;box-shadow:0 3px 10px rgba(90,150,110,.18);
   font-size:16px;font-weight:800;color:#3f7a52;line-height:1.5;max-width:44%;}
 .sr-board summary{cursor:pointer;font-size:16px;}
 .sr-me{color:#b85a2a;}
@@ -87,7 +120,7 @@ export const SR_CSS = `
   overflow-wrap:anywhere;line-height:1.5;}
 .sr-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .sr-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f7a52;text-align:center;overflow-wrap:anywhere;}
-.sr-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
+.sr-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#6fc48b,#4f9e6b);box-shadow:0 4px 0 #3d7d54;}
 .sr-open:active{transform:translateY(2px);box-shadow:0 2px 0 #3d7d54;}
 .sr-mode{max-width:760px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
@@ -97,9 +130,10 @@ export const SR_CSS = `
 .sr-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(120,170,130,.25);}
 .sr-over-t{font-size:21px;font-weight:900;color:#3f7a52;margin-bottom:8px;}
 .sr-over-s{font-size:16px;font-weight:700;color:#54886a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.sr-sumcv{display:block;width:min(320px,94%);margin:0 auto 12px;}
 .sr-skins{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0 0;}
 .sr-skin{border:2px solid transparent;border-radius:12px;padding:5px 9px;font-size:14px;font-weight:800;
-  font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:36px;}
+  font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:44px;}
 .sr-skin[aria-pressed="true"]{border-color:#4f9e6b;}
 .sr-skin[disabled]{opacity:.5;cursor:default;}
 @media (min-width:720px){
@@ -130,6 +164,8 @@ export interface RunResult {
   stops: number;
   usedSec: number;
   alive: boolean;
+  /** 本局长度采样(每 0.5s 一点),结算画长度曲线用 */
+  curve: number[];
 }
 
 export interface RunOpts {
@@ -249,6 +285,21 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
   for (let i = 0; i < cfg.food; i++) foods.push(spawnFood());
 
   let zone: Zone | null = cfg.shrink > 0 ? { cx: 0, cy: 0, radius: cfg.mapR * 0.96 } : null;
+
+  // ---- 1.3 视觉状态(只影响画面,不碰任何玩法数值) ----
+  /** 关卡段换色:白天原野 → 黄昏 → 迷雾夜(fog 关自动夜色调) */
+  const themeKind: FieldThemeKind = cfg.fog ? "night" : chapterIndexOf(cfg.level) >= 4 ? "dusk" : "day";
+  const theme = fieldTheme(themeKind);
+  /** 星光豆预渲染 sprite;拿不到离屏画布时为 null,画豆时自动退回直绘 */
+  const beanSprites = makeBeanSprites(soft);
+  /** 加速星屑拖尾对象池(上限 40,soft 全关) */
+  const stardust = makeStardustPool();
+  let dustSeed = 0;
+  /** 每颗掉落宝石的出生时刻(落地弹性用);宝石被捡走后自动回收 */
+  const orbBorn = new WeakMap<Orb, number>();
+  /** 本局长度采样(每 0.5s 一点),结算画长度曲线 */
+  const lenLog: number[] = [];
+  let nextLenSample = 0;
 
   // ---- DOM ----
   const wrap = document.createElement("div");
@@ -466,6 +517,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     const views = bodyViews();
     const rivals = rivalViews();
 
+    // 结算曲线采样(纯视觉,不参与任何判定)
+    const sampleMe = humans[0] ? runnerById(humans[0].id) : undefined;
+    if (sampleMe && elapsed >= nextLenSample && lenLog.length < 240) {
+      lenLog.push(Math.round(sampleMe.shown));
+      nextLenSample += 0.5;
+    }
+
     // 1) 先按同一份帧初快照决定每条蛇朝哪
     const wants = new Map<string, { target: number; boost: boolean }>();
     for (const r of runners) {
@@ -650,152 +708,125 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     const cam = cameraFor(id, canvas);
     const w = canvas.width;
     const h = canvas.height;
-    const toX = (x: number): number => w / 2 + (x - cam.x) * cam.zoom;
-    const toY = (y: number): number => h / 2 + (y - cam.y) * cam.zoom;
+    const z = cam.zoom;
+    const toX = (x: number): number => w / 2 + (x - cam.x) * z;
+    const toY = (y: number): number => h / 2 + (y - cam.y) * z;
 
     g.clearRect(0, 0, w, h);
-    g.fillStyle = "#F1FAEC";
-    g.fillRect(0, 0, w, h);
+    // 糖果原野:渐变底 + 低透明网格 + 视差装饰贴片(关卡段换色)
+    drawFieldBackground(g, { w, h, camX: cam.x, camY: cam.y, zoom: z, theme });
 
-    // 糖果原野的花纹背景
-    g.strokeStyle = "#DCF0D2";
-    g.lineWidth = 1;
-    const step = 90 * cam.zoom;
-    if (step > 6) {
-      for (let x = (((-cam.x * cam.zoom + w / 2) % step) + step) % step; x < w; x += step) {
-        g.beginPath();
-        g.moveTo(x, 0);
-        g.lineTo(x, h);
-        g.stroke();
-      }
-      for (let y = (((-cam.y * cam.zoom + h / 2) % step) + step) % step; y < h; y += step) {
-        g.beginPath();
-        g.moveTo(0, y);
-        g.lineTo(w, y);
-        g.stroke();
+    // 发光围栏:三层描边 + 灯珠;本画面的蛇头逼近 80px 内红色警示脉动(仅视觉)
+    const paneMe = runnerById(id);
+    let warn = 0;
+    let warnAngle = 0;
+    if (paneMe?.alive) {
+      const gap = cfg.mapR - Math.hypot(paneMe.x, paneMe.y);
+      if (gap < FENCE_WARN_PX) {
+        warn = Math.min(1, Math.max(0, 1 - gap / FENCE_WARN_PX));
+        warnAngle = Math.atan2(paneMe.y, paneMe.x);
       }
     }
+    drawFence(g, { cx: toX(0), cy: toY(0), r: cfg.mapR * z, w, h, t: elapsed, theme, warn, warnAngle, soft });
 
-    // 发光围栏
-    g.strokeStyle = "#8FD9A8";
-    g.lineWidth = 4;
-    g.beginPath();
-    g.arc(toX(0), toY(0), cfg.mapR * cam.zoom, 0, Math.PI * 2);
-    g.stroke();
-
-    if (zone) {
-      g.strokeStyle = "#7FC7D9";
-      g.lineWidth = 3;
-      g.beginPath();
-      g.arc(toX(zone.cx), toY(zone.cy), Math.max(2, zone.radius * cam.zoom), 0, Math.PI * 2);
-      g.stroke();
-    }
-
-    // 星光豆
-    g.fillStyle = "#F7D98C";
+    // 星光豆:预渲染 sprite + 哈希相位闪烁(soft 关光晕与闪烁)
     for (const f of foods) {
       const x = toX(f.x);
       const y = toY(f.y);
-      if (x < -8 || y < -8 || x > w + 8 || y > h + 8) continue;
-      g.beginPath();
-      g.arc(x, y, Math.max(2, 3.6 * cam.zoom), 0, Math.PI * 2);
-      g.fill();
+      if (x < -12 || y < -12 || x > w + 12 || y > h + 12) continue;
+      drawStarBeanFast(g, beanSprites, { x, y, r: Math.max(2, 3.6 * z), t: beanPhase(f.x, f.y, elapsed), soft });
     }
-    // 掉落光点(更亮更大)
-    g.fillStyle = "#FFB8D6";
+    // 掉落糖果宝石:按价值分档配色,落地 0.5s 弹性缩放
     for (const o of orbs) {
       const x = toX(o.x);
       const y = toY(o.y);
-      if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
-      g.beginPath();
-      g.arc(x, y, Math.max(2.5, (3.5 + o.value) * cam.zoom), 0, Math.PI * 2);
-      g.fill();
+      if (x < -14 || y < -14 || x > w + 14 || y > h + 14) continue;
+      let born = orbBorn.get(o);
+      if (born === undefined) {
+        born = elapsed;
+        orbBorn.set(o, born);
+      }
+      drawGemDrop(g, { x, y, r: Math.max(2.5, (3.2 + o.value) * z), value: o.value, age: elapsed - born, soft });
     }
+
+    // 加速星屑拖尾(soft 全关)
+    if (!soft) stardust.draw(g, toX, toY, z);
 
     // 蛇:从短到长画,自己最后画在最上面
     const order = [...runners].sort((a, b) => a.shown - b.shown);
     for (const r of order) {
       if (!r.alive && r.fade <= 0) continue;
       const alpha = r.alive ? 1 : Math.max(0, r.fade / FADE_SEC);
-      const rad = Math.max(2, lenToRadius(r.shown) * cam.zoom);
+      const rad = Math.max(2, lenToRadius(r.shown) * z);
+      const family = patternFamily(r.skin.pattern);
+      const nodes = r.nodes;
+      const lastIdx = Math.max(1, nodes.length - 1);
       g.globalAlpha = alpha;
-      for (let i = r.nodes.length - 1; i >= 0; i--) {
-        const nd = r.nodes[i];
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const nd = nodes[i];
         const x = toX(nd.x);
         const y = toY(nd.y);
         if (x < -30 || y < -30 || x > w + 30 || y > h + 30) continue;
-        const taper = 0.55 + 0.45 * (1 - i / Math.max(1, r.nodes.length));
-        g.fillStyle = nodeColor(r.skin, i);
-        g.beginPath();
-        g.arc(x, y, rad * taper, 0, Math.PI * 2);
-        g.fill();
+        const taper = 0.55 + 0.45 * (1 - i / Math.max(1, nodes.length));
+        const baseColor = nodeColor(r.skin, i);
+        // 渐变尾族:越靠尾越浅,整条蛇是一段渐变
+        const color = family === "gradient" ? tint(baseColor, (0.38 * i) / lastIdx) : baseColor;
+        // 节间填缝:相邻节中点补一个圆,高速转弯不断珠
+        if (i < nodes.length - 1) {
+          const nb = nodes[i + 1];
+          const bx = toX(nb.x);
+          const by = toY(nb.y);
+          if (!(bx < -30 || by < -30 || bx > w + 30 || by > h + 30)) {
+            const taper2 = 0.55 + 0.45 * (1 - (i + 1) / Math.max(1, nodes.length));
+            drawBodyNode(g, {
+              x: (x + bx) / 2,
+              y: (y + by) / 2,
+              r: rad * ((taper + taper2) / 2) * 0.9,
+              color,
+              plain: true
+            });
+          }
+        }
+        // 行进法线:背脊高光带往这边偏
+        const ahead = i > 0 ? nodes[i - 1] : { x: r.x, y: r.y };
+        const behind = nodes[Math.min(nodes.length - 1, i + 1)];
+        const dx = ahead.x - behind.x;
+        const dy = ahead.y - behind.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        drawBodyNode(g, { x, y, r: rad * taper, color, nx: -dy / dl, ny: dx / dl, pattern: family, index: i });
       }
-      // 头 + 小眼睛
+      // 头:椭圆 + 表情(boost 眯眼 / 死亡 X 眼) + 双人头饰
       const hx = toX(r.x);
       const hy = toY(r.y);
-      g.fillStyle = r.color;
-      g.beginPath();
-      g.arc(hx, hy, rad * 1.08, 0, Math.PI * 2);
-      g.fill();
-      if (rad > 4) {
-        const ex = Math.cos(r.angle + 0.6) * rad * 0.5;
-        const ey = Math.sin(r.angle + 0.6) * rad * 0.5;
-        const fx = Math.cos(r.angle - 0.6) * rad * 0.5;
-        const fy = Math.sin(r.angle - 0.6) * rad * 0.5;
-        g.fillStyle = "#ffffff";
-        g.beginPath();
-        g.arc(hx + ex, hy + ey, rad * 0.32, 0, Math.PI * 2);
-        g.arc(hx + fx, hy + fy, rad * 0.32, 0, Math.PI * 2);
-        g.fill();
-        g.fillStyle = "#3a5c46";
-        g.beginPath();
-        g.arc(hx + ex, hy + ey, rad * 0.15, 0, Math.PI * 2);
-        g.arc(hx + fx, hy + fy, rad * 0.15, 0, Math.PI * 2);
-        g.fill();
-      }
-      if (rad > 5) {
-        g.fillStyle = "#3f6b4f";
-        g.font = "700 12px system-ui, sans-serif";
-        g.textAlign = "center";
-        g.textBaseline = "bottom";
-        g.fillText(r.name, hx, hy - rad * 1.6);
-      }
-      // 加速尾焰(关掉动效时不画)
-      if (r.alive && r.boosting && !soft) {
-        const tail = r.nodes[Math.min(r.nodes.length - 1, 4)];
-        if (tail) {
-          g.globalAlpha = alpha * 0.5;
-          g.fillStyle = "#FFE7A8";
-          g.beginPath();
-          g.arc(toX(tail.x), toY(tail.y), rad * 1.5, 0, Math.PI * 2);
-          g.fill();
-        }
-      }
+      drawSnakeHead(g, {
+        x: hx,
+        y: hy,
+        r: rad * 1.08,
+        angle: r.angle,
+        color: r.color,
+        boosting: r.alive && r.boosting,
+        dead: !r.alive,
+        accessory: rad > 3 ? accessoryFor(r.human) : null,
+        soft
+      });
+      if (rad > 5) drawNameTag(g, { x: hx, y: hy - rad * 1.5 - 13, text: r.name, color: r.color });
       g.globalAlpha = 1;
     }
 
-    // 夜色迷雾里的小地图雷达
+    // 缩圈:圈外青灰罩 + 双层光带,画在场上东西之上才有「罩」的感觉
+    if (zone) {
+      drawShrinkZone(g, { cx: toX(zone.cx), cy: toY(zone.cy), r: Math.max(2, zone.radius * z), w, h, t: elapsed, soft });
+    }
+
+    // 夜色迷雾里的罗盘小地图(默认位不遮蛇头)
     if (cfg.fog) {
-      const size = 74;
-      const ox = w - size - 10;
-      const oy = h - size - 10;
-      g.fillStyle = "#ffffffcc";
-      g.fillRect(ox, oy, size, size);
-      g.strokeStyle = "#8FD9A8";
-      g.lineWidth = 2;
-      g.strokeRect(ox, oy, size, size);
-      const mini = (p: Pt): Pt => ({
-        x: ox + size / 2 + (p.x / cfg.mapR) * (size / 2 - 3),
-        y: oy + size / 2 + (p.y / cfg.mapR) * (size / 2 - 3)
-      });
+      const rr = 40;
+      const dots: RadarDot[] = [];
       for (const r of runners) {
         if (!r.alive) continue;
-        const m = mini({ x: r.x, y: r.y });
-        g.fillStyle = r.id === id ? "#E0508C" : r.color;
-        g.beginPath();
-        g.arc(m.x, m.y, r.id === id ? 4 : 3, 0, Math.PI * 2);
-        g.fill();
+        dots.push({ x: r.x / cfg.mapR, y: r.y / cfg.mapR, color: r.color, me: r.id === id });
       }
+      drawCompassRadar(g, { cx: w - rr - 10, cy: h - rr - 10, r: rr, t: elapsed, soft, dots });
     }
   }
 
@@ -823,7 +854,8 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
       rank: me ? Math.max(1, rankOf(rankInputs(), me.id) || runners.length) : 1,
       stops: me?.stops ?? 0,
       usedSec: elapsed,
-      alive: Boolean(me?.alive)
+      alive: Boolean(me?.alive),
+      curve: me ? [...lenLog, Math.round(me.shown)] : [...lenLog]
     };
     later(() => opts.onDone(result), 340);
   }
@@ -833,6 +865,19 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     const dt = last === 0 ? 1 / 60 : Math.min(0.05, (ts - last) / 1000);
     last = ts;
     if (!ended && !paused) update(dt);
+    // 加速星屑拖尾:纯视觉,boost 的每帧在尾节后方撒 2 颗(soft 全关)
+    if (!soft && !paused) {
+      stardust.step(dt);
+      if (!ended) {
+        for (const r of runners) {
+          if (!r.alive || !r.boosting) continue;
+          const tail = r.nodes[r.nodes.length - 1];
+          if (!tail) continue;
+          stardust.spawn(tail.x, tail.y, r.angle, ++dustSeed);
+          stardust.spawn(tail.x, tail.y, r.angle, ++dustSeed);
+        }
+      }
+    }
     canvases.forEach((c, i) => drawPane(c, humans[i]?.id ?? runners[0].id));
     renderHud();
     raf = requestAnimationFrame(frame);
@@ -1012,7 +1057,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     }, WAVE_BREAK_MS) as unknown as number;
   }
 
-  function showOver(title: string, sub: string, again: string): void {
+  function showOver(title: string, sub: string, again: string, deco?: { rank: number; stops: number; curve: number[] }): void {
     clearWaveTimer();
     run?.destroy();
     run = null;
@@ -1020,6 +1065,17 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const box = document.createElement("div");
     box.className = "sr-over";
     box.innerHTML = `<div class="sr-over-t">${title}</div><div class="sr-over-s">${sub}</div>`;
+    // 1.3 结算装饰:名次奖杯 + 本局长度曲线,拦下过人再亮盾徽
+    if (deco) {
+      const cv = document.createElement("canvas") as HTMLCanvasElement;
+      cv.className = "sr-sumcv";
+      cv.width = 320;
+      cv.height = 130;
+      cv.setAttribute("aria-hidden", "true");
+      const sg = cv.getContext?.("2d");
+      if (sg) drawSummary(sg, { w: 320, h: 130, rank: deco.rank, stops: deco.stops, curve: deco.curve });
+      box.appendChild(cv);
+    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "sr-open";
@@ -1050,7 +1106,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           bestLen = save.recordEndlessBest(meta.id, Math.round(r.length));
           const step = afterWave(r.won, wave, r.length, bestLen);
           if (step.kind === "over") {
-            showOver(step.title, step.sub, "🔁 再来一局");
+            showOver(step.title, step.sub, "🔁 再来一局", { rank: r.rank, stops: r.stops, curve: r.curve });
             return;
           }
           api.addStars(1);
@@ -1072,7 +1128,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           showOver(
             r.won ? "混战赢下来啦！" : "这一局到此为止",
             `${runLine(r.won, r.rank, r.length)} 用时 ${Math.round(r.usedSec)} 秒,拦下 ${r.stops} 条。`,
-            "🔁 再打一场"
+            "🔁 再打一场",
+            { rank: r.rank, stops: r.stops, curve: r.curve }
           );
         }
       });
@@ -1089,8 +1146,12 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       banner: "👫 朵朵 WASD+F/G · 星星 方向键+L/K",
       split: true,
       sfx: (n) => api.play(n),
-      onDone: () => {
-        showOver("这一局结束啦", "两个人一起玩,谁绕得漂亮谁就赢一半。再来一局吧！", "🔁 再来一局");
+      onDone: (r) => {
+        showOver("这一局结束啦", "两个人一起玩,谁绕得漂亮谁就赢一半。再来一局吧！", "🔁 再来一局", {
+          rank: r.rank,
+          stops: r.stops,
+          curve: r.curve
+        });
       }
     });
   }

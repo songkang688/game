@@ -15,7 +15,20 @@ import {
   type ModeEntry
 } from "../../engine";
 import { save } from "../../engine/save";
-import { cardLabel, cardName, isRed, GEARS, SUIT_LABELS, type Card } from "./cards";
+import { cardLabel, cardName, isRed, GEARS, type Card } from "./cards";
+import {
+  cardArtSVG,
+  deckStackSVG,
+  emptyDiscardSVG,
+  gearIconSVG,
+  healRiseSVG,
+  heartsSVG,
+  heroPortrait,
+  kindIconSVG,
+  petalBitSVG,
+  slashArcSVG,
+  statIconSVG
+} from "./cardart";
 import {
   advanceTurn,
   aliveIds,
@@ -60,6 +73,8 @@ import guide from "./guide";
 
 /** 一张牌飞出去的时长(毫秒),不允许瞬变 */
 export const FLY_MS = 220;
+/** 出牌飞到桌面中心后放大亮相的停留时长 */
+export const HOLD_MS = 400;
 /** AI 每一步之间的停顿,给孩子看清楚 */
 export const BEAT_MS = 460;
 /** 花瓣飘落的时长 */
@@ -78,35 +93,58 @@ export const HC_CSS = `
 .hc-badge{background:#fff;border-radius:14px;padding:5px 10px;font-size:16px;font-weight:800;color:#9a5a3a;
   box-shadow:0 2px 6px rgba(210,160,140,.3);line-height:1.5;overflow-wrap:anywhere;}
 .hc-seats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
-.hc-seat{flex:1 1 128px;min-width:0;background:#fff;border-radius:14px;padding:6px 8px;text-align:left;
+.hc-seat{flex:1 1 148px;min-width:0;background:#fff;border-radius:14px;padding:6px 8px;text-align:left;
   border:none;font-family:inherit;font-size:16px;font-weight:800;color:#7a4a34;cursor:pointer;
   box-shadow:0 2px 6px rgba(210,160,140,.28);line-height:1.5;overflow-wrap:anywhere;min-height:44px;
-  /* 座位那行是「元气 9/9 手牌 10 自己」这样一段段拼的,窄屏优先在空格处折,
+  /* 座位那行是「手牌 10 距 1」这样一段段拼的,窄屏优先在空格处折,
      别把「自己」「手牌」这种词从中间劈开 */
-  word-break:keep-all;}
+  word-break:keep-all;display:flex;gap:7px;align-items:flex-start;}
+.hc-seat-face{flex:0 0 36px;width:36px;height:36px;margin-top:1px;}
+.hc-seat-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .hc-seat-on{outline:3px solid #F0975C;}
 .hc-seat-turn{background:#FFF1E2;}
 .hc-seat-pick{outline:3px dashed #D2603A;}
 .hc-seat-out{opacity:.45;}
 .hc-seat-name{font-size:var(--mt-body,16px);}
-.hc-seat-line{font-size:var(--mt-body,16px);color:#8a6a54;}
-.hc-vigor{color:#C24A6A;letter-spacing:1px;}
-.hc-mid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:8px 0;}
-.hc-pile{background:#fff;border-radius:12px;padding:6px 10px;font-size:16px;font-weight:800;color:#7a5a44;
+.hc-seat-line{font-size:var(--mt-body,16px);color:#8a6a54;display:flex;align-items:center;gap:3px;flex-wrap:wrap;}
+.hc-hearts{line-height:0;margin:1px 0;}
+.hc-gear-ico{display:inline-flex;width:16px;height:16px;flex:0 0 auto;}
+.hc-role{padding:0 5px;border-radius:6px;color:#fff;}
+.hc-role-lord{background:#96691c;}
+.hc-role-loyal{background:#40619e;}
+.hc-role-rebel{background:#b13a40;}
+.hc-role-spy{background:#7a4fa8;}
+@keyframes hcshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.hc-seat-hit{animation:hcshake 260ms ease;outline:3px solid #E2574D;}
+.hc-mid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:stretch;margin:8px 0;}
+/* 桌面织物暗纹(1.3 r2 R2-2):与 .mj-board 同 45°/6px 节距;浅暖米底上白纹不可见,
+   改用木沿色 #EBD2B4 向深派生的暖褐,alpha 4% 顶格不越线,眯眼低于牌堆/头像一阶 */
+.hc-table{display:flex;gap:8px;align-items:center;border-radius:14px;padding:6px 10px;
+  background:repeating-linear-gradient(45deg,rgba(170,120,80,.04) 0 6px,transparent 6px 12px),linear-gradient(180deg,#FBEBD8,#F5DCC2);
+  box-shadow:inset 0 0 0 2px #EBD2B4,0 2px 6px rgba(210,160,140,.25);}
+.hc-deck-art{width:46px;height:58px;flex:0 0 auto;}
+.hc-discard{display:flex;align-items:center;}
+.hc-discard-art{width:40px;height:56px;flex:0 0 auto;}
+.hc-hero{display:flex;gap:7px;align-items:center;background:#fff;border-radius:14px;padding:4px 10px;
   box-shadow:0 2px 6px rgba(210,160,140,.25);}
+.hc-hero-face{width:42px;height:42px;flex:0 0 auto;}
+.hc-pile{background:none;border-radius:12px;padding:2px 2px;font-size:16px;font-weight:800;color:#7a5a44;
+  line-height:1.4;}
 .hc-log{background:#FFFDFA;border-radius:12px;padding:8px;font-size:16px;font-weight:700;color:#6b5a4a;
   line-height:1.6;min-height:4.8em;max-height:8em;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;}
-.hc-hand{display:flex;gap:6px;overflow-x:auto;padding:6px 2px;scrollbar-width:none;}
+.hc-hand{display:flex;gap:6px;overflow-x:auto;padding:12px 4px 8px;scrollbar-width:none;}
 .hc-hand::-webkit-scrollbar{display:none;}
-.hc-card{flex:0 0 auto;width:56px;min-height:76px;border:none;border-radius:10px;background:#fff;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:inherit;
-  box-shadow:0 2px 6px rgba(200,150,130,.3);padding:4px 2px;}
-.hc-card-suit{font-size:var(--mt-control,14px);font-weight:800;color:#8a6a54;line-height:1;}
-.hc-card-emoji{font-size:20px;line-height:1;}
-.hc-card-name{font-size:var(--mt-control,14px);font-weight:800;color:#7a4a34;line-height:1.2;text-align:center;}
-.hc-card-red .hc-card-suit{color:#C2453A;}
-.hc-card-on{outline:3px solid #E0713F;transform:translateY(-6px);}
-.hc-card-dim{opacity:.42;}
+/* 卡面米白纸感(1.3 r1 P8):纯白平涂换纵向纸色渐变,和暖色桌面不再生硬 */
+.hc-card{flex:0 0 auto;width:60px;min-height:84px;border:none;border-radius:9px;background:linear-gradient(180deg,#fffdf8,#f6efe2);cursor:pointer;
+  position:relative;font-family:inherit;padding:0;
+  box-shadow:0 2px 0 #E6D5C0,0 3px 7px rgba(200,150,130,.32);
+  /* 扇形微倾:--fan/--arc 由 renderHand 按张数算,中间高两边低 */
+  transform:rotate(var(--fan,0deg)) translateY(var(--arc,0px));}
+.hc-card>svg{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.hc-card-suit{font-size:var(--mt-control,14px);font-weight:800;}
+.hc-card-name{font-size:var(--mt-control,14px);font-weight:800;}
+.hc-card-on{outline:3px solid #E0713F;transform:rotate(var(--fan,0deg)) translateY(calc(var(--arc,0px) - 8px));}
+.hc-card-dim{opacity:.5;filter:grayscale(.65);}
 .hc-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
 .hc-btn{min-width:84px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:16px;
   font-weight:900;cursor:pointer;background:#FBD9C0;color:#8a4318;box-shadow:0 3px 0 #E0B392;padding:0 12px;}
@@ -116,15 +154,31 @@ export const HC_CSS = `
 .hc-btn:focus-visible,.hc-card:focus-visible,.hc-seat:focus-visible{outline:3px solid #6b3210;outline-offset:2px;}
 .hc-msg{text-align:center;min-height:1.6em;font-size:16px;font-weight:800;color:#8a5238;margin-top:6px;
   line-height:1.5;overflow-wrap:anywhere;}
-.hc-fly{position:absolute;font-size:15px;font-weight:900;color:#8a4318;background:#fff;border-radius:8px;
-  padding:2px 6px;pointer-events:none;z-index:6;box-shadow:0 2px 6px rgba(190,130,100,.35);
-  transition:left ${FLY_MS}ms ease,top ${FLY_MS}ms ease,opacity ${FLY_MS}ms ease;}
-.hc-petal{position:absolute;font-size:15px;pointer-events:none;z-index:7;}
+.hc-fly{position:absolute;width:46px;height:64px;pointer-events:none;z-index:6;
+  filter:drop-shadow(0 3px 4px rgba(120,70,40,.35));
+  transition:left ${FLY_MS}ms ease,top ${FLY_MS}ms ease,opacity ${FLY_MS}ms ease,transform ${FLY_MS}ms ease;}
+.hc-fly svg{width:100%;height:100%;display:block;}
+@keyframes hcspin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+.hc-fly-spin svg{animation:hcspin ${FLY_MS * 2 + HOLD_MS}ms linear;}
+.hc-fx{position:absolute;pointer-events:none;z-index:7;}
+.hc-fx svg{width:100%;height:100%;display:block;}
+.hc-streak{width:44px;height:44px;transition:left ${FLY_MS}ms ease,top ${FLY_MS}ms ease;}
+.hc-slashfx{width:46px;height:46px;animation:hcpop 300ms ease-out forwards;}
+.hc-healfx{width:38px;height:38px;animation:hcrise 520ms ease-out forwards;}
+@keyframes hcpop{0%{transform:scale(.4);opacity:0}30%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:0}}
+@keyframes hcrise{0%{transform:translateY(8px);opacity:0}25%{opacity:1}100%{transform:translateY(-24px);opacity:0}}
+.hc-petal{position:absolute;width:14px;height:14px;pointer-events:none;z-index:7;}
+.hc-petal svg{width:100%;height:100%;display:block;}
 @keyframes hcpetal{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),52px) rotate(200deg);opacity:0}}
-.hc-over{text-align:center;padding:20px 14px;background:#fff;border-radius:16px;
+.hc-over{text-align:center;padding:20px 14px;background:#fff;border-radius:16px;position:relative;
   box-shadow:0 4px 14px rgba(200,150,130,.3);}
 .hc-over-t{font-size:20px;font-weight:900;color:#9a5030;margin-bottom:6px;}
 .hc-over-s{font-size:16px;font-weight:700;color:#7a6252;line-height:1.6;margin-bottom:12px;overflow-wrap:anywhere;}
+.hc-over-face{width:76px;height:76px;margin:0 auto 6px;}
+.hc-over-face svg{width:100%;height:100%;display:block;}
+.hc-statbar{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:0 0 12px;}
+.hc-stat{display:inline-flex;align-items:center;gap:5px;font-size:16px;font-weight:800;color:#7a5a44;
+  background:#FFF6EC;border-radius:10px;padding:4px 10px;}
 .hc-reveal{font-size:var(--mt-body,16px);font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
 .hc-modebar,.hc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .hc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#8a5238;text-align:center;overflow-wrap:anywhere;}
@@ -143,15 +197,20 @@ export const HC_CSS = `
 @media (max-width:360px){
   .hc-wrap{padding:8px;}
   .hc-seat{flex:1 1 46%;padding:5px 6px;}
+  .hc-seat-face{flex:0 0 30px;width:30px;height:30px;}
   .hc-badge{padding:4px 8px;}
-  /* 牌名 14px 三个字就要 42px,48px 的牌面挤不下 */
-  .hc-card{width:52px;min-height:70px;}
-  .hc-card-name{font-size:var(--mt-control,14px);}
+  /* 红线:360px 下单卡仍 ≥ 56×80,扇形退化成平排 */
+  .hc-card{width:56px;min-height:80px;transform:none;}
+  .hc-card-on{transform:translateY(-4px);}
+  .hc-deck-art{width:40px;height:52px;}
+  .hc-discard-art{width:36px;height:50px;}
   .hc-btn{min-width:74px;font-size:15px;padding:0 8px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
   .hc-petal{display:none;}
+  .hc-fx{display:none;}
+  .hc-seat-hit{animation:none;}
   .hc-card-on{transform:none;}
 }
 `;
@@ -241,6 +300,10 @@ export interface TableResult {
   myWin: boolean;
   turns: number;
   timeout: boolean;
+  /** 纯展示:这一局你打出的攻击 / 防御 / 回复张数,结算面板画图标条用 */
+  stats: { attack: number; guard: number; heal: number };
+  /** 纯展示:胜方阵营的代表英杰(画大头像),平局为 null */
+  winnerHero: string | null;
 }
 
 export interface TableOptions {
@@ -289,6 +352,8 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
   let destroyed = false;
   let myTurns = 0;
   let logShown = 0;
+  /** 纯展示:自己打出的攻击 / 防御 / 回复张数,结算面板画图标条 */
+  const stats = { attack: 0, guard: 0, heal: 0 };
   const timers = new Set<ReturnType<typeof setTimeout>>();
 
   function later(fn: () => void, ms: number): void {
@@ -329,13 +394,35 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
   });
   wrap.appendChild(seatRow);
 
+  // 战桌中心区:左边是叠着牌背的牌堆实体,右边露出弃牌堆顶那张,中间的数字照旧是文本
   const mid = document.createElement("div");
   mid.className = "hc-mid";
+  const tableZone = document.createElement("div");
+  tableZone.className = "hc-table";
+  const deckArt = document.createElement("span");
+  deckArt.className = "hc-deck-art";
+  deckArt.setAttribute("aria-hidden", "true");
+  deckArt.innerHTML = deckStackSVG();
   const pileChip = document.createElement("span");
   pileChip.className = "hc-pile";
+  const discardBox = document.createElement("span");
+  discardBox.className = "hc-discard";
+  const discardArt = document.createElement("span");
+  discardArt.className = "hc-discard-art";
+  discardArt.setAttribute("aria-hidden", "true");
+  discardBox.appendChild(discardArt);
+  tableZone.append(deckArt, pileChip, discardBox);
+  // 英杰面板:自己的 Q 版头像挨着技能与攻击范围
+  const heroPanel = document.createElement("div");
+  heroPanel.className = "hc-hero";
+  const heroFace = document.createElement("span");
+  heroFace.className = "hc-hero-face";
+  heroFace.setAttribute("aria-hidden", "true");
+  heroFace.innerHTML = heroPortrait(state.players[HUMAN].heroId);
   const skillChip = document.createElement("span");
   skillChip.className = "hc-pile";
-  mid.append(pileChip, skillChip);
+  heroPanel.append(heroFace, skillChip);
+  mid.append(tableZone, heroPanel);
   wrap.appendChild(mid);
 
   const logEl = document.createElement("div");
@@ -374,21 +461,91 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
     msg.textContent = text;
   }
 
-  // ---- 动画 ----
-  function fly(text: string, fromSeat: number, toSeat: number): void {
+  // ---- 动画(soft = prefers-reduced-motion:一个特效节点都不建,画面直接落到终态) ----
+
+  /** 某个座位在画面上大概的位置(百分比坐标,座位横排均摊) */
+  function seatPos(id: number): { left: string; top: string } {
+    const n = Math.max(1, state.players.length);
+    return { left: `${8 + (id + 0.5) * (78 / n)}%`, top: "16%" };
+  }
+
+  /**
+   * 出牌演出:整张卡面先飞到桌面中心放大亮相,停一拍,
+   * 再按去向收尾——普通牌滑进弃牌堆,装备缩进目标座位,延时锦囊转着圈贴到目标头顶。
+   */
+  function flyCard(card: Card, fromSeat: number, toKind: "discard" | "gear" | "delay", toSeat = fromSeat): void {
     if (soft) return;
     const el = document.createElement("div");
-    el.className = "hc-fly";
-    el.textContent = text;
-    el.style.left = `${12 + fromSeat * 8}%`;
-    el.style.top = "46%";
+    el.className = `hc-fly${toKind === "delay" ? " hc-fly-spin" : ""}`;
+    el.innerHTML = cardArtSVG(card);
+    const from = fromSeat === HUMAN ? { left: "44%", top: "72%" } : seatPos(fromSeat);
+    el.style.left = from.left;
+    el.style.top = from.top;
     wrap.appendChild(el);
     later(() => {
-      el.style.left = `${12 + toSeat * 8}%`;
-      el.style.top = "30%";
-      el.style.opacity = "0";
+      el.style.left = "40%";
+      el.style.top = "38%";
+      el.style.transform = "scale(1.12)";
     }, 16);
-    later(() => el.remove(), FLY_MS + 120);
+    later(() => {
+      const to = toKind === "discard" ? { left: "56%", top: "32%" } : seatPos(toSeat);
+      el.style.left = to.left;
+      el.style.top = to.top;
+      el.style.opacity = "0";
+      el.style.transform = toKind === "gear" ? "scale(.35)" : "scale(.5)";
+    }, FLY_MS + HOLD_MS);
+    later(() => el.remove(), FLY_MS * 2 + HOLD_MS + 120);
+  }
+
+  /** 攻击类:一道剑光从出牌人划向目标(分级口径:剑光 + 星星,无血液) */
+  function streakFx(fromSeat: number, toSeat: number): void {
+    if (soft) return;
+    const el = document.createElement("div");
+    el.className = "hc-fx hc-streak";
+    el.innerHTML = slashArcSVG();
+    const from = fromSeat === HUMAN ? { left: "44%", top: "70%" } : seatPos(fromSeat);
+    el.style.left = from.left;
+    el.style.top = from.top;
+    wrap.appendChild(el);
+    const to = seatPos(toSeat);
+    later(() => {
+      el.style.left = to.left;
+      el.style.top = to.top;
+    }, 16);
+    later(() => el.remove(), FLY_MS + 140);
+  }
+
+  /** 受击:目标座位震一下 + 星光迸开 */
+  function hitFx(seatId: number): void {
+    if (soft) return;
+    const seat = seatEls[seatId];
+    if (seat && !seat.className.includes("hc-seat-hit")) {
+      seat.className += " hc-seat-hit";
+      later(() => {
+        seat.className = seat.className.replace(" hc-seat-hit", "");
+      }, 300);
+    }
+    const el = document.createElement("div");
+    el.className = "hc-fx hc-slashfx";
+    el.innerHTML = slashArcSVG();
+    const at = seatPos(seatId);
+    el.style.left = at.left;
+    el.style.top = at.top;
+    wrap.appendChild(el);
+    later(() => el.remove(), 340);
+  }
+
+  /** 回血:绿光托着红心 +1 往上飘 */
+  function healFx(seatId: number): void {
+    if (soft) return;
+    const el = document.createElement("div");
+    el.className = "hc-fx hc-healfx";
+    el.innerHTML = healRiseSVG();
+    const at = seatPos(seatId);
+    el.style.left = at.left;
+    el.style.top = at.top;
+    wrap.appendChild(el);
+    later(() => el.remove(), 560);
   }
 
   /** 掉元气就飘几片花瓣,不做红闪 */
@@ -397,7 +554,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
     for (let i = 0; i < Math.max(1, n * 2); i++) {
       const el = document.createElement("div");
       el.className = "hc-petal";
-      el.textContent = i % 2 === 0 ? "🌸" : "✨";
+      el.innerHTML = petalBitSVG(i % 2 === 0 ? "petal" : "spark");
       el.style.left = `${10 + seatId * 9 + i * 2}%`;
       el.style.top = "24%";
       el.style.setProperty("--dx", `${(i - 2) * 8}px`);
@@ -419,24 +576,44 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
 
     seatEls.forEach((el, i) => {
       const p = state.players[i];
+      const hero = heroOf(p.heroId);
       const gear = Object.values(p.gear).filter((c): c is Card => Boolean(c));
+      // aria 用纯文字口径,画面上装备名前画小图标
       const gearText = gear.length
         ? gear.map((c) => `${GEARS[c.gear!].emoji}${GEARS[c.gear!].name}`).join(" ")
         : "没有装备";
-      const delayed = p.delayed.length ? ` 🪁×${p.delayed.length}` : "";
+      const gearHtml = gear.length
+        ? gear
+            .map((c) => `<span class="hc-gear-ico" aria-hidden="true">${gearIconSVG(c.gear!)}</span>${GEARS[c.gear!].name}`)
+            .join(" ")
+        : "没有装备";
+      const delayed = p.delayed.length
+        ? ` <span class="hc-gear-ico" aria-hidden="true">${kindIconSVG("playful")}</span>×${p.delayed.length}`
+        : "";
+      const role = p.revealed
+        ? `<b class="hc-role hc-role-${p.role}">${ROLE_LABELS[p.role]}</b>`
+        : `<b class="hc-role hc-role-spy">?</b>`;
+      const dist = i === HUMAN ? "自己" : `距 ${distanceBetween(state, HUMAN, i)}`;
       const pickable = mode === "target" && pendingTargets.includes(i);
       el.className = `hc-seat${i === state.turn ? " hc-seat-turn" : ""}${p.out ? " hc-seat-out" : ""}${
         pickable ? " hc-seat-pick" : ""
       }${mode === "target" && i === seatCursor ? " hc-seat-on" : ""}`;
-      el.innerHTML = `<div class="hc-seat-name">${seatSummary(state, i)}</div>
-        <div class="hc-seat-line">${gearText}${delayed}${p.out ? " · 已下桌休息" : ""}</div>`;
+      el.innerHTML = `<span class="hc-seat-face" aria-hidden="true">${heroPortrait(p.heroId)}</span>
+        <span class="hc-seat-main">
+          <span class="hc-seat-name">${p.name}·${hero.name} ${role}</span>
+          <span class="hc-hearts" aria-hidden="true">${heartsSVG(Math.max(0, p.vigor), p.maxVigor)}</span>
+          <span class="hc-seat-line">手牌 ${p.hand.length} · ${dist}${delayed}${p.out ? " · 已下桌休息" : ""}</span>
+          <span class="hc-seat-line">${gearHtml}</span>
+        </span>`;
       el.setAttribute("aria-label", `${seatSummary(state, i)},${gearText}`);
       el.disabled = p.out;
     });
 
-    pileChip.textContent = `🎴 牌堆 ${state.pile.deck.length} · 弃牌 ${state.pile.discard.length}`;
+    pileChip.textContent = `牌堆 ${state.pile.deck.length} · 弃牌 ${state.pile.discard.length}`;
+    const topDiscard = state.pile.discard[state.pile.discard.length - 1];
+    discardArt.innerHTML = topDiscard ? cardArtSVG(topDiscard) : emptyDiscardSVG();
     const hero = heroOf(me.heroId);
-    skillChip.textContent = `${hero.emoji}${hero.name}:${hero.skills.map((s) => s.name).join(" / ")} · 范围 ${rangeOf(
+    skillChip.textContent = `${hero.name}:${hero.skills.map((s) => s.name).join(" / ")} · 范围 ${rangeOf(
       state,
       HUMAN
     )}`;
@@ -462,6 +639,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
         if (canPlay(state, HUMAN, c) || (giftLeft(state, HUMAN) > 0 && me.hand.length > 1)) okSet.add(c.id);
       }
     }
+    const center = (me.hand.length - 1) / 2;
     me.hand.forEach((card, i) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -469,9 +647,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
       btn.className = `hc-card${isRed(card) ? " hc-card-red" : ""}${chosen || i === handCursor ? " hc-card-on" : ""}${
         okSet.has(card.id) ? "" : " hc-card-dim"
       }`;
-      btn.innerHTML = `<span class="hc-card-suit">${SUIT_LABELS[card.suit]}</span>
-        <span class="hc-card-emoji">${card.gear ? GEARS[card.gear].emoji : "🎴"}</span>
-        <span class="hc-card-name">${cardName(card)}</span>`;
+      // 扇形微倾:每张差 2°,中间高两边低;360px 窄屏由 CSS 退化成平排
+      btn.style.setProperty("--fan", `${Math.max(-8, Math.min(8, (i - center) * 2)).toFixed(1)}deg`);
+      btn.style.setProperty("--arc", `${(Math.abs(i - center) * 2).toFixed(1)}px`);
+      btn.innerHTML = cardArtSVG(card);
       btn.setAttribute("aria-label", cardLabel(card));
       btn.addEventListener("click", () => onCardClick(card));
       handEl.appendChild(btn);
@@ -541,7 +720,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
       }
       const before = snapshotVigor();
       startTurn(state, HUMAN);
-      showPetals(before);
+      showVigorFx(before);
       mode = "idle";
       selected = null;
       pendingTargets = [];
@@ -559,7 +738,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
       }
       const before = snapshotVigor();
       startFlow(runAiTurn(state, who, opts.tier) as Flow<unknown>, () => {
-        showPetals(before);
+        showVigorFx(before);
         opts.sfx("tap");
         if (checkEnd()) return;
         advanceTurn(state);
@@ -572,11 +751,25 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
     return state.players.map((p) => p.vigor);
   }
 
-  function showPetals(before: number[]): void {
+  /** 打出「攻击 / 防御 / 回血」画面必须不一样:掉元气飘花瓣 + 震动,回元气绿光飘心 */
+  function showVigorFx(before: number[]): void {
     state.players.forEach((p, i) => {
-      const lost = before[i] - p.vigor;
-      if (lost > 0) petals(i, lost);
+      const diff = p.vigor - before[i];
+      if (diff < 0) {
+        petals(i, -diff);
+        hitFx(i);
+      } else if (diff > 0) {
+        healFx(i);
+      }
     });
+  }
+
+  /** 出牌统计(只记自己,纯展示不进规则) */
+  function countPlay(card: Card): void {
+    const k = card.kind;
+    if (k === "slash" || k === "duel" || k === "petalStorm" || k === "starShower" || k === "borrow") stats.attack++;
+    else if (k === "dodge" || k === "nullify") stats.guard++;
+    else if (k === "heal") stats.heal++;
   }
 
   function checkEnd(): boolean {
@@ -598,13 +791,20 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
         say(`${p.name} 的身份是 ${ROLE_EMOJI[p.role]}${ROLE_LABELS[p.role]}`);
       }, REVEAL_MS * (i + 1));
     });
+    // 胜方阵营的代表英杰(优先还在桌上的那位),结算面板画大头像
+    const winnerHero = state.winner
+      ? (state.players.find((p) => campOf(p.role) === state.winner && !p.out) ??
+          state.players.find((p) => campOf(p.role) === state.winner))?.heroId ?? null
+      : null;
     later(
       () => {
         opts.onOver({
           winner: state.winner,
           myWin: !timeout && state.winner === myCamp,
           turns: myTurns,
-          timeout
+          timeout,
+          stats: { ...stats },
+          winnerHero
         });
       },
       REVEAL_MS * (order.length + 1)
@@ -641,12 +841,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
         return;
       }
       opts.sfx("pop");
-      fly(cardName(card), HUMAN, state.turn);
+      flyCard(card, HUMAN, "discard");
+      countPlay(card);
       const before = snapshotVigor();
       mode = "busy";
       request = null;
       pump({ card });
-      showPetals(before);
+      showVigorFx(before);
       return;
     }
     if (state.turn !== HUMAN) {
@@ -742,10 +943,14 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
     pendingTargets = [];
     mode = "busy";
     opts.sfx("pop");
-    fly(cardName(card), HUMAN, targets[0] ?? HUMAN);
+    // 出什么牌就是什么演出:装备缩进座位,延时锦囊转圈贴头顶,攻击再补一道剑光
+    const toKind = card.gear ? "gear" : card.kind === "playful" ? "delay" : "discard";
+    flyCard(card, HUMAN, toKind, targets[0] ?? HUMAN);
+    if (card.kind === "slash" || card.kind === "duel") streakFx(HUMAN, targets[0] ?? HUMAN);
+    countPlay(card);
     const before = snapshotVigor();
     startFlow(playCard(state, HUMAN, card, targets) as Flow<unknown>, () => {
-      showPetals(before);
+      showVigorFx(before);
       if (checkEnd()) return;
       mode = "idle";
       say("还能接着出牌,或者结束回合。");
@@ -760,7 +965,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): Table {
     const before = snapshotVigor();
     opts.sfx("tap");
     pump({ card: null });
-    showPetals(before);
+    showVigorFx(before);
   }
 
   function cancel(): void {
@@ -968,13 +1173,35 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
     onBack();
   });
 
-  function over(title: string, sub: string, again: string): void {
+  function over(title: string, sub: string, again: string, r?: TableResult): void {
     table?.destroy();
     table = null;
     stage.innerHTML = "";
     const box = document.createElement("div");
     box.className = "hc-over";
-    box.innerHTML = `<div class="hc-over-t">${title}</div><div class="hc-over-s">${sub}</div>`;
+    // 胜者英杰大头像 + 本局出牌统计(攻/防/愈图标条)
+    const face = r?.winnerHero
+      ? `<div class="hc-over-face" aria-hidden="true">${heroPortrait(r.winnerHero)}</div>`
+      : "";
+    const stat = r
+      ? `<div class="hc-statbar"><span class="hc-stat">${statIconSVG("attack")}攻 ×${r.stats.attack}</span>` +
+        `<span class="hc-stat">${statIconSVG("guard")}防 ×${r.stats.guard}</span>` +
+        `<span class="hc-stat">${statIconSVG("heal")}愈 ×${r.stats.heal}</span></div>`
+      : "";
+    box.innerHTML = `${face}<div class="hc-over-t">${title}</div><div class="hc-over-s">${sub}</div>${stat}`;
+    // 赢了撒彩带:复用花瓣粒子通道,弱动效下一片都不撒
+    if (r?.myWin && !reducedMotion()) {
+      for (let i = 0; i < 10; i++) {
+        const bit = document.createElement("div");
+        bit.className = "hc-petal";
+        bit.innerHTML = petalBitSVG(i % 2 === 0 ? "petal" : "spark");
+        bit.style.left = `${8 + i * 9}%`;
+        bit.style.top = "4%";
+        bit.style.setProperty("--dx", `${(i - 5) * 10}px`);
+        bit.style.animation = `hcpetal ${PETAL_MS + i * 60}ms ease-out forwards`;
+        box.appendChild(bit);
+      }
+    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "hc-open";
@@ -1032,7 +1259,8 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
         over(
           r.myWin ? "这一局赢下来啦!" : "这一局到此为止",
           outcomeLine(r.winner, campOf(table?.state().players[HUMAN].role ?? "lord")),
-          "🔁 再来一局"
+          "🔁 再来一局",
+          r
         );
       }
     });
@@ -1055,10 +1283,15 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
           streak++;
           best = save.recordEndlessBest(meta.id, streak);
           api.play("win");
-          over(`连胜 ${streak} 场!`, `最高连胜 ${best}。下一桌的对手会更难缠。`, "▶ 下一桌");
+          over(`连胜 ${streak} 场!`, `最高连胜 ${best}。下一桌的对手会更难缠。`, "▶ 下一桌", r);
         } else {
           api.play("oops");
-          over("连胜到这里啦", `这一轮连胜 ${streak} 场,最高纪录还是 ${best}。歇一会儿,下一局重新开。`, "🔁 重新开始");
+          over(
+            "连胜到这里啦",
+            `这一轮连胜 ${streak} 场,最高纪录还是 ${best}。歇一会儿,下一局重新开。`,
+            "🔁 重新开始",
+            r
+          );
           streak = 0;
         }
       }
