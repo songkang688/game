@@ -140,6 +140,12 @@ const CSS = `
   .sn-pad { position: sticky; bottom: 0; z-index: 5; flex: 0 0 auto; margin-top: 6px;
     background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 14px); padding-top: 4px; }
   .sn-msg { flex: 0 0 auto; max-height: 1.3em; overflow: hidden; margin-top: 4px; }
+  /* r18 · N-81 实测补账:无尽花园顶上还有「回选关」头行,wrap 真实顶距 165 不是 108,
+     sticky 钉在 wrap 底(469)落在 412 外。照 N-75 麻将配方改 fixed 钉视口底,收盘让键。 */
+  .sn-mode .sn-wrap { max-height: calc(100dvh - 176px); }
+  .sn-mode .sn-canvas { max-height: min(128px, 31dvh); }
+  .sn-mode .sn-pad { position: fixed; left: 10px; right: 10px; bottom: 6px;
+    background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 12px); }
 }
 `;
 

@@ -340,6 +340,11 @@ export const WQ_CSS = `
 @media (min-width:700px) and (max-height:500px){
   .wq-scroll{max-height:min(260px, calc(100dvh - 168px));}
   .wq-tools{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(251,247,238,.45),#FBF7EE);}
+  /* r18 · N-10:915 实测盘顶距 170,九路最小盘 263 装不进 244 的滚动盒。
+     「回闯关」行悬浮到左上(宽屏两行横向错开不打架),棋盘行上移 ~52px 整盘进屏。 */
+  .wq-wrap{position:relative;}
+  .wq-wrap>.wq-hud{position:absolute;top:0;left:0;width:auto;z-index:6;margin:0;}
+  .wq-scroll{max-height:min(280px, calc(100dvh - 128px));}
 }
 @media (prefers-reduced-motion:reduce){
   .wq-canvas{transition:none;}
