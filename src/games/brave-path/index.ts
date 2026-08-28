@@ -147,6 +147,7 @@ import {
   type FxPlan
 } from "./visual";
 import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
+import { BVP_LOBBY_CSS } from "./lobbyFit";
 
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
@@ -170,14 +171,8 @@ const CSS = `
   box-shadow:0 4px 14px rgba(140,120,190,.16);margin-bottom:12px;}
 .bvp-h{font-size:17px;font-weight:900;margin:0 0 8px;display:flex;align-items:center;gap:6px;}
 .bvp-sub{font-size:13px;font-weight:700;color:var(--bvp-soft);line-height:1.65;}
-.bvp-modes{display:grid;grid-template-columns:1fr;gap:10px;}
-@media(min-width:560px){.bvp-modes{grid-template-columns:1fr 1fr;}}
-.bvp-mode{border:none;border-radius:18px;padding:15px;text-align:left;cursor:pointer;font-family:inherit;
-  display:flex;gap:12px;align-items:flex-start;box-shadow:0 4px 12px rgba(140,120,190,.18);color:var(--bvp-ink);}
-.bvp-mode:active{transform:translateY(2px);}
-.bvp-mode-em{font-size:34px;line-height:1;flex:0 0 auto;}
-.bvp-mode-t{font-size:17px;font-weight:900;display:block;margin-bottom:3px;}
-.bvp-mode-d{font-size:13px;font-weight:700;color:var(--bvp-soft);line-height:1.55;display:block;}
+/* 模式卡两列锁在 lobbyFit @media(min-width:560px)，360 仍单列 */
+${BVP_LOBBY_CSS}
 .bvp-hero-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:800;color:var(--bvp-soft);}
 .bvp-fighter{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:0 3px 10px rgba(140,120,190,.16);margin-bottom:9px;
   position:relative;transition:transform var(--bvp-t-turn) ease-out,box-shadow var(--bvp-t-turn) ease-out;}
@@ -2152,6 +2147,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     dropCurrent();
     outer.killTimers();
     view.innerHTML = "";
+    view.className = screen === "menu" ? "bvp-lobby" : "";
     if (screen === "menu") renderMenu();
     else if (screen === "campaign") renderCampaign();
     else if (screen === "endless") renderEndless();
