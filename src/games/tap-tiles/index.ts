@@ -227,6 +227,8 @@ const CSS = `
 .tt-over-s{font-size:15px;font-weight:700;color:#6f6390;line-height:1.6;}
 .tt-sum{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;align-items:center;}
 .tt-sum-bar{display:flex;width:100%;height:14px;border-radius:999px;overflow:hidden;background:#efeaf6;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.tt-sum-bar[hidden]{display:none;}
 .tt-seg-p{background:linear-gradient(180deg,#ffd98a,#f5b953);}
 .tt-seg-g{background:linear-gradient(180deg,#a8d8f8,#7fc9f5);}
 .tt-seg-m{background:#d9d3e6;}

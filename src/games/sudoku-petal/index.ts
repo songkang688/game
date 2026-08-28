@@ -409,6 +409,8 @@ export const SP_CSS = `
   overflow-wrap:anywhere;line-height:1.5;max-width:340px;}
 .sp-hintbox{background:#FFFBEA;border-radius:12px;padding:8px 10px;font-size:16px;font-weight:700;color:#7a5f1e;
   line-height:1.6;max-width:340px;text-align:left;display:flex;align-items:flex-start;gap:6px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.sp-hintbox[hidden]{display:none;}
 .sp-bulb{order:-1;width:18px;height:18px;flex:0 0 18px;margin-top:2px;}
 /* 收桌小仪式:用时、提示次数,和一排「花田收成」小花 */
 .sp-harvest{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:8px;position:relative;z-index:1;

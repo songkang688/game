@@ -134,6 +134,8 @@ export const SR_CSS = `
 .sr-over-s{font-size:16px;font-weight:700;color:#54886a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 .sr-sumcv{display:block;width:min(320px,94%);margin:0 auto 12px;}
 .sr-skins{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0 0;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.sr-skins[hidden]{display:none;}
 .sr-skin{border:2px solid transparent;border-radius:12px;padding:5px 9px;font-size:14px;font-weight:800;
   font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:44px;}
 .sr-skin[aria-pressed="true"]{border-color:#4f9e6b;}

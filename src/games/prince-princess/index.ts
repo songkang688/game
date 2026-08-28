@@ -15,6 +15,7 @@ import {
   type PlayHandle,
   type SoundName,
 } from "../level99";
+import { attachCanvasFit } from "../stageFit";
 import { save } from "../../engine/save";
 import { getLevelExtras, type GuideBook } from "../../ui/level188Contract";
 import GUIDE from "./guide";
@@ -874,6 +875,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const tip = el("div", "pcp-tip", opts.tip);
   wrap.appendChild(tip);
   host.appendChild(wrap);
+
+  // 915×412 触控键折叠线下(r5 N-17):按舞台可视余量给画布钳显示高,
+  // 渲染每帧都按 clientWidth/clientHeight 重配缓冲,收多少画多少不变形
+  const canvasFit = attachCanvasFit(canvas, wrap, { minPx: 100 });
 
   const g = canvas.getContext("2d");
 
@@ -1872,6 +1877,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       ended = true;
       particles.length = 0;
       fx.clear();
+      canvasFit.detach();
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

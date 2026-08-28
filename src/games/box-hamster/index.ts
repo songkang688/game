@@ -139,6 +139,12 @@ const CSS = `
   .bh-tip{font-size:11px;}
 }
 @media (max-width:340px){ .bh-grid{--cell:28px;} }
+/* 宽而矮的横屏(915×412 一族):抬头行占掉小半屏,方向盘让到右侧空翼,
+   竖排只剩棋盘和提示行,fitBoard 会同步给两翼留出方向盘的宽(r5 N-18) */
+@media (min-width:700px) and (max-height:520px){
+  .bh-pad{position:absolute;right:10px;top:50%;transform:translateY(-50%);margin-top:0;
+    grid-template-columns:repeat(3,48px);grid-auto-rows:46px;gap:5px;z-index:2;}
+}
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
 ${bhVisualCss()}`;
 
@@ -354,8 +360,14 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
    */
   function fitBoard(): void {
     const style = typeof getComputedStyle === "function" ? getComputedStyle(box) : null;
-    const pad = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0;
-    const avail = (box.clientWidth || 0) - pad;
+    const inset = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0;
+    // 矮横屏上方向盘让到右翼(position:absolute,见媒体查询):两翼各留一块,
+    // 棋盘保持居中、不会被浮着的方向盘压住
+    let flank = 0;
+    if (style && typeof getComputedStyle === "function" && getComputedStyle(pad).position === "absolute") {
+      flank = ((pad.offsetWidth || 160) + 20) * 2;
+    }
+    const avail = (box.clientWidth || 0) - inset - flank;
     // 还没上屏就量不出宽度;先留着 CSS 里那一档,等下一帧再量
     if (avail <= 0) return;
     let availH = Number.NaN;

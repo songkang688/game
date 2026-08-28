@@ -6,6 +6,7 @@ export { meta };
 // 守卫用回旋镖敲晕,集齐日纹石 / 月纹石 / 星纹石三件神器才推得开尽头的首领之门。
 // 三种玩法:188 关八大遗迹战役、无尽遗迹(一层比一层深)、计时速通(每章记录最好时间)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { boardCapWidthPx, canvasRoomPx, rectBottom, stageClipBottom } from "../stageFit";
 import { save } from "../../engine/save";
 import {
   ARTIFACT_EMOJI,
@@ -130,6 +131,8 @@ const CSS = `
 .ak-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .ak-tip{text-align:center;font-size:13px;font-weight:700;color:#7a6046;line-height:1.5;}
 .ak-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},进模式收条全靠它 */
+.ak-bar[hidden]{display:none;}
 .ak-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f0a35c,#d9803a);box-shadow:0 4px 0 #b1642a;}
 .ak-open.ak-open-time{background:linear-gradient(180deg,#7fa8e8,#5a80c8);box-shadow:0 4px 0 #45619b;}
@@ -207,6 +210,20 @@ const CSS = `
 .advk-case-lock .advk-case-name{color:#a99e8c;}
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
+/* 宽而矮的横屏(915×412 一族):方向盘让到右翼,竖排只剩房间+说话行+工具排,
+   fitBoard 会同步给两翼留出方向盘的宽(r5 走查新账) */
+@media (min-width:700px) and (max-height:520px){
+  .ak-mode{position:relative;gap:4px;padding:8px 10px;}
+  .advk-pad2{position:absolute;right:10px;top:50%;transform:translateY(-50%);margin-top:0;
+    grid-template-columns:repeat(3,50px);gap:5px;z-index:2;}
+  .advk-pad2 button{min-height:46px;}
+  /* 抬头/工具/说话行都收一号,412px 高里给房间和陈列摘要腾出一行 */
+  .ak-mhead .ak-back,.advk-tool{padding:5px 11px;font-size:13px;}
+  .advk-hud{gap:4px;font-size:13px;}
+  .advk-hud span{padding:2px 8px;}
+  .advk-say{min-height:16px;font-size:13px;}
+  .advk-album{font-size:12px;}
+}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
 ${touchUpliftCss([".ak-open"])}
 ${bodyFontUpliftCss([".ak-tip"])}
@@ -297,6 +314,10 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   function syncSize(): void {
     cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
     cssH = clamp(Math.round(cssW * 0.9), 250, 430);
+    // 915×412 画布出屏 204、六颗触控键折叠线下(r5 N-16):按舞台可视余量
+    // 再收一刀;镜头 scale 跟着 cssH 走,世界坐标与判定零改动
+    const room = canvasRoomPx(canvas, wrap);
+    if (Number.isFinite(room) && room > 0 && cssH > room) cssH = Math.max(160, Math.floor(room));
     scale = cssH / VIEW_H;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     const bw = Math.max(1, Math.round(cssW * dpr));
@@ -1149,6 +1170,44 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
     }
     if (miniOpen) mini.textContent = miniMapRows(state).join("\n");
     renderHud();
+    fitBoard();
+  }
+
+  /**
+   * 915×412 俯视房间连方向盘一起出屏 384(r5 走查新账):按舞台可视余量给房间
+   * 格盘钳一条 max-width(格子 aspect-ratio:1,宽收了高跟着收)。家当只算到
+   * 方向盘/工具排下沿——那些是走法必需;贴纸陈列在更下面,属可滚的加餐内容,
+   * 不抢这口预算。矮横屏媒体查询会把方向盘挪去右翼(position:absolute),
+   * 那时家当只剩说话行+工具排,盘宽同时给两翼各让一块。量不到(单测桩)一个样式不写。
+   */
+  function fitBoard(): void {
+    if (typeof board.getBoundingClientRect !== "function" || typeof pad.getBoundingClientRect !== "function") return;
+    board.style.maxWidth = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const b = board.getBoundingClientRect();
+    if (!Number.isFinite(b.top) || !(b.height > 0)) return;
+    const padDocked =
+      typeof getComputedStyle === "function" && getComputedStyle(pad).position === "absolute";
+    // 矮横屏方向盘在右翼:竖排家当到工具排 + 陈列摘要行(展开的展柜属加餐,不抢预算);
+    // 竖屏维持老口径量到方向盘,陈列在更下面本来就是滚出来看的
+    const lastInFlow = padDocked ? ((album.firstElementChild as HTMLElement | null) ?? tools) : pad;
+    const below = Math.max(0, rectBottom(lastInFlow.getBoundingClientRect()) - rectBottom(b));
+    const inset = 12; // .advk-room 自己的内衬(6px×2),格子在内衬里面排
+    const cap = boardCapWidthPx({
+      h: b.height - inset,
+      room: clip - b.top - below - 12 - inset,
+      cols: state.w,
+      rows: state.h,
+      gap: 2,
+      minCellPx: 20,
+    });
+    let capW = cap === null ? Number.POSITIVE_INFINITY : cap + inset;
+    if (padDocked && wrap.clientWidth > 0) {
+      // 右翼浮着方向盘:两侧各留一块,房间保持居中、不会被压住
+      capW = Math.min(capW, wrap.clientWidth - ((pad.offsetWidth || 176) + 20) * 2);
+    }
+    board.style.maxWidth = Number.isFinite(capW) ? `${Math.max(capW, 200)}px` : "";
   }
 
   function nextRoom(): void {
@@ -1340,6 +1399,15 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   speakLine("方向键 / WASD 走一步,手机点下面的方向盘。找到 🚪 就进下一间。");
   renderBoard();
   renderAlbum();
+  // 挂载那一刻可能还没排好版,抽空补量一次;转屏/开合侧栏也重量
+  if (typeof setTimeout === "function") {
+    const fitTimer = setTimeout(fitBoard, 0);
+    bag.add(() => clearTimeout(fitTimer));
+  }
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("resize", fitBoard);
+    bag.add(() => window.removeEventListener("resize", fitBoard));
+  }
 
   return {
     destroy() {

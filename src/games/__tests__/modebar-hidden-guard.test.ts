@@ -88,3 +88,62 @@ describe("模式条 [hidden] 全库守门(r5 C-1 收尾)", () => {
     expect(wired.indexOf("bar.hidden = true")).toBeLessThan(wired.indexOf("playLevel(stage, ctx)"));
   });
 });
+
+/**
+ * 同族第二道闸(r5 走查追加):类名不带 modebar 的「flex/grid 容器 + 代码里
+ * `xx.hidden = true` 收起」也会中一样的招——adventure-king `.ak-bar` 就是这么
+ * 在第一道闸眼皮底下把三颗模式钮永远杵在无尽古堡里的。这里顺着代码找:
+ * 凡被 `.hidden = true` 点过名的元素,若其类名的 CSS 规则带 display:flex/grid,
+ * 同文件必须有 `[hidden]{display:none}` 兜底。
+ */
+describe("hidden 收起 × display:flex/grid 全库守门(r5 追加)", () => {
+  /** A 组(壳层+闯关学习)待修名单:B 组无权改这些目录,修完从名单划掉 */
+  const A_GROUP_PENDING = new Set(["sky-squad/index.ts:sks-topbar"]);
+
+  interface Offender {
+    file: string;
+    cls: string;
+  }
+
+  function offendersOf(file: string): Offender[] {
+    const src = readFileSync(file, "utf8");
+    const out: Offender[] = [];
+    const hiddenVars = new Set<string>();
+    for (const m of src.matchAll(/(\w+)\.hidden = true/g)) hiddenVars.add(m[1]);
+    for (const v of hiddenVars) {
+      // 变量的类名:`v.className = "…"` 或 `v = el("tag", "…")` 两种写法
+      const cm = src.match(new RegExp(`${v}(?:\\.className\\s*=\\s*|\\s*=\\s*el\\("\\w+",\\s*)"([a-z0-9- ]+)"`));
+      if (!cm) continue;
+      for (const cls of cm[1].split(/\s+/)) {
+        if (!new RegExp(`\\.${cls}\\{[^}]*display:(?:flex|grid)`, "s").test(src)) continue;
+        if (!hiddenRuleCovers(src, cls)) out.push({ file, cls });
+      }
+    }
+    return out;
+  }
+
+  it("被 .hidden 收起的 flex/grid 容器都有 [hidden] 兜底(A 组待修名单除外)", () => {
+    const bad: string[] = [];
+    for (const file of gameSourceFiles()) {
+      for (const o of offendersOf(file)) {
+        const key = `${file.split("/").slice(-2).join("/")}:${o.cls}`;
+        if (A_GROUP_PENDING.has(key)) continue;
+        bad.push(key);
+      }
+    }
+    expect(bad, `这些容器被 .hidden 收起但 display:flex/grid 顶掉了兜底:${bad.join(", ")}`).toEqual([]);
+  });
+
+  it("本轮补上的四款在扫描口径里(ak-bar / sr-skins / sp-hintbox / tt-sum-bar)", () => {
+    const named: Array<[string, string]> = [
+      ["adventure-king/index.ts", "ak-bar"],
+      ["snake-royale/index.ts", "sr-skins"],
+      ["sudoku-petal/index.ts", "sp-hintbox"],
+      ["tap-tiles/index.ts", "tt-sum-bar"],
+    ];
+    for (const [rel, cls] of named) {
+      const src = readFileSync(join(GAMES_DIR, rel), "utf8");
+      expect(hiddenRuleCovers(src, cls), `${rel} 的 .${cls} 缺兜底`).toBe(true);
+    }
+  });
+});
