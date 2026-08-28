@@ -440,6 +440,8 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 | rootGate / farm runner / 拼音 scene·timed | **不要**扩 840（N-109 明文平板零变化；禁止盲拷清单） | — |
 | hue-hand | 840 暗牌区 `min-height:64px`，**不盲拷** 500 的 48px | 1024×768 |
 | mine-garden | 840 钉 `.mn-tools` sticky，**不拷** 500 的 `mn-msg min-height:0` | 1024×768 |
+| flight-chess | 去掉 840 档后多余 `}`，避免后续 `prefers-reduced-motion` 解析漂移 | 全视口 |
+| tap-tiles | 守门：840 **不得**拷 `.tt-keys{display:none}` | 平板横屏 |
 
 ## 附：第 3 轮环境水位
 

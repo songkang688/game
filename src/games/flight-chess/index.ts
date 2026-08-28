@@ -297,7 +297,6 @@ export const CSS = `
   .fc-picker{position:sticky;bottom:0;z-index:5;padding:4px 0 2px;background:#FFF2F7ee;}
   .fc-boardwrap{max-height:min(280px,52dvh);max-width:min(280px,52dvh,calc(100dvh - 148px));}
 }
-}
 @media (prefers-reduced-motion:reduce){
   .fc-token,.fc-token-arc{transition:none;}
   .fc-token-pick{animation:none;}
