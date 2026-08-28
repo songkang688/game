@@ -289,7 +289,14 @@ const CSS = `
   .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;}
   .pfb-tip{grid-column:1/-1;}
 }
-@media (max-height:840px) and (min-height:501px){
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:10px;}
+  .pfb-hud{grid-column:1/-1;}
+  .pfb-stagebox{grid-column:1;min-width:0;}
+  .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;position:sticky;top:0;}
+  .pfb-tip{grid-column:1/-1;}
+}
+@media (max-height:840px) and (min-height:501px) and (max-width:639px){
   .pfb-pads{position:sticky;bottom:0;z-index:4;padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }

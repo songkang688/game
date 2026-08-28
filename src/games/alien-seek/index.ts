@@ -182,7 +182,13 @@ const CSS = `
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
 @media (max-height:840px) and (min-height:501px) and (min-width:640px){
-  .as-wrap>.als-tools,.as-wrap>.as-pads{position:sticky;bottom:0;z-index:3;}
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    gap:6px 12px;align-items:stretch;min-height:0;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+  .as-wrap>.as-clues{grid-column:2;max-height:32%;overflow:auto;}
+  .as-wrap>.als-list{grid-column:2;}
+  .as-wrap>.als-tools,.as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;}
+  .as-wrap>.as-tip{grid-column:2;}
 }
 /* r18 B:412 高的找物关侧栏(清单56+缩放96+方向盘166+提示)总高≈380px,as-wrap 可视只有
    ~208px。病根是没有显式行模板时 grid-row:1/-1 跨不了隐式行——画布把第 1 行撑到自己那么
