@@ -273,6 +273,13 @@ export const CSS = `
   .mst-btn{min-height:44px;}
   .mst-wrap{padding:8px;}
 }
+/* 915×412：8×8 盘按宽度长出 ~648px，.l99-stage overflow:hidden 裁掉下半盘且不能滚。
+   矮屏只钳棋盘盒、盒内 pan-y，不缩小格子（格高会掉到 44 以下）。390 盘 ~351 不触顶。 */
+@media (max-height:500px){
+  .mst-wrap{min-height:0;}
+  .mst-boardwrap{max-height:min(240px, calc(100dvh - 196px));overflow-y:auto;
+    -webkit-overflow-scrolling:touch;touch-action:pan-y;}
+}
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}
   .mst-spin,.mst-cell.mst-belt::after,.mst-chainpop,.mst-cheer-star{animation:none;}
