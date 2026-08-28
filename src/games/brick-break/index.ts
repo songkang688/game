@@ -137,7 +137,11 @@ const CSS = `
 .brk-over h3 { margin: 0 0 6px; font-size: 19px; color: #7A5AA8; }
 .brk-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }
 .brk-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
-/* N-124 模式:915×412 粗指针中间档钉回关 CTA,不改 画布物理台面 W/H */
+@media (prefers-reduced-motion: reduce) {
+  .brk-btn:active, .brk-open:active { transform: none; }
+}
+${touchUpliftCss([".brk-open", ".brk-back"])}
+/* N-124 模式:915×412 钉回关。写在 uiTouch 40 后面,才能盖过 min-height:40 */
 @media (max-height:820px) and (pointer:coarse){
   .brk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;
     box-sizing:border-box;min-height:0;}
@@ -148,10 +152,6 @@ const CSS = `
   .brk-msg{max-height:1.3em;overflow:hidden;margin-top:2px;}
   .brk-back{min-height:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 }
-@media (prefers-reduced-motion: reduce) {
-  .brk-btn:active, .brk-open:active { transform: none; }
-}
-${touchUpliftCss([".brk-open", ".brk-back"])}
 `;
 
 function reducedMotion(): boolean {

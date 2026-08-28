@@ -465,9 +465,11 @@ export const SP_CSS = `
   .sp-top{flex:0 0 auto;}
   .sp-seats{flex:1 1 auto;min-height:0;overflow:auto;flex-wrap:nowrap;gap:8px;}
   .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px;max-width:50%;}
-  .sp-pad{width:auto;max-width:140px;margin-top:0;grid-template-columns:repeat(3,1fr);
+  .sp-grid{min-width:0;max-height:min(280px,68dvh);}
+  .sp-pad{width:auto;max-width:140px;min-width:132px;margin-top:0;grid-template-columns:repeat(3,1fr);
     position:sticky;bottom:0;z-index:5;flex:0 0 auto;
     background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);padding-top:4px;}
+  .sp-key{min-width:44px;min-height:44px;}
   .sp-tools{position:sticky;bottom:0;z-index:6;flex:0 0 auto;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}
 }
