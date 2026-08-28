@@ -255,7 +255,7 @@ const CSS = `
 .pfb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
 .pfb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
 .pfb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
-.pfb-open{border:none;border-radius:16px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;
+.pfb-open{border:none;border-radius:16px;padding:10px 18px;min-height:${TOUCH_MIN}px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pfb-done{text-align:center;padding:18px 12px;font-size:16px;font-weight:800;color:#2F5A8C;line-height:1.7;}
 @media (max-width:420px){
@@ -277,7 +277,7 @@ const CSS = `
 @media (hover:none) and (max-width:420px){ .pfb-pad-name{display:none;} }
 @media (max-height:620px){
   .pfb-cv{height:170px;}
-  .pfb-pads{--k:46px;margin-top:4px;}
+  .pfb-pads{--k:${TOUCH_MIN}px;margin-top:4px;}
   .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;}
   .pfb-tip{margin-top:4px;font-size:11px;}
 }
@@ -848,7 +848,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const room = bottomLimit() - boxRect.top - below - VIEW_PAD;
     // 比场地本身还高只会多出两条天空,不如把余量留给别人
     const aspect = ARENA_W / ARENA_H;
-    const h = Math.round(Math.max(VIEW_MIN, Math.min(room, availW / aspect)));
+    const cap = room > 0 ? room : VIEW_MIN;
+    const h = Math.round(Math.max(96, Math.min(cap, availW / aspect)));
     // 场地是等比缩放居中画的,画框比它宽多少,左右就空多少;
     // 干脆把画框收到跟场地一样宽,圆角正好贴着围墙
     const w = Math.round(Math.min(availW, h * aspect));

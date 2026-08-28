@@ -100,7 +100,7 @@ const CSS = `
   font-weight:800;white-space:nowrap;box-shadow:0 2px 5px rgba(120,110,170,.18);}
 .bc-chip-p0{color:#a8306a;background:#ffeaf3;}
 .bc-chip-p1{color:#28568f;background:#e6f0ff;}
-.bc-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
+.bc-btn{border:none;border-radius:999px;padding:6px 13px;min-height:44px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#e07aa8,#c8558a);box-shadow:0 3px 0 #a03f6d;}
 .bc-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #a03f6d;}
 .bc-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -138,7 +138,7 @@ const CSS = `
 .bc-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#fff3f8,#f2f5ff);display:flex;flex-direction:column;gap:8px;}
 .bc-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.bc-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
+.bc-back{border:none;border-radius:999px;padding:6px 12px;min-height:44px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#a8306a;box-shadow:0 3px 0 rgba(180,90,140,.28);}
 .bc-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(180,90,140,.28);}
 .bc-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -169,11 +169,15 @@ const CSS = `
 @media (max-height:720px){
   .bc-wrap{gap:5px;}
   .bc-chip{padding:2px 7px;}
-  .bc-btn{padding:5px 11px;font-size:12px;}
+  .bc-btn{padding:5px 11px;min-height:44px;font-size:12px;}
+  .bc-back{min-height:44px;}
   .bc-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
   .bc-stick{width:86px;height:86px;}
   .bc-knob{width:36px;height:36px;margin:-18px 0 0 -18px;}
   .bc-acts button{height:44px;width:52px;font-size:11.5px;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
 }
 @media (prefers-reduced-motion:reduce){
   .bc-btn:active,.bc-acts button:active,.bc-pick:active{transform:none;}
@@ -558,7 +562,13 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
     // 场地上下压着标题栏、HUD、提示语和摇杆。矮屏按舞台剩余高度缩，不再猜 innerHeight-320。
     const guessed = Math.max(200, (window.innerHeight || 700) - 320);
-    const roomH = Math.max(200, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const stageH = Math.max(200, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const below = Math.max(
+      118,
+      (tip.offsetHeight || 0) + (pads.offsetHeight || 0) + (legend.offsetHeight || 0) + 10,
+    );
+    const hudH = Math.max(36, hud.offsetHeight || 0);
+    const roomH = Math.max(140, stageH - hudH - below);
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);
