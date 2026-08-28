@@ -576,7 +576,8 @@ const L99_CSS = `
 .l99-star{color:#e3ddef;display:inline-flex;}
 .l99-star svg{display:block;}
 .l99-star-on{color:#ffb937;filter:drop-shadow(0 1px 1px rgba(200,120,0,.35));}
-.l99-node-cur{outline:3px solid #ff8fc0;animation:l99pulse 1.4s ease infinite;}
+/* N-100(R-1):聚焦滚动的呼吸边距,配合 showMap 聚焦后的最小滚动钳制 */
+.l99-node-cur{outline:3px solid #ff8fc0;animation:l99pulse 1.4s ease infinite;scroll-margin-block:12px;}
 .l99-node-cur .l99-node-num{color:#b52e72;}
 @keyframes l99pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 .l99-node-lock{background:#f2eef8;box-shadow:none;cursor:default;}
@@ -641,6 +642,12 @@ const L99_CSS = `
      四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
   .l99-wrap{max-height:calc(100dvh - 136px);}
   .l99-view{overscroll-behavior:contain;}
+  /* N-100(R-1):tab 折行款头部栈(章节页签折 2~4 行)超过矮横屏 276px 视高,
+     进场聚焦当前关时「继续 ▶」必然卷出顶(17 款实测 -154~-31)。头行钉 .l99-view 顶——
+     这里的滚动主就是 .l99-view(overflow-y:auto),sticky 合法;§八军规禁的是
+     l99-stage/l99-host overflow:hidden 链里的关内 sticky,别混。 */
+  .l99-head{position:sticky;top:0;z-index:3;margin:0 -10px 6px;padding:4px 10px 8px;
+    background:linear-gradient(180deg,#fff7fb 82%,rgba(255,247,251,0));}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
@@ -996,6 +1003,25 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
           // 老浏览器不支持 options 就算了
         }
         cur.focus?.();
+        // N-100(R-1):center 聚焦在 tab 折行款会把「继续 ▶/工具行」卷出 .l99-view 顶
+        // (17 款 915×412 实测 top -154~-31,全部滚得回但初见丢 CTA)。聚焦后把 scrollTop
+        // 收回「当前关贴可视底」的最小滚动量:当前关能与头部同屏时回到 0,同屏不了才保留
+        // 让当前关整格可见的最小滚动(N-39「当前关在屏」口径不变)。呼吸边距见
+        // L99_CSS .l99-node-cur 的 scroll-margin-block。单测桩没有 getBoundingClientRect,
+        // 全部可选调用,量不到就保持 scrollIntoView 的结果。
+        const curBox = (cur as { getBoundingClientRect?: () => { bottom: number } }).getBoundingClientRect?.();
+        const viewBox = view.getBoundingClientRect?.();
+        if (
+          curBox &&
+          viewBox &&
+          typeof view.scrollTop === "number" &&
+          typeof view.clientHeight === "number" &&
+          view.clientHeight > 0
+        ) {
+          const visibleBottom = viewBox.top + view.clientHeight;
+          const minTop = view.scrollTop + (curBox.bottom - visibleBottom) + 12;
+          if (minTop < view.scrollTop) view.scrollTop = Math.max(0, minTop);
+        }
         // N-63:scrollIntoView 会连 .game-stage 一起滚,模式条飞到负 top。
         // 滚条已经交给 .l99-view,舞台顶归零;hop-pads 当前关仍在地图盒里。
         // 不写 wrap.closest:node 单测桩没有 closest,初次 showMap(true) 会整库红
