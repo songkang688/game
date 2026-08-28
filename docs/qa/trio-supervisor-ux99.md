@@ -48,3 +48,4 @@
 | 15min 定时器 | `c8a3d154` | Wave1 A/B/学习仍 RUNNING，无 PR、无 r18 文件进主干。**不加派。** 主干已另含 r17 笔记+playbook（N-89…N-91）与 r17 A 的 N-89 标题条修复；下一轮 A/B 应交 r17 playbook，学习员伤号从 N-98 起。同环境另有多路 r18/竖屏/横屏测试员 RUNNING，避免抢文件。 |
 | 学习员 Wave1 交卷 | `8b23ab11` | r18 笔记+playbook 已进主干（N-98 hue-hand / N-99 sudoku；N-60/61/62/90/91 结案勿第二套）。Wave1 A/B 仍 RUNNING，同环境另有多路 A/B/学习员 RUNNING（含「学习员第9轮记 r18」），**本拍不加派**。A/B 空闲后立刻执行 `docs/qa/trio-r18-playbook.md`；下一学习员伤号 **N-100** 起、文件 `trio-r19-*`。 |
 | 30min 定时器 | `8b23ab11` | Wave1 A/B 仍 RUNNING（尚无 tester-A/B 报告进主干）；本拍学习员 IDLE 但环境已有「学习员第9轮记 r18」「学习员skills记playbook」「Learn round 4」RUNNING。**不加派。** 待本拍 A 或 B 交卷后再派执行 r18 playbook。 |
+| 45min 定时器 | `6982da7e` | Wave1 A/B 仍 RUNNING、无 tester 报告、无 PR。主干 r18 笔记已并入 N-100…N-107。本拍学习员 IDLE，但「学习员第10轮记 r19」「Learn round 7」「r2修N-105」已在途。**不加派。** |
