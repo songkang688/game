@@ -969,6 +969,14 @@ button {
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
+  /* N-33 配方 I:结算内容高于 86dvh 时按钮列粘在弹窗可视底,不跟着正文滚出屏。
+     暂停/家长门同样受益;按钮语义与 isGuardedClick 零触碰。 */
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  padding-top: 10px;
+  background: #ffffff;
+  box-shadow: 0 -12px 16px #ffffff;
 }
 
 /* 结算弹窗 */

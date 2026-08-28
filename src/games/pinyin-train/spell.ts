@@ -206,6 +206,26 @@ const CSS = `
   .pyt-wobble{animation:none;}
   .pyt-loco{transition:none;}
 }
+/* N-34 配方 G:矮横屏火车画布左、车厢+票排右;min-height:380 在 412 高档会把票挤下线 */
+@media (max-height:500px){
+  .pyt-spell{min-height:0;padding:8px;gap:6px;}
+  .pyt-loco{padding:6px 10px;gap:6px;}
+  .pyt-loco-emoji,.pyt-loco-word{font-size:26px;}
+  .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pyt-top{grid-column:1/-1;grid-row:1;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-loco{grid-column:2;grid-row:2;}
+  .pyt-slots{grid-column:2;grid-row:3;}
+  .pyt-view{grid-column:2;grid-row:4;}
+  .pyt-say-row{grid-column:2;grid-row:5;position:static;}
+  .pyt-yard{grid-column:2;grid-row:6;}
+  .pyt-bottom{grid-column:2;grid-row:7;}
+}
 `;
 
 export interface SpellOptions {
