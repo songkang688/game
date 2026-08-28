@@ -2336,6 +2336,171 @@ reg("🔭", "望远镜", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 6 章 玩具城堡（W8R1-04 余量 · 第 3 轮终验按稿补齐） ----
+
+reg("🧸", "玩具熊", () => {
+  // 通用简笔坐姿泰迪：圆耳圆身 + 缝线肚兜，无衣饰无纽扣（去色剪影自查过，避开任何知名熊形象）
+  const c = "#c99b6a";
+  const out = o(c);
+  const belly = "#f0dcc0";
+  return (
+    gs(24, 43.5, 13) +
+    // 耳朵
+    `<circle cx="15.5" cy="9.5" r="4.6" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<circle cx="32.5" cy="9.5" r="4.6" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<circle cx="15.5" cy="9.5" r="2" fill="${belly}"/>` +
+    `<circle cx="32.5" cy="9.5" r="2" fill="${belly}"/>` +
+    // 手臂
+    `<ellipse cx="10.5" cy="28.5" rx="4" ry="6.4" fill="${c}" stroke="${out}" stroke-width="2" transform="rotate(18 10.5 28.5)"/>` +
+    `<ellipse cx="37.5" cy="28.5" rx="4" ry="6.4" fill="${c}" stroke="${out}" stroke-width="2" transform="rotate(-18 37.5 28.5)"/>` +
+    // 腿
+    `<ellipse cx="15" cy="39" rx="5.4" ry="4.2" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<ellipse cx="33" cy="39" rx="5.4" ry="4.2" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<ellipse cx="14.5" cy="39.5" rx="2.4" ry="1.9" fill="${belly}"/>` +
+    `<ellipse cx="33.5" cy="39.5" rx="2.4" ry="1.9" fill="${belly}"/>` +
+    // 身体与肚兜
+    `<ellipse cx="24" cy="31.5" rx="10" ry="9.6" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 41.1 a10 9.6 0 0 0 9.2 -13.6 a12 11.5 0 0 1 -9.2 13.6" fill="${shade(c, -14)}" opacity=".75"/>` +
+    `<ellipse cx="24" cy="32.5" rx="5.6" ry="5.4" fill="${belly}"/>` +
+    // 头
+    `<circle cx="24" cy="15.5" r="9.6" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 25.1 a9.6 9.6 0 0 0 8.8 -13.4 a11.5 11.5 0 0 1 -8.8 13.4" fill="${shade(c, -14)}" opacity=".75"/>` +
+    // 口鼻与缝线
+    `<ellipse cx="24" cy="18.5" rx="4.2" ry="3.2" fill="${belly}"/>` +
+    `<path d="M22.6 17.5 L25.4 17.5 L24 19.2 Z" fill="${INK}"/>` +
+    `<path d="M24 19.2 L24 20.6 M22.5 21.6 Q24 22.6 25.5 21.6" fill="none" stroke="${INK}" stroke-width="1.1" stroke-linecap="round"/>` +
+    `<circle cx="20" cy="14" r="1.5" fill="${INK}"/><circle cx="28" cy="14" r="1.5" fill="${INK}"/>` +
+    `<path d="M24 27.5 L24 30" stroke="${out}" stroke-width="1.2" stroke-dasharray="1.6 1.4"/>` +
+    hi(19, 10, 2.4, 1.5)
+  );
+});
+
+reg("🚂", "小火车头", () => {
+  // 双胞胎 🚂↔🚗 的区分位：烟囱 + 冒烟 + 圆锅炉（🚗 是无烟囱的轿车）
+  const body = P.teal;
+  const out = o(body);
+  const cab = P.red;
+  return (
+    gs(24, 42.5, 15) +
+    // 烟囱冒的烟
+    `<circle cx="13" cy="9" r="3.4" fill="#eef2fa" stroke="#b8c4d8" stroke-width="1.4"/>` +
+    `<circle cx="17.5" cy="6" r="2.4" fill="#eef2fa" stroke="#b8c4d8" stroke-width="1.2"/>` +
+    // 车厢（右侧驾驶室）
+    `<path d="M28 12.5 L38 12.5 Q39.5 12.5 39.5 14 L39.5 31 L28 31 Z" fill="${cab}" stroke="${o(cab)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<rect x="30.5" y="16" width="6" height="5.6" rx="1.4" fill="#dff3fa" stroke="${o(cab)}" stroke-width="1.4"/>` +
+    `<path d="M26.5 12.5 L41 12.5 Q42.5 12.5 42.5 11 Q42.5 9.5 41 9.5 L28 9.5 Q26.5 9.5 26.5 11 Z" fill="${shade(cab, -12)}" stroke="${o(cab)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    // 锅炉
+    `<path d="M8.5 20.5 Q8.5 16.5 12.5 16.5 L26 16.5 Q28 16.5 28 18.5 L28 31 L8.5 31 Z" fill="${body}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M22 16.5 L26 16.5 Q28 16.5 28 18.5 L28 31 L24 31 Q25.5 24 22 16.5 Z" fill="${shade(body, -14)}" opacity=".75"/>` +
+    // 烟囱（区分位）
+    `<path d="M10.5 16.5 L10.5 11.5 Q10.5 10 12 10 L14 10 Q15.5 10 15.5 11.5 L15.5 16.5 Z" fill="${shade(body, -18)}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // 车灯
+    `<circle cx="9.8" cy="23.5" r="2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.3"/>` +
+    // 底盘与轮子
+    `<rect x="6.5" y="31" width="35" height="4" rx="2" fill="${P.brown}" stroke="${o(P.brown)}" stroke-width="1.8"/>` +
+    `<circle cx="13" cy="37.5" r="4" fill="#5f6678" stroke="${o("#5f6678")}" stroke-width="1.8"/>` +
+    `<circle cx="24" cy="37.5" r="4" fill="#5f6678" stroke="${o("#5f6678")}" stroke-width="1.8"/>` +
+    `<circle cx="35" cy="37.5" r="4" fill="#5f6678" stroke="${o("#5f6678")}" stroke-width="1.8"/>` +
+    `<circle cx="13" cy="37.5" r="1.5" fill="${P.gold}"/><circle cx="24" cy="37.5" r="1.5" fill="${P.gold}"/><circle cx="35" cy="37.5" r="1.5" fill="${P.gold}"/>` +
+    hi(13, 19.5, 2.4, 1.5)
+  );
+});
+
+reg("✈️", "小飞机", () => {
+  // 双胞胎 ✈️↔🚁 的区分位：固定翼 + 尾翼（🚁 是顶置旋翼 + 尾桨）
+  const body = P.blue;
+  const out = o(body);
+  return (
+    gs(24, 41, 15) +
+    // 尾翼
+    `<path d="M7 12.5 L13.5 12.5 L15.5 24 L7.5 24 Q10 18 7 12.5 Z" fill="${P.rose}" stroke="${o(P.rose)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // 机身（右为机头）
+    `<path d="M6.5 27.5 Q6.5 21.5 14 21.5 L33 21.5 Q39.5 21.5 42 25 Q43 26.5 41 28.5 Q37.5 32 31 32 L12 32 Q6.5 32 6.5 27.5 Z" fill="${body}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M31 32 Q37.5 32 41 28.5 Q43 26.5 42 25 Q40.5 29 33 30 L14 30.5 Q23 32 31 32 Z" fill="${shade(body, -14)}" opacity=".75"/>` +
+    // 机翼（伸向观者下方）
+    `<path d="M19 25.5 L30 25.5 L24.5 35.5 L14.5 35.5 Z" fill="${P.rose}" stroke="${o(P.rose)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // 舷窗与驾驶舱
+    `<circle cx="17" cy="25.5" r="1.9" fill="#dff3fa" stroke="${out}" stroke-width="1.2"/>` +
+    `<circle cx="24" cy="25.5" r="1.9" fill="#dff3fa" stroke="${out}" stroke-width="1.2"/>` +
+    `<path d="M36 22.5 Q39.5 23.5 41 25.5 Q38.5 26.5 36 25.5 Z" fill="#dff3fa" stroke="${out}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    hi(13, 24, 2.4, 1.4)
+  );
+});
+
+reg("🚁", "直升机", () => {
+  // 双胞胎 🚁↔✈️ 的区分位：顶置旋翼（🚁 独有）
+  const body = P.orange;
+  const out = o(body);
+  return (
+    gs(24, 42, 14) +
+    // 顶置旋翼（区分位）
+    `<path d="M6 8.5 L42 8.5" stroke="${o("#8fa2b8")}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<path d="M24 9 L24 14" stroke="${out}" stroke-width="2.2"/>` +
+    `<circle cx="24" cy="9" r="2" fill="#8fa2b8" stroke="${o("#8fa2b8")}" stroke-width="1.3"/>` +
+    // 尾梁与尾桨
+    `<path d="M30 22 L42 19.5 L42 23 L30 25.5 Z" fill="${shade(body, -10)}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M42 14.5 L42 27.5" stroke="${o("#8fa2b8")}" stroke-width="2.2" stroke-linecap="round"/>` +
+    `<circle cx="42" cy="21" r="1.7" fill="#8fa2b8" stroke="${o("#8fa2b8")}" stroke-width="1.2"/>` +
+    // 机舱
+    `<path d="M9 22.5 Q9 14 19 14 L26 14 Q34 14 34 22.5 Q34 30.5 25.5 30.5 L16 30.5 Q9 30.5 9 22.5 Z" fill="${body}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M25.5 30.5 Q34 30.5 34 22.5 Q34 17 30.5 15.2 Q32.5 19 31.5 24 Q30.2 29.5 22 30.3 Q23.8 30.5 25.5 30.5 Z" fill="${shade(body, -14)}" opacity=".75"/>` +
+    // 大舷窗
+    `<path d="M11.5 20.5 Q12.5 16.5 17.5 16.5 L20 16.5 L20 24 L13 24 Q11.5 23 11.5 20.5 Z" fill="#dff3fa" stroke="${out}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    // 起落橇
+    `<path d="M17 30.5 L17 34.5 M28 30.5 L28 34.5" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M12 35.5 L33.5 35.5" stroke="${out}" stroke-width="2.4" stroke-linecap="round"/>` +
+    hi(15, 17.5, 2.4, 1.5)
+  );
+});
+
+reg("🏀", "篮球", () => {
+  // 双胞胎 🏀↔⚽ 的区分位：橙底弧线球缝（⚽ 是黑白五边形）
+  const c = "#f08c3a";
+  const out = o(c);
+  const seam = shade(c, -32);
+  return (
+    gs(24, 42.5, 13) +
+    `<circle cx="24" cy="25" r="14.5" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 39.5 a14.5 14.5 0 0 0 13.3 -20.2 a17 17 0 0 1 -13.3 20.2" fill="${shade(c, -14)}" opacity=".75"/>` +
+    `<path d="M24 10.5 L24 39.5 M9.5 25 L38.5 25" fill="none" stroke="${seam}" stroke-width="1.8"/>` +
+    `<path d="M13.5 14.5 Q19.5 25 13.5 35.5 M34.5 14.5 Q28.5 25 34.5 35.5" fill="none" stroke="${seam}" stroke-width="1.8"/>` +
+    hi(17.5, 17)
+  );
+});
+
+reg("🎈", "气球", () => {
+  const c = P.red;
+  const out = o(c);
+  return (
+    `<ellipse cx="24" cy="18.5" rx="11" ry="13" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 31.5 a11 13 0 0 0 10.1 -18.2 a13 15.5 0 0 1 -10.1 18.2" fill="${shade(c, -14)}" opacity=".75"/>` +
+    `<path d="M21.5 31 L26.5 31 L25 34 L23 34 Z" fill="${c}" stroke="${out}" stroke-width="1.5" stroke-linejoin="round"/>` +
+    `<path d="M24 34 Q20 39 23.5 44" fill="none" stroke="${out}" stroke-width="1.5" stroke-linecap="round"/>` +
+    `<ellipse cx="19" cy="11.5" rx="3.2" ry="4.6" fill="#ffffff" opacity=".5" transform="rotate(22 19 11.5)"/>`
+  );
+});
+
+reg("🥁", "小鼓", () => {
+  const shell = P.rose;
+  const out = o(shell);
+  return (
+    gs(24, 43, 15) +
+    // 交叉鼓棒
+    `<path d="M10 7.5 L25 19 M38 7.5 L23 19" stroke="${o(P.wood)}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<circle cx="10" cy="7.5" r="2.4" fill="${P.wood}" stroke="${o(P.wood)}" stroke-width="1.3"/>` +
+    `<circle cx="38" cy="7.5" r="2.4" fill="${P.wood}" stroke="${o(P.wood)}" stroke-width="1.3"/>` +
+    // 鼓身
+    `<path d="M9.5 22 L9.5 36 Q9.5 40.5 24 40.5 Q38.5 40.5 38.5 36 L38.5 22 Z" fill="${shell}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M34 22 L38.5 22 L38.5 36 Q38.5 39.2 31 40.2 Q35.5 38.5 35 34.5 Z" fill="${shade(shell, -14)}" opacity=".75"/>` +
+    // 绷绳锯齿
+    `<path d="M11 24.5 L17.5 35.5 L24 24.5 L30.5 35.5 L37 24.5" fill="none" stroke="${P.gold}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // 鼓面
+    `<ellipse cx="24" cy="22" rx="14.5" ry="4.6" fill="#fff6e8" stroke="${out}" stroke-width="2"/>` +
+    `<ellipse cx="24" cy="22" rx="10.5" ry="3.1" fill="none" stroke="#e0d2b8" stroke-width="1.2"/>` +
+    hi(16, 20.5, 2.8, 1.5)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------

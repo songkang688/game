@@ -23,7 +23,7 @@ import { CHAPTERS, LEVELS, THEME_POOLS } from "./levels";
 const PICTO = /\p{Extended_Pictographic}/u;
 
 /** 已配齐图集的主题（第 3 轮终验补齐第 4–10 章，配齐一章亮一章） */
-const READY_THEMES = [0, 1, 2, 3, 4];
+const READY_THEMES = [0, 1, 2, 3, 4, 5];
 
 /** 双胞胎替换表（LOOKALIKE 是题库私有常量，这里从源码现抓，谁改表这里跟着变） */
 function lookalikeTwins(pool: readonly string[]): string[] {
