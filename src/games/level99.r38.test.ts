@@ -1,7 +1,7 @@
 /**
- * trio-r38…r41 A：N-176 *-pick、N-179 *-lessonbtn、N-182 *-softbtn、N-185 *-catch。
- * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760。
- * B 热区文件白名单（N-174/169/94/102/177/181/184）。
+ * trio-r38…r42 A：N-176 *-pick、N-179 *-lessonbtn、N-182 *-softbtn、N-185 *-catch、N-188 *-toggle。
+ * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760 / --vv-h。
+ * B 热区文件白名单（N-174/169/94/102/177/181/184/187）。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -18,10 +18,13 @@ const CLF = readFileSync(fileURLToPath(new URL("./color-fun/ui.ts", import.meta.
 const DVS = readFileSync(fileURLToPath(new URL("./duo-vs-star/index.ts", import.meta.url)), "utf8");
 const DR = readFileSync(fileURLToPath(new URL("./duo-rush/index.ts", import.meta.url)), "utf8");
 const HH = readFileSync(fileURLToPath(new URL("./hue-hand/index.ts", import.meta.url)), "utf8");
+const MMC = readFileSync(fileURLToPath(new URL("./memory-cards/index.ts", import.meta.url)), "utf8");
+const SNK = readFileSync(fileURLToPath(new URL("./snake-snack/index.ts", import.meta.url)), "utf8");
+const SHR = readFileSync(fileURLToPath(new URL("./shoot-range/index.ts", import.meta.url)), "utf8");
 
-/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn、N-181 softbtn、N-184 hh-catch */
+/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn、N-181 softbtn、N-184 hh-catch、N-187 mmc-toggle */
 const B_ALLOW_FILE =
-  /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king|hue-hand)\//;
+  /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king|hue-hand|memory-cards)\//;
 
 const KIT_TOKEN =
   /TOUCH_MIN|MIN_HIT_PX|HUD_BTN_MIN_H|MIN_HOT|TOGGLE_MIN_H|MIN_TOUCH_PX|CHIP_MIN|SWATCH_MIN/;
@@ -79,6 +82,8 @@ describe("已做号不回退", () => {
     expect(STYLES).toMatch(/@media \(min-width: 980px\) and \(min-height: 600px\)/);
     expect(MST).toContain("boardBoxMaxPx");
     expect(MST).toContain("@media (max-height:500px)");
+    expect(STYLES).toContain("height: var(--vv-h, 100dvh)");
+    expect(STYLES).toContain("max-height: var(--vv-h, 100svh)");
   });
 });
 
@@ -180,6 +185,33 @@ describe("N-185 *-catch", () => {
       for (const r of rulesOf(src)) {
         if (/\.hh-(deck|back|card|pile|heap|bubble)\b/.test(r.sel)) continue;
         if (!classSuffix(r.sel, "catch")) continue;
+        if (!clickable(r.sel, r.body)) continue;
+        if (tallEnough(r.body)) continue;
+        hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
+      }
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+});
+
+describe("N-188 *-toggle", () => {
+  it("族存在；对照绿 .snk-toggle；.shr-toggle 仍归 N-134；不替代 N-187", () => {
+    expect(MMC).toContain(".mmc-toggle {");
+    expect(MMC).toContain('back.className = "mmc-toggle"');
+    expect(SNK).toMatch(/\.snk-toggle \{[^}]*min-height: 44px/);
+    expect(SHR).toContain(".shr-toggle{");
+  });
+
+  it("可点 *-toggle 须 ≥44 或 TOGGLE_MIN_H 插值（.mmc-toggle 走 B 白名单，不扫 .shr-toggle）", () => {
+    const hits: string[] = [];
+    for (const file of walkSrc(GAMES)) {
+      const rel = file.slice(GAMES.length).replace(/\\/g, "/");
+      if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (/\.test\.(ts|css)$/.test(rel)) continue;
+      const src = readFileSync(file, "utf8");
+      for (const r of rulesOf(src)) {
+        if (/\.shr-toggle\b/.test(r.sel)) continue;
+        if (!classSuffix(r.sel, "toggle")) continue;
         if (!clickable(r.sel, r.body)) continue;
         if (tallEnough(r.body)) continue;
         hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
