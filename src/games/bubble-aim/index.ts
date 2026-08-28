@@ -421,8 +421,9 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     flight = null;
     aiming = false;
     endless = false;
-    // r18 B:选关页在宽屏放宽列宽(见 .ba-wrap--map),打泡泡时仍回 400px 竖版
-    wrap.classList.add("ba-wrap--map");
+    // r18 B:选关页在宽屏放宽列宽(见 .ba-wrap--map),打泡泡时仍回 400px 竖版。
+    // 用 className 拼字符串:单测的假元素没有 classList,classList.add 会炸。
+    wrap.className = "ba-wrap ba-wrap--map";
     topBar.style.display = "none";
     canvas.style.display = "none";
     mapEl.style.display = "";
@@ -525,7 +526,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
 
   function startLevel(index: number): void {
     screen = "play";
-    wrap.classList.remove("ba-wrap--map");
+    wrap.className = "ba-wrap";
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
@@ -564,7 +565,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
    */
   function startEndless(): void {
     screen = "play";
-    wrap.classList.remove("ba-wrap--map");
+    wrap.className = "ba-wrap";
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
