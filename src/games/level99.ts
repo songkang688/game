@@ -568,7 +568,8 @@ const L99_CSS = `
   .l99-stagebar{padding:6px 8px;gap:6px;}
   .l99-stagetitle{font-size:14px;}
   .l99-stage{padding:6px;}
-  .l99-jump-note{font-size:14px;margin:0;}
+  /* 矮屏只收外边距,字号不动:说明文字的 16px 红线(mobileText.test)矮屏也算数 */
+  .l99-jump-note{margin:0;}
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
 }
