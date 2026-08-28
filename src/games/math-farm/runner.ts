@@ -83,6 +83,19 @@ export const MTF_CSS = `
 @media (max-height: 500px) {
   .mtf-vert-row { font-size: ${MIN_VERT_PX}px; letter-spacing: 2px; }
   .mtf-vert-rule { margin: 2px 0 1px; }
+  /* N-97:root×深关(应用题两行题面 + 直达行)把宿主可视段(~164px)吃光,三块答案
+     木牌初见掉到 412 线下。答案行 sticky 钉在宿主可视段底,题面在上头滚;
+     L1 装得下时 sticky 不产生位移,零变化。判分、题库、seed 零触碰。 */
+  .mtf-quizhost .qz-choices { position: sticky; bottom: 0; z-index: 4;
+    background: linear-gradient(180deg, rgba(255, 252, 255, .35), #fff 45%); }
+  /* 应用题题面收到正文红线 16px,两行从 77px 回到 ~58px,少挡一截 */
+  .mtf-word { font-size: 16px; line-height: 1.45; }
+  /* root 开着才有 .qz-jump:把进度徽章/进度条/朗读/直达排到答案后面去滚,
+     题面+问句+三块木牌整组进第一屏;root 关着(含 L1)一行不动。 */
+  .mtf-quizhost:has(.qz-jump) .qz-wrap > .qz-bar { display: none; }
+  .mtf-quizhost:has(.qz-jump) .qz-say-row { order: 7; }
+  .mtf-quizhost:has(.qz-jump) .qz-top { order: 8; }
+  .mtf-quizhost:has(.qz-jump) .qz-jump { order: 9; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mtf-hint { animation: none; }
