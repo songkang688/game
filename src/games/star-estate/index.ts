@@ -11,6 +11,7 @@ import {
   type ModeEntry
 } from "../../engine";
 import { save } from "../../engine/save";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import {
   BOARD,
   BOARD_LEN,
@@ -195,6 +196,9 @@ const CSS = `
 .se-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px;}
 /* display:flex 压过 UA 的 [hidden]{display:none},轮到电脑时这排要真的藏住 */
 .se-pad[hidden]{display:none;}
+/* r5 N-3:掷骰/购买/结束回合与竞拍排是每回合必点,对战模式舞台可滚时贴底常驻
+   (闯关壳 .l99-stage overflow:hidden 粘不住,那边靠钳盘+双栏一屏装下) */
+.se-actions{position:sticky;bottom:0;z-index:6;background:rgba(255,248,236,.92);border-radius:14px;}
 .se-btn{min-width:88px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:16px;
   font-weight:900;cursor:pointer;background:#F6D9AE;color:#7a4a18;box-shadow:0 3px 0 #DDB981;padding:0 12px;}
 .se-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #DDB981;}
@@ -251,12 +255,29 @@ const CSS = `
    按规格改走「棋盘缩到整屏 + 当前格放大预览」，价格只在预览里给。 */
 @media (max-width:480px){
   .se-tile-price{display:none;}
+  /* 390 宽下三颗按钮 356px 排不进一行,结束回合会折到第二行掉出首屏 */
+  .se-btn{min-width:80px;font-size:15px;padding:0 10px;}
 }
 @media (max-width:360px){
   .se-badge{padding:4px 8px;}
   .se-seat{flex:1 1 46%;}
   .se-btn{min-width:72px;font-size:15px;padding:0 8px;}
   .se-deed{flex:1 1 100%;}
+}
+/* r5 N-3:矮横屏竖排装不下(盘 560 + 席位 + 按钮排 > 412),改「盘左控件右」双栏 */
+@media (min-width:700px) and (max-height:520px){
+  .se-wrap{display:grid;grid-template-columns:minmax(0,11fr) minmax(0,13fr);gap:2px 10px;
+    align-items:start;align-content:start;padding:8px;}
+  .se-top{grid-column:1 / -1;margin-bottom:2px;}
+  .se-board-wrap{grid-column:1;grid-row:2 / span 5;align-self:center;}
+  .se-seats,.se-actions,.se-msg,.se-drawer{grid-column:2;}
+  .se-seats{margin-bottom:2px;}
+  .se-seat{flex:1 1 45%;padding:3px 6px;font-size:14px;}
+  .se-seat-tier{font-size:14px;}
+  .se-pad{margin-top:4px;}
+  .se-btn{min-height:44px;}
+  .se-msg{margin-top:2px;min-height:1.4em;font-size:14px;}
+  .se-drawer{margin-top:4px;max-height:110px;overflow-y:auto;}
 }
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
@@ -550,12 +571,16 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
   endBtn.className = "se-btn";
   endBtn.textContent = "⏭️ 结束回合";
   pad.append(rollBtn, buyBtn, endBtn);
-  wrap.appendChild(pad);
 
   const bidRow = document.createElement("div");
   bidRow.className = "se-pad";
   bidRow.hidden = true;
-  wrap.appendChild(bidRow);
+
+  // 常规排 + 竞拍排合抱成一条 sticky 操作条:对战模式舞台可滚时贴底常驻
+  const actions = document.createElement("div");
+  actions.className = "se-actions";
+  actions.append(pad, bidRow);
+  wrap.appendChild(actions);
 
   const msg = document.createElement("div");
   msg.className = "se-msg";
@@ -571,6 +596,29 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
   wrap.appendChild(drawer);
 
   host.appendChild(wrap);
+
+  /* r5 N-3 配方 B:盘面(正方形)按舞台可视余量收宽,按钮排/战报/房契装进一屏。
+     「下方家当」量 wrap 下沿减盘下沿:竖排是按钮排+战报+抽屉,矮横屏双栏右列自理、差值≈0。
+     量不到(单测桩)一个样式不写;缩到 240px 以下宁可交给舞台滚动。 */
+  function fitBoard(): void {
+    if (typeof boardWrap.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function")
+      return;
+    boardWrap.style.maxWidth = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const b = boardWrap.getBoundingClientRect();
+    if (!Number.isFinite(b.top) || !(b.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(b));
+    const room = clip - b.top - below - 8;
+    if (!Number.isFinite(room) || b.height <= room + 1) return;
+    boardWrap.style.maxWidth = `${Math.max(240, Math.floor(room))}px`;
+  }
+  fitBoard();
+  later(fitBoard, 0);
+  // 首次 render 后战报/房契抽屉才有真实行高,再补量一次
+  later(fitBoard, 300);
+  const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasResize) window.addEventListener("resize", fitBoard);
 
   // ---- 画面 ----
   function tileCenter(pos: number): { x: number; y: number } {
@@ -1406,6 +1454,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
       destroyed = true;
       for (const t of timers) clearTimeout(t);
       timers.clear();
+      if (hasResize) window.removeEventListener("resize", fitBoard);
       (globalThis as { removeEventListener?: typeof window.removeEventListener }).removeEventListener?.(
         "keydown",
         onKey
