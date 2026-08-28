@@ -26,8 +26,13 @@ describe("C-8 / N-45 补帐", () => {
     expect(read("./duo-arena/index.ts")).toContain(".dua-start{position:sticky;bottom:0");
   });
 
-  it("duo-rush 菜单开跑钮 sticky，赛道 match 仍无布局串", () => {
-    expect(read("./duo-rush/index.ts")).toContain(".dr-start { position: sticky; bottom: 0");
+  it("duo-rush 菜单开跑钮钉进首屏（N-87 后改为 CTA 排 sticky 顶），赛道 match 仍无布局串", () => {
+    // r16 摘合 N-87 把旧的 `.dr-start { position: sticky; bottom: 0 }` 升级成
+    // 「怎么玩 / 收藏册 / 开跑」整排 .dr-menu-cta sticky 顶；守门意图不变：
+    // 矮横屏菜单态开跑钮必须钉在首屏，赛道 match.ts 不许混进菜单布局。
+    const src = read("./duo-rush/index.ts");
+    expect(src).toMatch(/\.dr-menu-cta \{[^}]*position: sticky; top: 0/s);
+    expect(src).toContain(".dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start");
     expect(read("./duo-rush/match.ts")).not.toContain("dr-btns");
   });
 
