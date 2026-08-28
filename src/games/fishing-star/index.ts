@@ -361,6 +361,10 @@ const CSS = `
   .fss-wind{font-size:11px;padding:2px 7px;}
   .fss-row{gap:4px;}
 }
+@media (max-height:840px) and (min-height:661px){
+  .fs-wrap{max-height:100%;overflow-y:auto;}
+  .fs-act{min-height:44px;box-sizing:border-box;}
+}
 @media (prefers-reduced-motion:reduce){
   .fss-shake{animation:none;}
   .fss-let:active,.fss-gbuy:active:not(:disabled){transform:none;}
