@@ -858,7 +858,8 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
     const scroll = el("div", "fk-scroll");
     scroll.appendChild(frameTable(characterById(o.p1)));
-    trainPanel.append(h, modeRow, dummyHint, trainLive, scroll);
+    bar.appendChild(modeRow);
+    trainPanel.append(h, dummyHint, trainLive, scroll);
     wrap.appendChild(trainPanel);
     wrap.appendChild(pads);
   } else {
