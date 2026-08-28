@@ -19,11 +19,33 @@ import {
   chapterStartId,
   levelsOfChapter,
   type BirdKind,
+  type BlockKind,
   type LevelDef,
   type PortalDef,
   type SlopeDef,
   type WindDef
 } from "./levels";
+import {
+  SHARD_COLORS,
+  WIN_LEAP_H,
+  beanVariant,
+  drawBannerBadge,
+  drawBeanArt,
+  drawBirdArt,
+  drawBlockArt,
+  drawGrassStrip,
+  drawMidground,
+  drawShard,
+  drawShockRing,
+  drawSlingshotArt,
+  drawSparklePoint,
+  drawWinSparkle,
+  shardShapeFor,
+  winLeapPhase,
+  type BeanVariant,
+  type BirdMood,
+  type ShardShape
+} from "./art";
 import {
   GRAVITY,
   GROUND_Y,
@@ -141,8 +163,33 @@ interface Particle {
   maxLife: number;
   size: number;
   color: string;
-  square: boolean;
+  /** 碎片形状(1.3:材质碎片查表,不再是纯色方块/圆) */
+  shape: ShardShape;
+  rot: number;
+  /** 自转角速度(rad/s) */
+  vr: number;
 }
+
+/** 扩散圆环:TNT 冲击波(0.25s)与技能触发白闪圈(0.12s) */
+interface Ring {
+  x: number;
+  y: number;
+  t: number;
+  dur: number;
+  max: number;
+}
+
+/** 豆豆被击中的 0.2s「惊讶脸」残影 */
+interface BeanGhost {
+  x: number;
+  y: number;
+  t: number;
+  variant: BeanVariant;
+}
+
+/** 世界层 burst 配色 → 方块材质的反查表(渲染层识别「谁碎了」用) */
+const FILL_TO_KIND: Record<string, BlockKind> = {};
+for (const [k, m] of Object.entries(MAT)) FILL_TO_KIND[m.fill] = k as BlockKind;
 
 export function mount(api: GameApi): { destroy: () => void } {
   let destroyed = false;
@@ -404,6 +451,9 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   let world: World = createWorld({ blocks: [], beans: [] });
   let particles: Particle[] = [];
+  let rings: Ring[] = [];
+  let beanGhosts: BeanGhost[] = [];
+  let featherT = 0;
   let queue: BirdKind[] = [];
   let loadedBird: RtBird | null = null;
 
@@ -439,7 +489,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   /** 世界给渲染层的钩子:粒子、音效、震屏、HUD 刷新 */
   const worldFx = {
     burst: (x: number, y: number, colors: string[], count: number, speed: number, square: boolean) =>
-      burst(x, y, colors, count, speed, square),
+      fancyBurst(x, y, colors, count, speed, square),
     sound: (name: SoundName, gap: number) => playThrottled(name, gap),
     shake: (amount: number) => {
       shake = Math.max(shake, reduceMotion ? amount * 0.3 : amount);
@@ -454,6 +504,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     nextTowerTimer = 0;
     world = createWorld(src, worldFx, quality);
     particles = [];
+    rings = [];
+    beanGhosts = [];
+    featherT = 0;
     queue = [...src.birds];
     loadedBird = null;
     phase = "aim";
@@ -565,7 +618,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 粒子与特效 ---------------- */
 
-  function burst(x: number, y: number, colors: string[], count: number, speed: number, square: boolean): void {
+  function spawnBurst(x: number, y: number, colors: string[], count: number, speed: number, shape: ShardShape): void {
     if (particles.length > 260) return;
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -577,11 +630,62 @@ export function mount(api: GameApi): { destroy: () => void } {
         vy: Math.sin(a) * s - speed * 0.35,
         life: 0.55 + Math.random() * 0.35,
         maxLife: 0.9,
-        size: square ? 3 + Math.random() * 4 : 2 + Math.random() * 3,
+        size: shape === "dot" ? 2 + Math.random() * 3 : 3 + Math.random() * 3,
         color: colors[Math.floor(Math.random() * colors.length)],
-        square
+        shape,
+        rot: shape === "dot" ? 0 : Math.random() * Math.PI * 2,
+        vr: shape === "dot" ? 0 : (Math.random() - 0.5) * 10
       });
     }
+  }
+
+  /** 材质碎片:木长条 / 石四边形 / 冰玻璃三角 / 岩壳圆石 / 晶核菱片 / TNT 火花,每种 ≤6 粒,弱动效减半 */
+  function spawnShards(kind: BlockKind, x: number, y: number, speed: number): void {
+    spawnBurst(x, y, SHARD_COLORS[kind], reduceMotion ? 3 : 6, speed, shardShapeFor(kind));
+  }
+
+  /** 豆豆被击中:0.2s 惊讶脸残影 + 4 粒绿星屑 + 1 片叶子飘落(弱动效只留淡出的脸) */
+  function spawnBeanPop(x: number, y: number): void {
+    const idx = world.beans.findIndex((b) => b.x === x && b.y === y);
+    beanGhosts.push({ x, y, t: 0, variant: beanVariant(idx < 0 ? 0 : idx) });
+    if (reduceMotion) return;
+    spawnBurst(x, y, ["#A5D96C", "#7FBF4D", "#D3F0A8"], 4, 130, "star");
+    particles.push({
+      x,
+      y,
+      vx: 18,
+      vy: -46,
+      life: 0.8,
+      maxLife: 0.9,
+      size: 4,
+      color: "#6FAE45",
+      shape: "leaf",
+      rot: 0.4,
+      vr: 2.4
+    });
+  }
+
+  /**
+   * 世界层 burst 的渲染派发:按配色识别事件——
+   * 方块碎裂(square)→ 材质碎片;豆豆被弹走 → 惊讶脸演出;
+   * TNT 爆炸 → 白色冲击波环 + 星形火花(无火焰恐怖感);其余保持圆点星屑。
+   */
+  function fancyBurst(x: number, y: number, colors: string[], count: number, speed: number, square: boolean): void {
+    if (square) {
+      const kind = FILL_TO_KIND[colors[0]];
+      if (kind) {
+        spawnShards(kind, x, y, speed);
+        return;
+      }
+    } else if (colors[0] === "#A5D96C") {
+      spawnBeanPop(x, y);
+      return;
+    } else if (colors[0] === "#FFB864") {
+      if (!reduceMotion) rings.push({ x, y, t: 0, dur: 0.25, max: 64 });
+      spawnBurst(x, y, SHARD_COLORS.tnt, reduceMotion ? 5 : 10, speed, "spark");
+      return;
+    }
+    spawnBurst(x, y, colors, count, speed, square ? "quad" : "dot");
   }
 
   function birdsRemaining(): number {
@@ -662,6 +766,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       phase = "won";
       endT = 0;
       shake = Math.max(shake, reduceMotion ? 0.08 : 0.25);
+      // 胜利小仪式:金色星屑撒场,排队的小鸟一起跳(见 drawQueue)
+      spawnBurst(WORLD_W / 2, 90, ["#FFD86B", "#FFE9A8", "#FFC1D8"], reduceMotion ? 5 : 12, 180, "star");
     }
 
     if (phase === "won") {
@@ -716,6 +822,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   function fireSkill(): void {
     const bird = worldTriggerSkill(world);
     if (!bird) return;
+    // 技能触发瞬间的白色闪圈(弱动效不放)
+    if (!reduceMotion) rings.push({ x: bird.x, y: bird.y, t: 0, dur: 0.12, max: 26 });
     msgEl.textContent =
       bird.kind === "split"
         ? "云云分裂!三朵小云一起冲!"
@@ -840,15 +948,6 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 渲染 ---------------- */
 
-  /** 把 #rrggbb 变深/变浅(amt 为 -255..255) */
-  function shade(hex: string, amt: number): string {
-    const n = parseInt(hex.slice(1), 16);
-    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
-    const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
-    const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
-    return `rgb(${r},${g},${b})`;
-  }
-
   const CH_STYLE = [
     { skyTop: "#D8F3FF", skyBot: "#F2FFE3", ground: "#B7E39B", groundEdge: "#96CE7A", hill: "#CBEDB0" },
     { skyTop: "#CFF0FF", skyBot: "#FFF6DC", ground: "#F6E0A8", groundEdge: "#E3C685", hill: "#BDE8F2" },
@@ -862,7 +961,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     { skyTop: "#4A3244", skyBot: "#E0985E", ground: "#7A4F3E", groundEdge: "#5E3B30", hill: "#A4573F" }
   ];
 
-  function drawBg(c: CanvasRenderingContext2D, chapter: number): void {
+  function drawBg(c: CanvasRenderingContext2D, chapter: number, midShift: number): void {
     const st = CH_STYLE[chapter];
     // 天空渐变一直铺到画布顶(竖屏时上方延展出的天空区)
     const grad = c.createLinearGradient(0, -skyPad, 0, WORLD_H);
@@ -1116,11 +1215,17 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.globalAlpha = 1;
     }
 
+    // 中景剪影层(1.3):树/雪杉雪人/云堡浮岛…压在远景与近景战场之间,
+    // 镜头拉伸时轻微视差(midShift,弱动效恒 0),给画面补一层纵深
+    drawMidground(c, chapter, GROUND_Y, WORLD_W, midShift);
+
     // 地面(向下延展的泥土区一起铺满)
     c.fillStyle = st.ground;
     c.fillRect(0, GROUND_Y, WORLD_W, WORLD_H + groundPad - GROUND_Y);
     c.fillStyle = st.groundEdge;
     c.fillRect(0, GROUND_Y, WORLD_W, 5);
+    // 近景草丛带:三角草簇每 60px 一组(确定性摆放,天然静态)
+    drawGrassStrip(c, chapter, GROUND_Y, WORLD_W);
 
     // 延展泥土里点缀小石子当装饰
     if (groundPad > 14) {
@@ -1267,7 +1372,6 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBlocks(c: CanvasRenderingContext2D): void {
     for (const bl of world.blocks) {
       if (bl.dead) continue;
-      const m = MAT[bl.kind];
       // 命中反馈第一段「变形」:刚挨过打的块会歪一下、抖一抖,再倒、再结算
       const stress = reduceMotion ? Math.min(bl.stress, 0.25) : bl.stress;
       const shaky = stress > 0.02;
@@ -1278,171 +1382,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.scale(1 + 0.05 * stress, 1 - 0.05 * stress);
         c.translate(-(bl.x + bl.w / 2), -(bl.y + bl.h / 2));
       }
-      if (bl.kind === "wood") {
-        const g = c.createLinearGradient(bl.x, bl.y, bl.w >= bl.h ? bl.x : bl.x + bl.w, bl.w >= bl.h ? bl.y + bl.h : bl.y);
-        g.addColorStop(0, "#F2CFA0");
-        g.addColorStop(0.5, m.fill);
-        g.addColorStop(1, "#D8AC76");
-        c.fillStyle = g;
-      } else if (bl.kind === "stone") {
-        const g = c.createLinearGradient(bl.x, bl.y, bl.x, bl.y + bl.h);
-        g.addColorStop(0, "#E0E4EC");
-        g.addColorStop(1, "#BCC2CF");
-        c.fillStyle = g;
-      } else {
-        c.fillStyle = m.fill;
-      }
-      c.strokeStyle = m.edge;
-      c.lineWidth = 2;
-      c.beginPath();
-      c.roundRect(bl.x, bl.y, bl.w, bl.h, 4);
-      c.fill();
-      c.stroke();
-      if (bl.kind === "wood") {
-        // 木板纹理:板缝 + 短木纹
-        c.strokeStyle = "rgba(160,110,60,0.4)";
-        c.lineWidth = 1.5;
-        c.beginPath();
-        if (bl.w >= bl.h) {
-          c.moveTo(bl.x + 4, bl.y + bl.h / 2);
-          c.lineTo(bl.x + bl.w - 4, bl.y + bl.h / 2);
-        } else {
-          c.moveTo(bl.x + bl.w / 2, bl.y + 4);
-          c.lineTo(bl.x + bl.w / 2, bl.y + bl.h - 4);
-        }
-        c.stroke();
-        c.strokeStyle = "rgba(160,110,60,0.22)";
-        c.lineWidth = 1;
-        c.beginPath();
-        if (bl.w >= bl.h) {
-          c.moveTo(bl.x + bl.w * 0.22, bl.y + bl.h * 0.26);
-          c.lineTo(bl.x + bl.w * 0.42, bl.y + bl.h * 0.26);
-          c.moveTo(bl.x + bl.w * 0.55, bl.y + bl.h * 0.74);
-          c.lineTo(bl.x + bl.w * 0.8, bl.y + bl.h * 0.74);
-        } else {
-          c.moveTo(bl.x + bl.w * 0.26, bl.y + bl.h * 0.22);
-          c.lineTo(bl.x + bl.w * 0.26, bl.y + bl.h * 0.42);
-          c.moveTo(bl.x + bl.w * 0.74, bl.y + bl.h * 0.55);
-          c.lineTo(bl.x + bl.w * 0.74, bl.y + bl.h * 0.8);
-        }
-        c.stroke();
-      } else if (bl.kind === "stone") {
-        // 砖缝
-        c.strokeStyle = "rgba(140,148,165,0.5)";
-        c.lineWidth = 1.2;
-        c.beginPath();
-        if (bl.w >= bl.h) {
-          c.moveTo(bl.x + 3, bl.y + bl.h / 2);
-          c.lineTo(bl.x + bl.w - 3, bl.y + bl.h / 2);
-          c.moveTo(bl.x + bl.w * 0.33, bl.y + 2);
-          c.lineTo(bl.x + bl.w * 0.33, bl.y + bl.h / 2);
-          c.moveTo(bl.x + bl.w * 0.66, bl.y + bl.h / 2);
-          c.lineTo(bl.x + bl.w * 0.66, bl.y + bl.h - 2);
-        } else {
-          c.moveTo(bl.x + 2, bl.y + bl.h * 0.33);
-          c.lineTo(bl.x + bl.w - 2, bl.y + bl.h * 0.33);
-          c.moveTo(bl.x + 2, bl.y + bl.h * 0.66);
-          c.lineTo(bl.x + bl.w - 2, bl.y + bl.h * 0.66);
-        }
-        c.stroke();
-      } else if (bl.kind === "ice" || bl.kind === "glass") {
-        // 斜向闪光
-        c.strokeStyle = "rgba(255,255,255,0.9)";
-        c.lineWidth = 2.5;
-        c.beginPath();
-        c.moveTo(bl.x + 3, bl.y + bl.h * 0.4);
-        c.lineTo(bl.x + bl.w * 0.42, bl.y + 3);
-        c.stroke();
-        c.lineWidth = 1.2;
-        c.beginPath();
-        c.moveTo(bl.x + bl.w * 0.3, bl.y + bl.h - 4);
-        c.lineTo(bl.x + bl.w - 4, bl.y + bl.h * 0.25);
-        c.stroke();
-      } else if (bl.kind === "shell") {
-        // 岩壳:粗糙的鹅卵石纹 + 中缝透出的一线暖光,暗示里面藏着晶核
-        c.strokeStyle = "rgba(90,66,48,0.5)";
-        c.lineWidth = 1.4;
-        c.beginPath();
-        c.arc(bl.x + bl.w * 0.32, bl.y + bl.h * 0.34, Math.min(bl.w, bl.h) * 0.16, 0, Math.PI * 2);
-        c.moveTo(bl.x + bl.w * 0.78, bl.y + bl.h * 0.62);
-        c.arc(bl.x + bl.w * 0.66, bl.y + bl.h * 0.62, Math.min(bl.w, bl.h) * 0.12, 0, Math.PI * 2);
-        c.stroke();
-        c.strokeStyle = "rgba(255,214,140,0.85)";
-        c.lineWidth = 2;
-        c.beginPath();
-        c.moveTo(bl.x + bl.w * 0.5, bl.y + bl.h * 0.2);
-        c.lineTo(bl.x + bl.w * 0.42, bl.y + bl.h * 0.5);
-        c.lineTo(bl.x + bl.w * 0.56, bl.y + bl.h * 0.82);
-        c.stroke();
-      } else if (bl.kind === "core") {
-        // 晶核:亮闪闪的钻石切面,一看就很脆
-        c.strokeStyle = "rgba(255,255,255,0.95)";
-        c.lineWidth = 1.6;
-        c.beginPath();
-        c.moveTo(bl.x + bl.w / 2, bl.y + 3);
-        c.lineTo(bl.x + bl.w - 4, bl.y + bl.h / 2);
-        c.lineTo(bl.x + bl.w / 2, bl.y + bl.h - 3);
-        c.lineTo(bl.x + 4, bl.y + bl.h / 2);
-        c.closePath();
-        c.stroke();
-        c.fillStyle = "rgba(255,255,255,0.5)";
-        c.beginPath();
-        c.arc(bl.x + bl.w * 0.38, bl.y + bl.h * 0.36, 2.2, 0, Math.PI * 2);
-        c.fill();
-      } else if (bl.kind === "tnt") {
-        // 警示斜纹 + 内框 + 「爆」字
-        c.save();
-        c.beginPath();
-        c.roundRect(bl.x, bl.y, bl.w, bl.h, 4);
-        c.clip();
-        c.strokeStyle = "rgba(226,132,141,0.4)";
-        c.lineWidth = 3;
-        for (let sx = bl.x - bl.h; sx < bl.x + bl.w; sx += 10) {
-          c.beginPath();
-          c.moveTo(sx, bl.y + bl.h);
-          c.lineTo(sx + bl.h, bl.y);
-          c.stroke();
-        }
-        c.restore();
-        c.strokeStyle = "#E2848D";
-        c.lineWidth = 2;
-        c.strokeRect(bl.x + 3.5, bl.y + 3.5, bl.w - 7, bl.h - 7);
-        c.fillStyle = "#FFE9EB";
-        c.beginPath();
-        c.arc(bl.x + bl.w / 2, bl.y + bl.h / 2, Math.min(bl.w, bl.h) * 0.32, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = "#C0392B";
-        c.font = "bold 9px sans-serif";
-        c.textAlign = "center";
-        c.fillText("爆", bl.x + bl.w / 2, bl.y + bl.h / 2 + 3.5);
-        c.textAlign = "left";
-      }
-      // 顶部受光条
-      if (bl.kind !== "tnt") {
-        c.fillStyle = "rgba(255,255,255,0.3)";
-        c.beginPath();
-        c.roundRect(bl.x + 2, bl.y + 2, bl.w - 4, Math.min(4, bl.h * 0.2), 2);
-        c.fill();
-      }
-      // 裂纹
-      const ratio = bl.hp / bl.maxHp;
-      if (ratio < 0.66) {
-        c.strokeStyle = "rgba(90,70,60,0.45)";
-        c.lineWidth = 1.4;
-        c.beginPath();
-        c.moveTo(bl.x + bl.w * 0.25, bl.y + 2);
-        c.lineTo(bl.x + bl.w * 0.45, bl.y + bl.h * 0.5);
-        c.lineTo(bl.x + bl.w * 0.3, bl.y + bl.h - 2);
-        c.stroke();
-      }
-      if (ratio < 0.33) {
-        c.strokeStyle = "rgba(90,70,60,0.5)";
-        c.beginPath();
-        c.moveTo(bl.x + bl.w - 2, bl.y + bl.h * 0.3);
-        c.lineTo(bl.x + bl.w * 0.55, bl.y + bl.h * 0.55);
-        c.lineTo(bl.x + bl.w - 4, bl.y + bl.h * 0.8);
-        c.stroke();
-      }
+      // 材质纹理与残血裂纹分级(>50% 完好 / ≤50% 一条折线 / ≤25% 三条放射)在 art.ts
+      drawBlockArt(c, { kind: bl.kind, x: bl.x, y: bl.y, w: bl.w, h: bl.h, ratio: bl.hp / bl.maxHp });
       if (shaky) c.restore();
     }
   }
@@ -1508,47 +1449,51 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawBeans(c: CanvasRenderingContext2D): void {
-    for (const bean of world.beans) {
+    // 失败结算的 0.6s:豆豆们开心跳一小段舞(幸灾乐祸要可爱不要嘲讽;弱动效静止)
+    const dance = phase === "lost" && !reduceMotion;
+    for (let i = 0; i < world.beans.length; i++) {
+      const bean = world.beans[i];
       if (bean.dead) continue;
-      const wob = Math.sin(world.simT * 4 + bean.x * 0.13) * 1.2;
-      const g = c.createRadialGradient(bean.x - bean.r * 0.35, bean.y - bean.r * 0.4, bean.r * 0.2, bean.x, bean.y, bean.r * 1.15);
-      g.addColorStop(0, "#C4EA92");
-      g.addColorStop(1, "#8FC957");
-      c.fillStyle = g;
-      c.strokeStyle = "#7FB84B";
-      c.lineWidth = 2;
-      c.beginPath();
-      c.ellipse(bean.x, bean.y, bean.r + wob * 0.3, bean.r - wob * 0.3, 0, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      // 小叶子
-      c.fillStyle = "#6FAE45";
-      c.beginPath();
-      c.ellipse(bean.x + 3, bean.y - bean.r - 3, 4.5, 2.6, -0.6, 0, Math.PI * 2);
-      c.fill();
-      // 脸
-      c.fillStyle = "#3E6B24";
-      c.beginPath();
-      c.arc(bean.x - 3.4, bean.y - 2, 1.5, 0, Math.PI * 2);
-      c.arc(bean.x + 3.4, bean.y - 2, 1.5, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = "#3E6B24";
-      c.lineWidth = 1.4;
-      c.beginPath();
-      c.arc(bean.x, bean.y + 2.5, 3, 0.15 * Math.PI, 0.85 * Math.PI);
-      c.stroke();
-      c.fillStyle = "rgba(255,140,160,0.4)";
-      c.beginPath();
-      c.arc(bean.x - 6, bean.y + 2, 1.8, 0, Math.PI * 2);
-      c.arc(bean.x + 6, bean.y + 2, 1.8, 0, Math.PI * 2);
-      c.fill();
+      const wob = reduceMotion ? 0 : Math.sin(world.simT * 4 + bean.x * 0.13) * 1.2;
+      // 待机偶发眨眼:全员共用周期、相位按序号错开,每个瞬间最多一两只在眨
+      const blink = reduceMotion ? 0 : (world.simT + i * 1.31) % 4.6 > 4.45 ? 1 : 0;
+      drawBeanArt(c, beanVariant(i), {
+        x: bean.x,
+        y: bean.y - (dance ? Math.abs(Math.sin(world.simT * 8 + i)) * 3 : 0),
+        r: bean.r,
+        wob,
+        blink,
+        tilt: dance ? Math.sin(world.simT * 8 + i) * 0.2 : 0
+      });
     }
+    // 被击中的 0.2s「惊讶脸」残影,随后交给星屑与叶子(弱动效为原地淡出)
+    for (const gst of beanGhosts) {
+      const k = clamp(gst.t / 0.22, 0, 1);
+      c.globalAlpha = 1 - k;
+      drawBeanArt(c, gst.variant, {
+        x: gst.x,
+        y: gst.y - (reduceMotion ? 0 : k * 14),
+        r: 10,
+        surprise: true
+      });
+      c.globalAlpha = 1;
+    }
+  }
+
+  /** 待机眨眼相位:约 3.4s 闭一下,seed 错开各自节奏(弱动效恒睁眼) */
+  function blinkPhase(seed: number): number {
+    if (reduceMotion) return 0;
+    return (world.simT + seed) % 3.4 > 3.22 ? 1 : 0;
   }
 
   function drawBird(c: CanvasRenderingContext2D, bird: RtBird): void {
     const info = BIRD_INFO[bird.kind];
     const ang = bird.flying ? Math.atan2(bird.vy, bird.vx) * 0.25 : 0;
-    const flap = bird.flying ? Math.sin(bird.age * 18) * 0.35 : Math.sin(world.simT * 3 + bird.x) * 0.08;
+    const flap = bird.flying
+      ? Math.sin(bird.age * 18) * 0.35
+      : reduceMotion
+        ? 0
+        : Math.sin(world.simT * 3 + bird.x) * 0.08;
     // 技能触发窗口:窗口开着就套一圈光环,窗口越到后面圈越淡(告诉孩子「现在可以点」)
     if (canTriggerSkill(bird)) {
       const left = clamp(1 - bird.age / SKILL_WINDOW_END, 0, 1);
@@ -1563,187 +1508,48 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.setLineDash([]);
       c.restore();
     }
-    c.save();
-    c.translate(bird.x, bird.y);
-    c.rotate(ang);
-    // 尾羽(三根小羽毛)
-    c.fillStyle = shade(info.color, -26);
-    for (const [dy, len] of [[-0.28, 0.9], [0, 1.05], [0.28, 0.9]] as const) {
-      c.beginPath();
-      c.ellipse(-bird.r * (0.75 + len * 0.25), bird.r * dy, bird.r * 0.42 * len, bird.r * 0.16, dy * 0.7, 0, Math.PI * 2);
-      c.fill();
-    }
-    // 身体:径向渐变 + 描边
-    const bodyGrad = c.createRadialGradient(-bird.r * 0.35, -bird.r * 0.4, bird.r * 0.2, 0, 0, bird.r * 1.15);
-    bodyGrad.addColorStop(0, shade(info.color, 26));
-    bodyGrad.addColorStop(1, shade(info.color, -14));
-    c.fillStyle = bodyGrad;
-    c.strokeStyle = info.dark;
-    c.lineWidth = 1.8;
-    c.beginPath();
-    c.arc(0, 0, bird.r, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-    c.fillStyle = info.belly;
-    c.beginPath();
-    c.arc(0, bird.r * 0.35, bird.r * 0.55, 0, Math.PI * 2);
-    c.fill();
-    // 小翅膀(飞行时扑动)
-    c.save();
-    c.translate(-bird.r * 0.25, bird.r * 0.05);
-    c.rotate(flap);
-    c.fillStyle = shade(info.color, -20);
-    c.strokeStyle = info.dark;
-    c.lineWidth = 1.2;
-    c.beginPath();
-    c.ellipse(0, 0, bird.r * 0.5, bird.r * 0.3, -0.5, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-    c.restore();
-    // 高光
-    c.fillStyle = "rgba(255,255,255,0.5)";
-    c.beginPath();
-    c.ellipse(-bird.r * 0.32, -bird.r * 0.45, bird.r * 0.28, bird.r * 0.16, -0.5, 0, Math.PI * 2);
-    c.fill();
-    // 眼睛(白底 + 瞳孔 + 高光)+ 腮红
-    c.fillStyle = "#FFFFFF";
-    c.beginPath();
-    c.arc(bird.r * 0.25, -bird.r * 0.25, bird.r * 0.24, 0, Math.PI * 2);
-    c.arc(bird.r * 0.68, -bird.r * 0.25, bird.r * 0.24, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = "#4A3B45";
-    c.beginPath();
-    c.arc(bird.r * 0.3, -bird.r * 0.23, bird.r * 0.14, 0, Math.PI * 2);
-    c.arc(bird.r * 0.73, -bird.r * 0.23, bird.r * 0.14, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = "#FFFFFF";
-    c.beginPath();
-    c.arc(bird.r * 0.34, -bird.r * 0.28, bird.r * 0.05, 0, Math.PI * 2);
-    c.arc(bird.r * 0.77, -bird.r * 0.28, bird.r * 0.05, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = "rgba(255,120,140,0.45)";
-    c.beginPath();
-    c.arc(-bird.r * 0.3, bird.r * 0.1, bird.r * 0.2, 0, Math.PI * 2);
-    c.fill();
-    // 小嘴巴(上下两瓣)
-    c.fillStyle = "#F7B267";
-    c.strokeStyle = "#D98E3F";
-    c.lineWidth = 1;
-    c.beginPath();
-    c.moveTo(bird.r * 0.95, -bird.r * 0.08);
-    c.lineTo(bird.r * 1.35, bird.r * 0.06);
-    c.lineTo(bird.r * 0.92, bird.r * 0.12);
-    c.closePath();
-    c.fill();
-    c.stroke();
-    c.fillStyle = "#EFA050";
-    c.beginPath();
-    c.moveTo(bird.r * 0.92, bird.r * 0.14);
-    c.lineTo(bird.r * 1.28, bird.r * 0.14);
-    c.lineTo(bird.r * 0.9, bird.r * 0.3);
-    c.closePath();
-    c.fill();
-    // 角色标记
-    c.fillStyle = info.dark;
-    if (bird.kind === "straight") {
-      c.beginPath();
-      c.moveTo(-bird.r * 0.1, -bird.r * 0.95);
-      c.quadraticCurveTo(bird.r * 0.15, -bird.r * 1.5, bird.r * 0.4, -bird.r * 1.0);
-      c.quadraticCurveTo(bird.r * 0.15, -bird.r * 1.1, -bird.r * 0.1, -bird.r * 0.95);
-      c.fill();
-    } else if (bird.kind === "split") {
-      c.beginPath();
-      c.arc(-bird.r * 0.35, -bird.r * 0.65, bird.r * 0.14, 0, Math.PI * 2);
-      c.arc(0, -bird.r * 0.8, bird.r * 0.14, 0, Math.PI * 2);
-      c.arc(bird.r * 0.35, -bird.r * 0.65, bird.r * 0.14, 0, Math.PI * 2);
-      c.fill();
-    } else if (bird.kind === "slam") {
-      c.beginPath();
-      c.roundRect(-bird.r * 0.6, -bird.r * 1.1, bird.r * 1.2, bird.r * 0.32, 2);
-      c.fill();
-    } else if (bird.kind === "drill") {
-      c.beginPath();
-      c.moveTo(-bird.r * 0.2, -bird.r * 0.8);
-      c.lineTo(bird.r * 0.45, -bird.r * 0.95);
-      c.lineTo(bird.r * 0.15, -bird.r * 0.55);
-      c.closePath();
-      c.fill();
-    } else {
-      // 卷卷:头顶一撮打着圈的回旋呆毛
-      c.strokeStyle = info.dark;
-      c.lineWidth = bird.r * 0.22;
-      c.lineCap = "round";
-      c.beginPath();
-      c.arc(bird.r * 0.05, -bird.r * 1.05, bird.r * 0.32, Math.PI * 0.2, Math.PI * 1.6);
-      c.stroke();
-      c.beginPath();
-      c.arc(bird.r * 0.05, -bird.r * 1.05, bird.r * 0.14, Math.PI * 0.6, Math.PI * 2);
-      c.stroke();
-    }
-    c.restore();
+    // 表情状态:拉弓鼓腮蓄力 / 飞行瞪眼 / 落地捂头眨眼 / 待机
+    const speed = Math.hypot(bird.vx, bird.vy);
+    const mood: BirdMood = bird.flying
+      ? bird.restT > 0.05
+        ? "rest"
+        : "fly"
+      : aiming && bird === loadedBird && Math.hypot(dragX, dragY) >= MIN_DRAG
+        ? "charge"
+        : "idle";
+    drawBirdArt(c, {
+      kind: bird.kind,
+      x: bird.x,
+      y: bird.y,
+      r: bird.r,
+      angle: ang,
+      flap,
+      mood,
+      blink:
+        mood === "rest"
+          ? reduceMotion
+            ? 0
+            : (world.simT * 2) % 1 > 0.5
+              ? 1
+              : 0
+          : blinkPhase(bird.x * 0.13),
+      // 速度线:飞得够快才拖白线(弱动效不拖)
+      dash: bird.flying && !reduceMotion ? clamp((speed - 300) / 260, 0, 1) : 0
+    });
   }
 
   function drawSlingshot(c: CanvasRenderingContext2D): void {
-    // 地面阴影
-    c.fillStyle = "rgba(80,90,60,0.18)";
-    c.beginPath();
-    c.ellipse(SLING_X, GROUND_Y, 16, 4, 0, 0, Math.PI * 2);
-    c.fill();
-    // 大弹弓:粗木叉(深色描边 + 木色内芯,更立体)
-    c.lineCap = "round";
-    c.strokeStyle = "#96683F";
-    c.lineWidth = 11;
-    c.beginPath();
-    c.moveTo(SLING_X, GROUND_Y);
-    c.lineTo(SLING_X, SLING_Y + 26);
-    c.stroke();
-    c.lineWidth = 9;
-    c.beginPath();
-    c.moveTo(SLING_X, SLING_Y + 26);
-    c.lineTo(SLING_X - 15, SLING_Y - 12);
-    c.moveTo(SLING_X, SLING_Y + 26);
-    c.lineTo(SLING_X + 15, SLING_Y - 12);
-    c.stroke();
-    c.strokeStyle = "#C99A6B";
-    c.lineWidth = 6.5;
-    c.beginPath();
-    c.moveTo(SLING_X, GROUND_Y - 1);
-    c.lineTo(SLING_X, SLING_Y + 26);
-    c.stroke();
-    c.lineWidth = 5;
-    c.beginPath();
-    c.moveTo(SLING_X, SLING_Y + 26);
-    c.lineTo(SLING_X - 15, SLING_Y - 12);
-    c.moveTo(SLING_X, SLING_Y + 26);
-    c.lineTo(SLING_X + 15, SLING_Y - 12);
-    c.stroke();
-    // 缠绕的绑带
-    c.strokeStyle = "#E2698A";
-    c.lineWidth = 2;
-    for (let i = 0; i < 3; i++) {
-      c.beginPath();
-      c.moveTo(SLING_X - 5, SLING_Y + 30 + i * 4);
-      c.lineTo(SLING_X + 5, SLING_Y + 32 + i * 4);
-      c.stroke();
-    }
-
-    // 皮筋:拉得越满绷得越紧(越细、颜色越深),松开时回弹成一条软弧
+    // 木叉/底座草石点缀/双线皮筋(暗边 + 亮边)在 art.ts;张力只是视觉,发射力度仍由 aim.ts 决定
     const tension = bandTension(Math.hypot(dragX, dragY));
-    c.strokeStyle = tension > 0.66 ? "#C9455F" : tension > 0.33 ? "#D75674" : "#E2698A";
-    c.lineWidth = 4 - tension * 1.4;
-    if (loadedBird && !loadedBird.flying) {
-      c.beginPath();
-      c.moveTo(SLING_X - 15, SLING_Y - 12);
-      c.lineTo(loadedBird.x, loadedBird.y);
-      c.lineTo(SLING_X + 15, SLING_Y - 12);
-      c.stroke();
-    } else {
-      c.lineWidth = 4;
-      c.beginPath();
-      c.moveTo(SLING_X - 15, SLING_Y - 12);
-      c.quadraticCurveTo(SLING_X, SLING_Y - 2, SLING_X + 15, SLING_Y - 12);
-      c.stroke();
-    }
+    const loaded = loadedBird && !loadedBird.flying ? loadedBird : null;
+    drawSlingshotArt(c, {
+      x: SLING_X,
+      y: SLING_Y,
+      groundY: GROUND_Y,
+      birdX: loaded ? loaded.x : null,
+      birdY: loaded ? loaded.y : null,
+      tension
+    });
   }
 
   /**
@@ -1765,16 +1571,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       previewDotCount(len)
     );
     for (const dot of dots) {
+      // 1.3:小白点换成小星点(四角星),精确段仍带淡蓝描边;dots 的数学一字未动
       c.globalAlpha = dot.alpha;
-      c.fillStyle = "#FFFFFF";
-      c.beginPath();
-      c.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
-      c.fill();
-      if (dot.precise) {
-        c.strokeStyle = "rgba(120,140,190,0.6)";
-        c.lineWidth = 1;
-        c.stroke();
-      }
+      drawSparklePoint(c, dot.x, dot.y, dot.radius, dot.precise);
     }
     c.globalAlpha = 1;
     // 手指与小鸟之间的牵引线:让孩子看懂「我按的地方」和「小鸟在哪」是分开的
@@ -1791,54 +1590,70 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawQueue(c: CanvasRenderingContext2D): void {
-    // 排队等候的小鸟站在弹弓后面
+    // 排队等候的小鸟站在弹弓后面;第一只原地小跳,胜利结算时全员跳(弱动效静止)
+    // 1.3 r3 · R2-TOP10 结算仪式(绘制层子集):省下的小鸟按 0.25s 间隔逐只腾一个
+    // 小弧、弧上绕三粒金色星屑——纯 endT 驱动的演出,queue/物理/计分零改动;
+    // 全部动作在 0.69s 内落地(finishWin 后画面冻结,不留半空定格帧);弱动效维持静止。
     let qx = SLING_X - 34;
-    for (const kind of queue) {
-      const info = BIRD_INFO[kind];
-      const fake: RtBird = {
+    for (let qi = 0; qi < queue.length; qi++) {
+      const kind = queue[qi];
+      const r = BIRD_INFO[kind].r * 0.82;
+      const leap = phase === "won" && !reduceMotion ? winLeapPhase(endT, qi) : 0;
+      const lift = Math.sin(Math.PI * leap) * WIN_LEAP_H;
+      const hop =
+        !reduceMotion && (qi === 0 || phase === "won")
+          ? Math.abs(Math.sin(world.simT * 5 + qi * 1.7)) * 3.5
+          : 0;
+      const by = GROUND_Y - r - hop - lift;
+      drawBirdArt(c, {
         kind,
         x: qx,
-        y: GROUND_Y - info.r,
-        vx: 0,
-        vy: 0,
-        r: info.r * 0.82,
-        power: 0,
-        gfactor: 1,
-        flying: false,
-        dead: false,
-        skillUsed: false,
-        pierce: false,
-        restT: 0,
-        age: 0,
-        portalCd: 0
-      };
-      drawBird(c, fake);
+        y: by,
+        r,
+        flap: reduceMotion ? 0 : Math.sin(world.simT * (leap > 0 ? 14 : 3) + qx) * (leap > 0 ? 0.4 : 0.08),
+        mood: leap > 0 ? "fly" : "idle",
+        blink: blinkPhase(qx * 0.13)
+      });
+      if (leap > 0) {
+        // 弧顶三粒金星屑绕小鸟转小半圈,随腾跃进度淡入淡出
+        for (let s = 0; s < 3; s++) {
+          const sa = leap * Math.PI * 1.6 + (s * Math.PI * 2) / 3;
+          drawWinSparkle(
+            c,
+            qx + Math.cos(sa) * (r + 7),
+            by + Math.sin(sa) * (r + 7) * 0.7,
+            2.4,
+            Math.sin(Math.PI * leap)
+          );
+        }
+      }
       qx -= 24;
       if (qx < 14) break;
     }
   }
 
   function drawParticles(c: CanvasRenderingContext2D): void {
+    // 材质碎片:木长条 / 石四边形 / 冰三角 / 岩壳圆石 / 晶核菱片 / TNT 火花 / 羽毛 / 叶子 / 星屑
     for (const p of particles) {
       c.globalAlpha = clamp(p.life / p.maxLife, 0, 1);
-      c.fillStyle = p.color;
-      if (p.square) {
-        c.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-      } else {
-        c.beginPath();
-        c.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        c.fill();
-      }
+      c.save();
+      c.translate(p.x, p.y);
+      if (p.rot !== 0) c.rotate(p.rot);
+      drawShard(c, p.shape, p.size, p.color);
+      c.restore();
     }
     c.globalAlpha = 1;
+    // TNT 冲击波环 / 技能白闪圈
+    for (const ring of rings) drawShockRing(c, ring.x, ring.y, ring.t / ring.dur, ring.max);
   }
 
   function drawBanner(c: CanvasRenderingContext2D): void {
     if (introT <= 0) return;
+    // 横幅标题不再贴章节 emoji——两端的 drawBannerBadge 已是全绘制的章节角标
     const title = level
-      ? `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`
+      ? `第${level.id}关 ${level.name}`
       : endlessRound
-        ? `♾️ ${endlessRound.name} · 共 ${ENDLESS_BIRDS} 只小鸟`
+        ? `${endlessRound.name} · 共 ${ENDLESS_BIRDS} 只小鸟`
         : "";
     if (!title) return;
     const a = clamp(introT > 1.6 ? (2 - introT) * 2.5 : introT / 0.5, 0, 1);
@@ -1854,6 +1669,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     c.textAlign = "center";
     c.fillText(title, WORLD_W / 2, by + 29);
     c.textAlign = "left";
+    // 圆角条两端的章节角标(小花 / 雪花 / 星星…全部绘制资产)
+    drawBannerBadge(c, WORLD_W / 2 - 104, by + 23, 7, sceneChapter());
+    drawBannerBadge(c, WORLD_W / 2 + 104, by + 23, 7, sceneChapter());
     c.globalAlpha = 1;
   }
 
@@ -1874,7 +1692,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
     // 世界坐标整体下移天空高度:上方是延展天空,下方是延展泥土
     ctx.translate(0, skyPad);
-    drawBg(ctx, chapter);
+    // 中景剪影随镜头拉伸微移(视差;reduceMotion 时 stretch 恒 1 → 位移恒 0)
+    drawBg(ctx, chapter, (stretch - 1) * 60);
     drawWinds(ctx);
     drawSlopes(ctx, chapter);
     drawPortals(ctx);
@@ -1913,11 +1732,40 @@ export function mount(api: GameApi): { destroy: () => void } {
       launchT += dt;
       for (const p of particles) {
         p.life -= dt;
-        p.vy += GRAVITY * 0.5 * dt;
+        // 羽毛与叶子飘着落(重力打二折),其余碎片正常坠
+        p.vy += GRAVITY * (p.shape === "feather" || p.shape === "leaf" ? 0.12 : 0.5) * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
+        p.rot += p.vr * dt;
       }
       particles = particles.filter((p) => p.life > 0);
+      for (const ring of rings) ring.t += dt;
+      rings = rings.filter((r) => r.t < r.dur);
+      for (const gst of beanGhosts) gst.t += dt;
+      beanGhosts = beanGhosts.filter((g) => g.t < 0.22);
+      // 飞行演出:速度够快的小鸟每 0.15s 脱落一片小羽毛(弱动效不掉)
+      if (!reduceMotion) {
+        featherT += dt;
+        if (featherT >= 0.15) {
+          featherT = 0;
+          const flyer = world.birds.find((b) => !b.dead && b.flying && Math.hypot(b.vx, b.vy) > 240);
+          if (flyer && particles.length < 240) {
+            particles.push({
+              x: flyer.x - flyer.r * 0.6,
+              y: flyer.y,
+              vx: -20 - Math.random() * 24,
+              vy: 8 + Math.random() * 20,
+              life: 0.7,
+              maxLife: 0.9,
+              size: 3,
+              color: BIRD_INFO[flyer.kind].color,
+              shape: "feather",
+              rot: Math.random() * Math.PI,
+              vr: 3
+            });
+          }
+        }
+      }
       draw();
     }
     raf = requestAnimationFrame(tick);

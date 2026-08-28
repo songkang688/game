@@ -23,7 +23,6 @@ import {
   PIVOT_Y,
   SHOP,
   SHOP_KINDS,
-  WALL,
   buyItem,
   canBuy,
   emptyWallet,
@@ -48,7 +47,6 @@ import {
 import {
   LIGHT_BAND_TOP,
   LIGHT_MAX_DIM,
-  PARALLAX,
   TALLY_MS,
   applySupply,
   createTwin,
@@ -58,7 +56,6 @@ import {
   lightRadius,
   makeHookRng,
   muddySlips,
-  parallaxOffset,
   priceAt,
   ropeSag,
   supplyChoices,
@@ -71,23 +68,25 @@ import { CSS } from "./style";
 import { bombLine, haulLine, slipLine, twinLine } from "./copy";
 import { bestLine, loadEndlessBest, mergeEndlessBest, saveEndlessBest, type EndlessBest } from "./endlessBest";
 
+import {
+  drawCrew,
+  drawGround,
+  drawHook,
+  drawIcon,
+  drawOre,
+  drawParallax,
+  drawRope,
+  drawSkyDecor,
+  drawWalls,
+  drawWinch,
+  type CrewPose,
+  type IconKind,
+  type Palette,
+} from "./art";
+
 // ---------------------------------------------------------------------------
 // 配色:一章一套粉彩矿洞
 // ---------------------------------------------------------------------------
-
-interface Palette {
-  /** 洞顶的天光 */
-  sky0: string;
-  /** 洞底的暗处(仍旧是浅色,不要大片深色压着眼睛) */
-  sky1: string;
-  /** 两侧石壁 */
-  wall: string;
-  /** 石壁上的矿脉纹路 */
-  vein: string;
-  /** 地面草皮 */
-  ground: string;
-  groundDark: string;
-}
 
 const PALETTES: Palette[] = [
   { sky0: "#FFF6E6", sky1: "#F6DEC2", wall: "#E4C9A6", vein: "#CBA97F", ground: "#BFE3A6", groundDark: "#93C97A" },
@@ -98,12 +97,6 @@ const PALETTES: Palette[] = [
   { sky0: "#F7F1FE", sky1: "#E1D3F6", wall: "#D4C2EE", vein: "#B198DD", ground: "#CDB9EE", groundDark: "#A98FD7" },
   { sky0: "#F4F8FF", sky1: "#DCE7FB", wall: "#CEDDF7", vein: "#A8C0E9", ground: "#D5E6FF", groundDark: "#AFC8EC" },
   { sky0: "#F1EFFB", sky1: "#D6D1EE", wall: "#C7C0E6", vein: "#A096D2", ground: "#BFB6E4", groundDark: "#978CCB" },
-];
-
-/** 朵朵 / 星星:一粉一蓝,两个人轮流转绞盘 */
-const CREW = [
-  { name: "朵朵", body: "#FF9EC4", dark: "#E2749F", helmet: "#FFD166", face: "#FFE7D6" },
-  { name: "星星", body: "#8FBEF5", dark: "#6693CE", helmet: "#9AD07C", face: "#FFE7D6" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -138,13 +131,22 @@ function iconButton(cls: string, icon: string, label: string): HTMLButtonElement
   return b;
 }
 
-/** 改这个按钮上那截会被收起来的文字（图标不动） */
-function setLabel(b: HTMLButtonElement, icon: string, label: string): void {
-  const ic = b.querySelector(".gdh-ic");
-  const lb = b.querySelector(".gdh-lb");
-  if (ic) ic.textContent = icon;
-  if (lb) lb.textContent = label;
-  b.setAttribute("aria-label", label);
+/**
+ * 一枚手绘的 HUD 图标(2 倍尺寸的小画布,CSS 再缩回去防糊)。
+ * 顶掉 1.2 的 💰🎯⏳💪🍀💥 emoji 芯片 —— emoji 换台设备就变脸,手绘不会。
+ */
+function iconCanvas(kind: IconKind, size = 14): HTMLCanvasElement {
+  const cv = el("canvas", "gdh-ic-cv");
+  cv.width = size * 2;
+  cv.height = size * 2;
+  cv.style.width = `${size}px`;
+  cv.style.height = `${size}px`;
+  const c = cv.getContext("2d");
+  if (c) {
+    c.setTransform(2, 0, 0, 2, 0, 0);
+    drawIcon(c, kind, size);
+  }
+  return cv;
 }
 
 /** 系统里关了动效吗（关了就不抖屏、不跳数） */
@@ -211,6 +213,8 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   let extendT = 0;
   /** 抓到那一下的顿感倒计时 */
   let hitch = 0;
+  /** 宝物入袋后的欢呼倒计时(0.4s 左右,矿工举手小跳) */
+  let cheer = 0;
   /** 泥泥矿打滑用的随机数,按矿洞种子起,重玩同一关手感一致 */
   const slipRng = makeHookRng(Math.round(o.field.phase * 1000 + o.field.time * 7 + o.goal));
   /** 被炸药固定过的泥泥矿 id */
@@ -224,21 +228,37 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   /**
    * 炸药撒出来的彩纸。**这是「炸药」在画面上的全部内容** ——
    * 没有火光、没有冲击波,就是一把花花绿绿的纸片飘下去,
-   * 和生日会拉炮一个意思。
+   * 和生日会拉炮一个意思。1.3 里同一套粒子还兼职两件小事:
+   * 宝箱入袋蹦出来的小金币(coin)和炸开泥壳飞散的泥点(mud)。
    */
-  const confetti: Array<{ x: number; y: number; vx: number; vy: number; life: number; hue: string }> = [];
+  const confetti: Array<{
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    life: number;
+    hue: string;
+    shape?: "coin" | "mud";
+  }> = [];
 
   const wrap = el("div", "gdh-run");
   // 顶部一行只放「金币 / 目标 / 剩余时间」三样,字号钉死 14px。
   // 道具栏挪到底下和放绳按钮同一行去了 —— 360px 上四样挤一行必换行,一换行字就得缩。
+  // 芯片一律「手绘图标 + 数字」两截:图标画一次不动,每帧只改数字那截的文字。
   const hud = el("div", "gdh-hud");
   const coinChip = el("span", "gdh-chip");
+  const coinNum = el("span");
+  coinChip.append(iconCanvas("coin"), coinNum);
   const goalChip = el("span", "gdh-chip gdh-chip-goal");
+  const goalNum = el("span");
+  goalChip.append(iconCanvas("target"), goalNum);
   const bar = el("div", "gdh-bar");
   const barFill = el("div", "gdh-bar-fill");
   const barTxt = el("span", "gdh-bar-txt");
+  const barNum = el("span");
+  barTxt.append(iconCanvas("hourglass"), barNum);
   bar.append(barFill, barTxt);
-  // 「收工」跟着「🎯 目标」走:达标了才冒出来,而且挂在顶部这一行 ——
+  // 「收工」跟着「目标」走:达标了才冒出来,而且挂在顶部这一行 ——
   // 底下那一行在 360px 上已经是掐着算的,再塞一格就要把「放绳」顶出屏幕
   const doneBtn = iconButton("gdh-btn gdh-done", "✅", "收工");
   doneBtn.hidden = true;
@@ -260,8 +280,17 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   // 一行才塞得下;热区靠 CSS 的 min-height/min-width 钉在 44px,一格都不缩。
   const ctrl = el("div", "gdh-ctrl");
   const fireBtn = iconButton("gdh-btn gdh-btn-fire", "⬇️", "放绳");
-  const bombBtn = iconButton("gdh-btn gdh-btn-bomb", "💥", "炸药");
+  // 炸药按钮:手绘炸弹图标 + 存量数字。数字和图标待在同一截里,
+  // 窄屏把「炸药」两个字收起来之后,还剩几个照样看得见
+  const bombBtn = button("gdh-btn gdh-btn-bomb", "");
+  const bombIc = el("span", "gdh-ic");
+  const bombNum = el("span", "gdh-ic-num");
+  bombIc.append(iconCanvas("bomb"), bombNum);
+  bombBtn.append(bombIc, el("span", "gdh-lb", "炸药"));
   const kitChip = el("span", "gdh-kit");
+  const kitStr = el("span");
+  const kitLuck = el("span");
+  kitChip.append(iconCanvas("arm"), kitStr, iconCanvas("clover"), kitLuck);
   const shopBtn = iconButton("gdh-btn gdh-btn-shop", "🛒", "商店");
   const pauseBtn = iconButton("gdh-btn", "⏸️", "暂停");
   ctrl.append(fireBtn, bombBtn, kitChip, shopBtn, pauseBtn);
@@ -311,199 +340,8 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   window.addEventListener("resize", onResize);
 
   // ------------------------------------------------------------------
-  // 画面
+  // 画面(矿工 / 矿石 / 矿洞的绘制函数都在 art.ts,这里只管调度)
   // ------------------------------------------------------------------
-
-  function drawCrew(c: CanvasRenderingContext2D, x: number, y: number, who: 0 | 1): void {
-    const k = CREW[who];
-    c.fillStyle = k.body;
-    c.beginPath();
-    c.roundRect(x - 9, y - 2, 18, 22, 8);
-    c.fill();
-    c.fillStyle = k.face;
-    c.beginPath();
-    c.arc(x, y - 8, 9, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = k.helmet;
-    c.beginPath();
-    c.arc(x, y - 10, 9.5, Math.PI, 0);
-    c.fill();
-    c.fillRect(x - 12, y - 11, 24, 3);
-    c.fillStyle = "#5A3350";
-    c.beginPath();
-    c.arc(x - 3.2, y - 6, 1.5, 0, Math.PI * 2);
-    c.arc(x + 3.2, y - 6, 1.5, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = "#C9736F";
-    c.lineWidth = 1.4;
-    c.beginPath();
-    c.arc(x, y - 4, 3.2, 0.2 * Math.PI, 0.8 * Math.PI);
-    c.stroke();
-    c.fillStyle = k.dark;
-    c.font = "bold 9px system-ui, sans-serif";
-    c.textAlign = "center";
-    c.fillText(k.name, x, y + 30);
-  }
-
-  /**
-   * 矿石的皮肤。
-   *
-   * 全都手画成矢量而不是直接甩 emoji:矿洞底色是浅米黄,emoji 在上面又小又糊,
-   * 而且换个设备字体一变就认不出来了。自己画能保证「金的是暖黄、石头是冷灰」这条
-   * 最要紧的分辨线一直在。
-   */
-  const ORE_SKIN: Record<Ore["kind"], { fill: string; lit: string; edge: string }> = {
-    nugget: { fill: "#FFD264", lit: "#FFF0BC", edge: "#CF9A20" },
-    goldSmall: { fill: "#FFC441", lit: "#FFE79A", edge: "#C1880F" },
-    goldBig: { fill: "#FFB22C", lit: "#FFDD8C", edge: "#AE7305" },
-    goldHuge: { fill: "#FF9F14", lit: "#FFD07A", edge: "#9C6100" },
-    pebble: { fill: "#C6BFB4", lit: "#E6E1D9", edge: "#8F887E" },
-    boulder: { fill: "#A9A299", lit: "#CFC9C1", edge: "#77716A" },
-    gem: { fill: "#7DDDF0", lit: "#D6F7FF", edge: "#2F97AF" },
-    chest: { fill: "#C98C58", lit: "#E7B98C", edge: "#8A5A31" },
-    mole: { fill: "#D8A87A", lit: "#F0CFAC", edge: "#A57A4E" },
-    // 1.2 新矿:泥泥矿一眼看出「裹着泥」,双层晶用冷紫和钻石区分开
-    muddy: { fill: "#A8794F", lit: "#D0A87C", edge: "#6E4A28" },
-    twinCrystal: { fill: "#9FA8F0", lit: "#DCE0FF", edge: "#5B63B8" },
-  };
-
-  /** 金块 / 石头共用的圆角块 */
-  function nuggetPath(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-    c.beginPath();
-    c.roundRect(x - r, y - r * 0.86, r * 2, r * 1.72, r * 0.44);
-  }
-
-  function drawOre(c: CanvasRenderingContext2D, ore: Ore, x: number): void {
-    const r = ore.radius;
-    const y = ore.y;
-    const skin = ORE_SKIN[ore.kind];
-    c.save();
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-
-    // 影子:让矿石从背景里浮起来一点
-    c.fillStyle = "rgba(120,95,60,.18)";
-    c.beginPath();
-    c.ellipse(x, y + r * 0.92, r * 0.86, r * 0.3, 0, 0, Math.PI * 2);
-    c.fill();
-
-    c.fillStyle = skin.fill;
-    c.strokeStyle = skin.edge;
-    c.lineWidth = 1.6;
-
-    if (ore.kind === "gem") {
-      c.beginPath();
-      c.moveTo(x, y - r);
-      c.lineTo(x + r * 0.92, y - r * 0.16);
-      c.lineTo(x, y + r);
-      c.lineTo(x - r * 0.92, y - r * 0.16);
-      c.closePath();
-      c.fill();
-      c.stroke();
-      c.strokeStyle = "rgba(255,255,255,.85)";
-      c.lineWidth = 1.2;
-      c.beginPath();
-      c.moveTo(x - r * 0.92, y - r * 0.16);
-      c.lineTo(x + r * 0.92, y - r * 0.16);
-      c.moveTo(x - r * 0.42, y - r * 0.16);
-      c.lineTo(x, y - r);
-      c.lineTo(x + r * 0.42, y - r * 0.16);
-      c.stroke();
-    } else if (ore.kind === "chest") {
-      c.beginPath();
-      c.roundRect(x - r, y - r * 0.8, r * 2, r * 1.6, r * 0.26);
-      c.fill();
-      c.stroke();
-      c.fillStyle = skin.lit;
-      c.beginPath();
-      c.roundRect(x - r, y - r * 0.8, r * 2, r * 0.62, r * 0.26);
-      c.fill();
-      c.fillStyle = "#F4C64A";
-      c.fillRect(x - r * 0.2, y - r * 0.8, r * 0.4, r * 1.6);
-      c.beginPath();
-      c.arc(x, y - r * 0.06, r * 0.26, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = skin.edge;
-      c.lineWidth = 1.2;
-      c.stroke();
-    } else if (ore.kind === "mole") {
-      // 两只耳朵先画,才会被脑袋压住一半
-      c.beginPath();
-      c.arc(x - r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
-      c.arc(x + r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.beginPath();
-      c.arc(x, y, r * 0.92, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.fillStyle = skin.lit;
-      c.beginPath();
-      c.ellipse(x, y + r * 0.3, r * 0.5, r * 0.36, 0, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = "#5A3F2A";
-      c.beginPath();
-      c.arc(x - r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
-      c.arc(x + r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
-      c.arc(x, y + r * 0.16, r * 0.16, 0, Math.PI * 2);
-      c.fill();
-    } else {
-      nuggetPath(c, x, y, r);
-      c.fill();
-      c.stroke();
-      // 左上角一小块高光,金子看着才有光泽;石头也留着,当作被磨亮的一面
-      c.fillStyle = skin.lit;
-      c.beginPath();
-      c.ellipse(x - r * 0.3, y - r * 0.34, r * 0.36, r * 0.22, -0.5, 0, Math.PI * 2);
-      c.fill();
-      if (ore.kind === "goldHuge") {
-        // 巨型金块再压一道分层的纹,免得和大金块只差个头
-        c.strokeStyle = skin.edge;
-        c.lineWidth = 1.2;
-        c.beginPath();
-        c.moveTo(x - r * 0.72, y + r * 0.24);
-        c.lineTo(x + r * 0.72, y + r * 0.24);
-        c.stroke();
-      }
-      if (!ORES[ore.kind].treasure) {
-        // 石头补两个坑,一眼看出来是不值钱的那种
-        c.fillStyle = skin.edge;
-        c.beginPath();
-        c.arc(x + r * 0.32, y + r * 0.2, r * 0.16, 0, Math.PI * 2);
-        c.arc(x - r * 0.42, y + r * 0.34, r * 0.11, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
-    c.restore();
-  }
-
-  /**
-   * 矿洞纵深:近岩壁 / 中矿层 / 远洞穴三层,跟着钩子放绳的长度错位挪动。
-   * **只有位移与明暗,没有透视** —— 钩子角度是这个玩法唯一要瞄的东西,一透视就瞄不准了。
-   */
-  function drawParallax(c: CanvasRenderingContext2D): void {
-    for (let i = PARALLAX.length - 1; i >= 0; i--) {
-      const spec = PARALLAX[i];
-      const dy = parallaxOffset(spec.layer, ropeLen);
-      c.save();
-      c.globalAlpha = 0.16 + i * 0.05;
-      c.fillStyle = shadeHex(pal.wall, spec.shade);
-      const band = 46 + i * 26;
-      for (let y = 118 - dy; y < FIELD_H; y += band * 2) {
-        c.fillRect(WALL + 4 + i * 10, y, FIELD_W - WALL * 2 - 8 - i * 20, band);
-      }
-      c.restore();
-    }
-  }
-
-  /** 把 #rrggbb 按比例调暗（远景层用） */
-  function shadeHex(hex: string, k: number): string {
-    const n = parseInt(hex.slice(1), 16);
-    const r = Math.round(((n >> 16) & 255) * k);
-    const g = Math.round(((n >> 8) & 255) * k);
-    const b = Math.round((n & 255) * k);
-    return `rgb(${r},${g},${b})`;
-  }
 
   /**
    * 无尽越深越暗的照明圈。半径有下限（`LIGHT_MIN`），
@@ -518,28 +356,6 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     c.fillStyle = g;
     // 只压 LIGHT_BAND_TOP 以下:上面那条是地面、绞盘台和悬挂点,压暗了连绳子从哪出来都看不清
     c.fillRect(0, LIGHT_BAND_TOP, FIELD_W, FIELD_H - LIGHT_BAND_TOP);
-  }
-
-  /**
-   * 绳子。空钩时绷成直线,钩着东西时中段往下垂一点 ——
-   * 「这一钩很沉」除了拉得慢,还得有个一眼能看出来的样子。
-   * 垂的方向永远是屏幕的下方(重力方向),不跟着钩子角度转。
-   */
-  function drawRope(c: CanvasRenderingContext2D, tipPt: { x: number; y: number }): void {
-    const sag = carrying ? ropeSag(carrying.weight) : 0;
-    c.strokeStyle = "#8A6B45";
-    c.lineWidth = 2.4;
-    c.beginPath();
-    c.moveTo(PIVOT_X, PIVOT_Y);
-    if (sag <= 0.2) {
-      c.lineTo(tipPt.x, tipPt.y);
-    } else {
-      // 二次贝塞尔:控制点放在两端中点再往下推 2 倍垂度,曲线中点正好垂 sag
-      const mx = (PIVOT_X + tipPt.x) / 2;
-      const my = (PIVOT_Y + tipPt.y) / 2;
-      c.quadraticCurveTo(mx, my + sag * 2, tipPt.x, tipPt.y);
-    }
-    c.stroke();
   }
 
   /** 彩纸的颜色:全是粉彩,没有一格是火焰色 */
@@ -558,6 +374,42 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
         vy: Math.sin(a) * speed - 30,
         life: 0.7 + Math.random() * 0.4,
         hue: CONFETTI_HUES[i % CONFETTI_HUES.length],
+      });
+    }
+  }
+
+  /** 泥点的颜色:就是泥,不是火 */
+  const MUD_HUES = ["#8A5F35", "#A5825C", "#6E4A28"];
+
+  /** 炸开泥壳时在钩尖飞散几粒泥点 */
+  function popMud(): void {
+    if (calm) return;
+    const at = hookTip(fireAngle, ropeLen);
+    for (let i = 0; i < 5; i++) {
+      confetti.push({
+        x: at.x,
+        y: at.y,
+        vx: (Math.random() - 0.5) * 110,
+        vy: -40 - Math.random() * 50,
+        life: 0.5 + Math.random() * 0.25,
+        hue: MUD_HUES[i % MUD_HUES.length],
+        shape: "mud",
+      });
+    }
+  }
+
+  /** 宝箱入袋:从绞盘口蹦出几枚小金币 */
+  function popCoins(n: number): void {
+    if (calm) return;
+    for (let i = 0; i < n; i++) {
+      confetti.push({
+        x: PIVOT_X + (i - 1) * 6,
+        y: PIVOT_Y + 6,
+        vx: (i - 1) * 34 + (Math.random() - 0.5) * 18,
+        vy: -70 - Math.random() * 40,
+        life: 0.6 + i * 0.08,
+        hue: "#FFD264",
+        shape: "coin",
       });
     }
   }
@@ -582,10 +434,28 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     for (const p of confetti) {
       c.save();
       c.globalAlpha = Math.max(0, Math.min(1, p.life * 1.6));
-      c.fillStyle = p.hue;
       c.translate(p.x, p.y);
-      c.rotate(p.x * 0.08);
-      c.fillRect(-2.5, -1.5, 5, 3);
+      if (p.shape === "coin") {
+        // 小金币:金圆 + 内环,和 HUD 的金币图标一个家族
+        c.fillStyle = p.hue;
+        c.beginPath();
+        c.arc(0, 0, 2.8, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = "#C98A1E";
+        c.lineWidth = 1;
+        c.beginPath();
+        c.arc(0, 0, 1.6, 0, Math.PI * 2);
+        c.stroke();
+      } else if (p.shape === "mud") {
+        c.fillStyle = p.hue;
+        c.beginPath();
+        c.arc(0, 0, 2.1, 0, Math.PI * 2);
+        c.fill();
+      } else {
+        c.fillStyle = p.hue;
+        c.rotate(p.x * 0.08);
+        c.fillRect(-2.5, -1.5, 5, 3);
+      }
       c.restore();
     }
   }
@@ -603,54 +473,56 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     g.addColorStop(1, pal.sky1);
     c.fillStyle = g;
     c.fillRect(0, 0, FIELD_W, FIELD_H);
+    // r2(B档TOP5):地表天空一件章节主题物 + 两朵慢云,calm 定格
+    drawSkyDecor(c, pal, Math.max(0, PALETTES.indexOf(pal)), worldClock, calm);
 
-    drawParallax(c);
+    drawParallax(c, pal, ropeLen);
 
-    // 两侧石壁 + 几道矿脉纹路
-    c.fillStyle = pal.wall;
-    c.fillRect(0, 96, WALL, FIELD_H - 96);
-    c.fillRect(FIELD_W - WALL, 96, WALL, FIELD_H - 96);
-    c.fillStyle = pal.vein;
-    for (let y = 120; y < FIELD_H - 8; y += 32) {
-      c.fillRect(3, y, WALL - 8, 4);
-      c.fillRect(FIELD_W - WALL + 5, y + 14, WALL - 8, 4);
-    }
+    // 两侧石壁(斜向矿脉 + 嵌着的小金点)与地面草皮
+    drawWalls(c, pal);
+    drawGround(c, pal);
+    // 两名矿工的动作跟着钩子的阶段走:放绳前倾、收绳摇柄、
+    // 钩到重物后仰咬牙、宝物入袋举手欢呼;calm 时是静止的持镐站姿
+    const heavyHaul = carrying !== null && carrying.weight >= 13;
+    const crewPose: CrewPose =
+      phase === "out"
+        ? "out"
+        : phase === "back"
+          ? heavyHaul
+            ? "heavy"
+            : "back"
+          : cheer > 0
+            ? "cheer"
+            : "idle";
+    drawCrew(c, PIVOT_X - 54, 52, 0, { pose: crewPose, t: worldClock, calm, crank: ropeLen });
+    drawCrew(c, PIVOT_X + 54, 52, 1, { pose: crewPose, t: worldClock, calm, crank: ropeLen });
+    // 绞盘:木架 + 卷筒 + 摇柄。摇柄角度和筒面的缠绳圈都由绳长驱动,
+    // 收放绳时它就转,calm 时绳不动它也不动,天然接住弱动效
+    drawWinch(c, PIVOT_X, PIVOT_Y - 2, {
+      spin: ropeLen * 0.05,
+      wraps: Math.max(0, Math.min(1, 1 - ropeLen / o.field.ropeMax)),
+    });
 
-    // 地面与绞盘台
-    c.fillStyle = pal.ground;
-    c.fillRect(0, 74, FIELD_W, 26);
-    c.fillStyle = pal.groundDark;
-    c.fillRect(0, 96, FIELD_W, 6);
-    drawCrew(c, PIVOT_X - 54, 52, 0);
-    drawCrew(c, PIVOT_X + 54, 52, 1);
-    c.fillStyle = "#A5825A";
-    c.beginPath();
-    c.roundRect(PIVOT_X - 16, 46, 32, 16, 6);
-    c.fill();
-    c.fillStyle = "#7C5F3E";
-    c.beginPath();
-    c.arc(PIVOT_X, PIVOT_Y, 6, 0, Math.PI * 2);
-    c.fill();
-
-    for (const ore of ores) drawOre(c, ore, oreX(ore, worldClock));
+    for (const ore of ores) drawOre(c, ore, oreX(ore, worldClock), { t: worldClock, calm });
 
     // 绳子与钩子
     const angle = phase === "swing" ? hookAngle(o.field, swingClock) : fireAngle;
     const tipPt = hookTip(angle, ropeLen);
-    drawRope(c, tipPt);
+    drawRope(c, tipPt, carrying ? ropeSag(carrying.weight) : 0);
     // 钩住的那颗要跟着钩尖走。`drawOre` 用的是 ore.y,所以得临时把埋点换成钩尖,
     // 不然拉的过程里矿石会一直留在原来那个坑里,只有绳子在动
-    if (carrying) drawOre(c, { ...carrying, y: tipPt.y + carrying.radius * 0.5 }, tipPt.x);
+    if (carrying) {
+      drawOre(c, { ...carrying, y: tipPt.y + carrying.radius * 0.5 }, tipPt.x, {
+        t: worldClock,
+        calm,
+        carried: true,
+      });
+    }
     c.save();
     c.translate(tipPt.x, tipPt.y);
     c.rotate((-angle * Math.PI) / 180);
-    c.strokeStyle = "#6E5334";
-    c.lineWidth = 3;
-    c.beginPath();
-    c.moveTo(-7, -2);
-    c.lineTo(0, 8);
-    c.lineTo(7, -2);
-    c.stroke();
+    // 锚形双爪钩:空钩张开,钩中咬合;抓到那一下的顿感期间白闪一瞬(calm 不闪)
+    drawHook(c, { open: carrying === null, flash: hitch > 0 && !calm });
     c.restore();
 
     // 瞄准辅助线:摆动时给一条淡淡的虚线,小朋友好判断这一钩会去哪
@@ -682,14 +554,19 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   }
 
   function refreshHud(): void {
-    coinChip.textContent = `💰 ${wallet.coins}`;
-    goalChip.textContent = `🎯 ${o.goal}`;
+    coinNum.textContent = `${wallet.coins}`;
+    coinChip.setAttribute("aria-label", `金币 ${wallet.coins}`);
+    goalNum.textContent = `${o.goal}`;
+    goalChip.setAttribute("aria-label", `目标 ${o.goal}`);
     const ratio = Math.max(0, Math.min(1, timeLeft / Math.max(1, o.field.time)));
     barFill.style.width = `${ratio * 100}%`;
     barFill.classList.toggle("gdh-low", timeLeft <= 10);
-    barTxt.textContent = `⏳ ${Math.ceil(Math.max(0, timeLeft))} 秒`;
-    kitChip.textContent = `💪${wallet.strength} 🍀${wallet.luck}`;
-    setLabel(bombBtn, `💥${wallet.bombs}`, `炸药 ${wallet.bombs} 个`);
+    barNum.textContent = `${Math.ceil(Math.max(0, timeLeft))} 秒`;
+    kitStr.textContent = `${wallet.strength}`;
+    kitLuck.textContent = `${wallet.luck}`;
+    kitChip.setAttribute("aria-label", `力量水 ${wallet.strength} 瓶,幸运石 ${wallet.luck} 块`);
+    bombNum.textContent = `${wallet.bombs}`;
+    bombBtn.setAttribute("aria-label", `炸药 ${wallet.bombs} 个`);
     bombBtn.disabled = wallet.bombs <= 0 || !carrying;
     fireBtn.disabled = phase !== "swing";
     doneBtn.hidden = wallet.coins < o.goal || phase === "done";
@@ -714,6 +591,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     if (kind === "muddy") {
       // 泥泥矿不炸掉,而是把外面那层泥「砰」一下震掉,接下来这一颗再也不滑
       pinned.add(carrying.id);
+      popMud();
     } else {
       carrying = null;
     }
@@ -752,6 +630,8 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       if (!next.taken) {
         ores.push(carrying);
         ores.sort((a, b) => a.y - b.y);
+      } else if (!calm) {
+        cheer = 0.45;
       }
       say(twinLine(got, next.taken));
       carrying = null;
@@ -761,6 +641,11 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     const got = haulValue(carrying, wallet.luck);
     wallet = { ...wallet, coins: wallet.coins + got };
     const profile = ORES[carrying.kind];
+    if (profile.treasure && !calm) {
+      // 宝物入袋:两名矿工举手欢呼 0.4s;宝箱另加三枚蹦出来的小金币
+      cheer = 0.45;
+      if (carrying.kind === "chest") popCoins(3);
+    }
     o.sfx(profile.treasure ? "coin" : "oops");
     say(haulLine(carrying.kind, profile.label, profile.emoji, got, profile.treasure));
     carrying = null;
@@ -910,6 +795,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
 
     worldClock += dt;
     shake = Math.max(0, shake - dt * 22);
+    cheer = Math.max(0, cheer - dt);
     stepConfetti(dt);
     if (toastLeft > 0) {
       toastLeft -= dt;
@@ -1101,23 +987,67 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   /**
    * 金额跳数:`TALLY_MS`(640ms,规格上限是 800)走完,点一下立刻跳到终值。
    * 系统里关了动效就直接显示终值,一帧都不跳。
+   * 1.3 在数字上面加一小块「矿石飞进钱袋」的清点台:三颗小矿石沿抛物线
+   * 依次落进袋口,和跳数同一条时间线;calm 时直接画「都已入袋」的静止终态。
    */
   function tallyBlock(coins: number, caption: string): HTMLElement {
     const wrapper = el("div");
-    const line = el("div", "gdh-tally", `💰 ${calm ? coins : 0}`);
+    const fly = el("canvas", "gdh-tally-fly");
+    fly.width = 280;
+    fly.height = 88;
+    const fctx = fly.getContext("2d");
+    fctx?.setTransform(2, 0, 0, 2, 0, 0);
+    /** 清点台画到第 p(0–1)步:右边一只钱袋,三颗小矿石排队飞进去 */
+    const drawFly = (p: number): void => {
+      if (!fctx) return;
+      fctx.clearRect(0, 0, 140, 44);
+      fctx.save();
+      fctx.translate(102, 9);
+      drawIcon(fctx, "bag", 26);
+      fctx.restore();
+      const hues: Array<[string, string]> = [
+        ["#FFD264", "#CF9A20"],
+        ["#7DDDF0", "#2F97AF"],
+        ["#FFB22C", "#AE7305"],
+      ];
+      for (let i = 0; i < 3; i++) {
+        const q = Math.max(0, Math.min(1, p * 1.6 - i * 0.3));
+        if (q >= 1) continue;
+        const sx = 12 + i * 15;
+        const sy = 32 - i * 5;
+        const px = sx + (112 - sx) * q;
+        const py = sy + (14 - sy) * q - Math.sin(q * Math.PI) * 13;
+        fctx.fillStyle = hues[i][0];
+        fctx.strokeStyle = hues[i][1];
+        fctx.lineWidth = 1.2;
+        fctx.beginPath();
+        fctx.arc(px, py, 4 - i * 0.4, 0, Math.PI * 2);
+        fctx.fill();
+        fctx.stroke();
+      }
+    };
+    const line = el("div", "gdh-tally");
+    const num = el("span", "", `${calm ? coins : 0}`);
+    line.append(iconCanvas("coin", 20), num);
     const hint = el("div", "gdh-tally-hint", calm ? caption : "点一下直接看总数");
-    wrapper.append(line, hint);
-    if (calm) return wrapper;
+    wrapper.append(fly, line, hint);
+    if (calm) {
+      drawFly(1);
+      return wrapper;
+    }
 
+    drawFly(0);
     const t0 = performance.now();
     const settle = (): void => {
       stopTally();
-      line.textContent = `💰 ${coins}`;
+      num.textContent = `${coins}`;
       hint.textContent = caption;
+      drawFly(1);
     };
     const tick = (now: number): void => {
       const ms = now - t0;
-      line.textContent = `💰 ${tallyValue(coins, ms)}`;
+      num.textContent = `${tallyValue(coins, ms)}`;
+      drawFly(Math.min(1, ms / TALLY_MS));
       if (ms >= TALLY_MS) {
         settle();
         return;

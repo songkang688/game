@@ -15,19 +15,28 @@ export const CSS = `
 .gdh-run{display:flex;flex-direction:column;gap:6px;}
 
 /* 顶部一行:金币 / 目标 / 剩余时间。字号钉死在 ${HUD_MIN_FONT}px,窄屏也不许再小。
-   「收工」达标以后也挂在这一行:它和「🎯 目标」是同一件事,挤到底下那行会把放绳按钮顶出屏幕 */
+   「收工」达标以后也挂在这一行:它和「目标」是同一件事,挤到底下那行会把放绳按钮顶出屏幕。
+   1.3 起芯片图标全部手绘(gdh-ic-cv 那块小画布),不再用 emoji —— 换台设备就变脸 */
 .gdh-hud{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:center;}
-.gdh-done{padding:6px 10px;font-size:${HUD_MIN_FONT}px;flex:none;}
+.gdh-done{padding:6px 10px;font-size:${HUD_MIN_FONT}px;flex:none;
+  animation:gdh-done-glow 1.6s ease-in-out infinite;}
+@keyframes gdh-done-glow{
+  0%,100%{box-shadow:0 3px 0 rgba(170,140,90,.34),0 0 0 0 rgba(255,205,90,.7);}
+  50%{box-shadow:0 3px 0 rgba(170,140,90,.34),0 0 12px 4px rgba(255,205,90,.55);}
+}
 .gdh-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:${HUD_MIN_FONT}px;font-weight:800;
-  color:#7A5A2E;box-shadow:0 2px 6px rgba(170,140,90,.24);white-space:nowrap;}
+  color:#7A5A2E;box-shadow:0 2px 6px rgba(170,140,90,.24);white-space:nowrap;
+  display:inline-flex;align-items:center;gap:4px;}
 .gdh-chip-goal{background:#FFF0D4;color:#9A6A16;}
 .gdh-chip-bag{background:#F1EAFB;color:#6B4E9A;font-size:${HUD_MIN_FONT}px;padding:4px 8px;}
+.gdh-ic-cv{flex:none;display:inline-block;vertical-align:-2px;}
+.gdh-ic-num{font-size:${HUD_MIN_FONT}px;font-weight:900;}
 .gdh-bar{position:relative;flex:1;min-width:88px;height:22px;border-radius:999px;background:#ffffffcc;
   overflow:hidden;box-shadow:inset 0 1px 3px rgba(160,130,90,.3);}
 .gdh-bar-fill{height:100%;width:100%;border-radius:999px;background:linear-gradient(90deg,#FFD98A,#FF9E5E);
   transition:width .2s linear;}
 .gdh-bar-fill.gdh-low{background:linear-gradient(90deg,#FFB3A7,#F0776A);}
-.gdh-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+.gdh-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:4px;
   font-size:${HUD_MIN_FONT}px;font-weight:900;color:#6E4A18;}
 
 .gdh-box{position:relative;display:flex;justify-content:center;}
@@ -50,9 +59,11 @@ export const CSS = `
 .gdh-btn-bomb{background:linear-gradient(180deg,#FFA9A0,#EE7A6E);color:#fff;box-shadow:0 4px 0 #C75648;}
 .gdh-btn-shop{background:linear-gradient(180deg,#B8A2EA,#9077D2);color:#fff;box-shadow:0 4px 0 #6F58AB;}
 /* 道具栏里的力量水 / 幸运石只是状态,不是按钮,但要和按钮一样高才对得齐 */
-.gdh-kit{display:inline-flex;align-items:center;justify-content:center;min-height:${TOUCH_MIN}px;
+.gdh-kit{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-height:${TOUCH_MIN}px;
   padding:0 10px;border-radius:999px;background:#F1EAFB;color:#6B4E9A;font-size:${HUD_MIN_FONT}px;
   font-weight:900;white-space:nowrap;box-shadow:0 2px 6px rgba(140,110,170,.22);}
+/* 按钮里的图标截:炸药按钮的手绘图标 + 存量数字待在这一截,窄屏收文字也收不掉它 */
+.gdh-ic{display:inline-flex;align-items:center;gap:3px;}
 .gdh-tip{text-align:center;font-size:12px;font-weight:700;color:#8A6C42;line-height:1.5;margin:0;}
 
 .gdh-toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -83,9 +94,11 @@ export const CSS = `
 .gdh-buy:active{transform:translateY(2px);box-shadow:0 1px 0 #C67F22;}
 .gdh-buy[disabled]{opacity:.42;cursor:default;}
 
-/* 结算跳数:${TALLY_MS}ms 走完,点一下立刻停在终值 */
-.gdh-tally{font-size:26px;font-weight:900;color:#B37514;cursor:pointer;line-height:1.2;}
+/* 结算跳数:${TALLY_MS}ms 走完,点一下立刻停在终值;上面那块小画布是矿石飞进钱袋的清点台 */
+.gdh-tally{font-size:26px;font-weight:900;color:#B37514;cursor:pointer;line-height:1.2;
+  display:flex;align-items:center;justify-content:center;gap:6px;}
 .gdh-tally-hint{font-size:11px;font-weight:700;color:#A08A66;}
+.gdh-tally-fly{display:block;margin:0 auto;width:140px;height:44px;}
 
 .gdh-modes{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 10px;}
 .gdh-modes-title{font-size:19px;font-weight:900;color:#8A5A22;text-align:center;}
@@ -131,5 +144,6 @@ export const CSS = `
   .gdh-btn:active,.gdh-buy:active,.gdh-card:active{transform:none;}
   .gdh-bar-fill{transition:none;}
   .gdh-toast{transition:none;}
+  .gdh-done{animation:none;}
 }
 `;

@@ -51,8 +51,11 @@ import {
 } from "./match";
 import {
   DASH_SPEED_SCALE,
+  GRAB_ACTIVE,
   GRAB_BASE_RADIUS,
+  GRAB_WINDUP,
   SKILLS,
+  type SkillId,
   type SkillState,
   WAVE_SPIN_SECONDS,
   canGrab,
@@ -67,6 +70,27 @@ import {
   tickSkills,
   waveJustFired,
 } from "./skills";
+// 1.3 视觉资产:全部纯 Canvas 绘制,目标物 / 表情 / 特效不再用任何 emoji 字符占位
+import {
+  type FaceMood,
+  drawBomb,
+  drawDuoFlower,
+  drawFacetStar,
+  drawGift,
+  drawIceShell,
+  drawJellyPad,
+  drawKitCoin,
+  drawMascotFace,
+  drawMicroFlower,
+  drawMiniStar,
+  drawShieldHex,
+  drawSkillIcon,
+  drawSparkStar,
+  drawStageGround,
+  drawTargetBubble,
+  pathRoundRect,
+  shadeHex,
+} from "./art";
 import {
   type Action,
   PAD_LAYOUT,
@@ -77,15 +101,10 @@ import {
   moveVector,
   resolveKey,
 } from "./keys";
-import {
-  type Stage,
-  blockRect,
-  boundaryHalfWidth,
-  clampToArena,
-  placeTarget,
-  spawnPoints,
-  stageAt,
-} from "./stages";
+import { type Stage, blockRect, clampToArena, placeTarget, spawnPoints, stageAt } from "./stages";
+
+/** 人机难度的小星阶(画布徽章用):档位越高星越多,替代 AI_SPECS 里的 emoji。 */
+const AI_PIPS: Readonly<Record<AiLevel, number>> = { rookie: 1, normal: 2, pro: 3, master: 4 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -108,6 +127,8 @@ const BODY_R = 0.052;
 const TARGET_R = 0.042;
 /** 演出时长上限:比赛节奏比什么都重要 */
 const SHOW_MS = 800;
+/** 回合结算的粒子雨演出时长(和幕布一样长,不拖节奏) */
+const CELEBRATE_MS = 800;
 /** 开局倒数 */
 const COUNTDOWN = 2.4;
 
@@ -147,6 +168,16 @@ interface FloatText {
   x: number;
   y: number;
   until: number;
+  /** 带上技能 id 时,浮字左侧画对应的手绘技能图标(替代 spec.emoji 字符)。 */
+  icon?: SkillId;
+}
+
+/** 收下目标那 0.25 秒的星屑爆点(纯演出,不进任何判定) */
+interface Burst {
+  x: number;
+  y: number;
+  at: number;
+  color: string;
 }
 
 interface Fighter {
@@ -168,6 +199,11 @@ interface Fighter {
   next: number;
   targets: LiveTarget[];
   floats: FloatText[];
+  /** 纯演出:收目标的星屑爆点 */
+  bursts: Burst[];
+  /** 纯演出:上一帧画的位置,用来把影子按移动速度压扁拉伸 */
+  lastDrawX: number;
+  lastDrawY: number;
   brain: AiBrain | null;
   aiLevel: AiLevel | null;
   /** 本回合让分助推(0 = 没有) */
@@ -232,6 +268,8 @@ const CSS = `
   border-radius:18px;z-index:5;font-weight:900;color:#B06AB3;font-size:19px;text-align:center;padding:14px 12px;
   box-shadow:0 6px 20px rgba(120,100,160,.28);line-height:1.6;}
 .dua-splash .sub{font-size:14px;color:#7A6A90;font-weight:700;margin-top:4px;}
+.dua-splash .big{font-size:22px;display:inline-block;animation:duaPop .45s ease;}
+@keyframes duaPop{from{transform:scale(.55);}to{transform:scale(1);}}
 .dua-splash .row{display:flex;gap:8px;margin-top:10px;}
 .dua-splash .row button{flex:1;border:none;border-radius:14px;padding:11px 6px;font-size:15px;font-weight:800;
   font-family:inherit;cursor:pointer;background:#FFB37E;color:#7A3A10;box-shadow:0 3px 0 #E08F55;min-height:44px;}
@@ -248,6 +286,7 @@ const CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .dua-start:active,.dua-pad button:active{transform:none;}
+  .dua-splash .big{animation:none;}
 }
 `;
 
@@ -292,6 +331,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   let keepWins = 0;
   let targetId = 1;
   let skipShow: (() => void) | null = null;
+  /** 回合结算演出:胜者半场落一场花瓣 / 星屑粒子雨 */
+  let celebrate: { seat: Seat; startMs: number } | null = null;
 
   const wrap = document.createElement("div");
   wrap.className = "dua-wrap";
@@ -387,6 +428,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       next: 0,
       targets: [],
       floats: [],
+      bursts: [],
+      lastDrawX: 0,
+      lastDrawY: 0,
       brain: null,
       aiLevel: null,
       boost: 0,
@@ -480,7 +524,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (!res.started) return;
     f.skills = res.state;
     const spec = SKILLS[res.id];
-    pushFloat(f, `${spec.emoji} ${spec.name}!`, "#8A5AA8");
+    pushFloat(f, `${spec.name}!`, "#8A5AA8", res.id);
     api.play(res.id === "wave" ? "jump" : "meow");
   }
 
@@ -650,6 +694,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       f.next = 0;
       f.targets = [];
       f.floats = [];
+      f.bursts = [];
       f.held = {};
       f.grabStart = null;
       f.skills = createSkillState(-COUNTDOWN);
@@ -671,6 +716,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       (f.courtEl.querySelector(".dua-pad") as HTMLElement).classList.toggle("dua-hidden", f.brain !== null);
     }
 
+    celebrate = null;
     const hot = isMatchPointRound(progress) && mode !== "keep";
     wrap.classList.toggle("mp", hot && !reduceMotion);
     mpTagEl.classList.toggle("dua-hidden", !hot);
@@ -726,20 +772,38 @@ export function mount(api: GameApi): { destroy: () => void } {
     });
   }
 
-  function pushFloat(f: Fighter, text: string, color: string): void {
-    f.floats.push({ text, color, x: f.x, y: f.y, until: roundTime + 0.8 });
+  function pushFloat(f: Fighter, text: string, color: string, icon?: SkillId): void {
+    f.floats.push({ text, color, x: f.x, y: f.y, until: roundTime + 0.8, icon });
     if (f.floats.length > 6) f.floats.shift();
   }
 
+  /** 收下目标:3 粒星屑爆开 + 白色小冲击圈;弱动效时不生成,只留飘字 */
+  function pushBurst(f: Fighter, t: LiveTarget): void {
+    if (reduceMotion) return;
+    const color =
+      t.kind === "coin"
+        ? "#FFD86B"
+        : t.kind === "bomb"
+          ? "#B39DDB"
+          : t.kind === "gift"
+            ? "#FFB37E"
+            : f.seat === SEAT_DUO
+              ? "#FF9EC4"
+              : "#8FB8F2";
+    f.bursts.push({ x: t.x, y: t.y, at: roundTime, color });
+    if (f.bursts.length > 8) f.bursts.shift();
+  }
+
   function collect(f: Fighter, t: LiveTarget): void {
+    pushBurst(f, t);
     const doubled = roundTime < f.doubleUntil;
     if (t.kind === "bomb") {
       f.score = applyTap(f.score, "bomb", doubled);
       if (isProtected(f.skills, roundTime)) {
-        pushFloat(f, "🫧 泡泡挡住啦", "#4A90D9");
+        pushFloat(f, "泡泡挡住啦", "#4A90D9");
       } else {
         f.spinUntil = roundTime + BOMB_STUN_SECONDS;
-        pushFloat(f, "💫 转晕了 -2", "#B06AB3");
+        pushFloat(f, "转晕了 -2", "#B06AB3");
       }
       api.play("oops");
       updateHud();
@@ -749,20 +813,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       const effect = t.effect ?? "plus3";
       if (effect === "plus3") {
         f.score += 3;
-        pushFloat(f, "🎉 +3", "#E8A93C");
+        pushFloat(f, "惊喜 +3", "#E8A93C");
         api.play("coin");
       } else if (effect === "freeze") {
         const o = other(f);
         if (isProtected(o.skills, roundTime)) {
-          pushFloat(f, "🫧 对手有护盾", "#7A6A90");
+          pushFloat(f, "对手有护盾", "#7A6A90");
         } else {
           o.frozenUntil = roundTime + FREEZE_SECONDS;
-          pushFloat(f, "❄️ 冰住对手", "#4A90D9");
+          pushFloat(f, "冰住对手", "#4A90D9");
         }
         api.play("meow");
       } else {
         f.doubleUntil = roundTime + DOUBLE_SECONDS;
-        pushFloat(f, "✨ 双倍星光", "#B06AB3");
+        pushFloat(f, "双倍星光", "#B06AB3");
         api.play("jump");
       }
       updateHud();
@@ -803,14 +867,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (waveJustFired(f.skills, prevTime, roundTime)) {
       const o = other(f);
       if (isProtected(o.skills, roundTime)) {
-        pushFloat(o, "🫧 挡下来了", "#4A90D9");
+        pushFloat(o, "挡下来了", "#4A90D9");
       } else {
         const p = pushedPosition({ x: o.x, y: o.y }, { x: f.x, y: f.y });
         const c = clampToArena(stage, p.x, p.y, BODY_R, roundTime);
         o.x = c.x;
         o.y = c.y;
         o.spinUntil = roundTime + WAVE_SPIN_SECONDS;
-        pushFloat(o, "🌀 被弹开,转个圈", "#8A5AA8");
+        pushFloat(o, "被弹开,转个圈", "#8A5AA8");
         api.play("pop");
       }
     }
@@ -840,6 +904,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
     f.targets = alive;
     f.floats = f.floats.filter((fl) => fl.until > roundTime);
+    f.bursts = f.bursts.filter((b) => roundTime - b.at <= 0.3);
   }
 
   function trySkillForAi(f: Fighter): void {
@@ -847,7 +912,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     const res = castSkill(f.skills, roundTime);
     if (!res.started) return;
     f.skills = res.state;
-    pushFloat(f, `${SKILLS[res.id].emoji} ${SKILLS[res.id].name}`, "#5A6AA8");
+    pushFloat(f, SKILLS[res.id].name, "#5A6AA8", res.id);
   }
 
   function grabForAi(f: Fighter): void {
@@ -875,25 +940,32 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 回合结算 ---------------- */
 
+  /** 结算幕布上的比分:滚动跳字(弱动效直接给终值) */
+  function rollNum(n: number): string {
+    return `<b class="dua-roll" data-to="${n}">${reduceMotion ? n : 0}</b>`;
+  }
+
   function endRound(): void {
     playing = false;
     const r: RoundResult = duo.score > star.score ? 0 : star.score > duo.score ? 1 : -1;
+    // 胜者半场落一场主题粒子雨(朵朵花瓣 / 星星星屑),平局不放
+    celebrate = r === -1 ? null : { seat: r === 0 ? SEAT_DUO : SEAT_STAR, startMs: lastFrame };
     if (mode === "keep") return endKeepBout(r);
 
     progress = pushRound(progress, r);
     updateHud();
     const line =
       r === -1
-        ? `平局!${duo.score} : ${star.score}`
+        ? `平局!${rollNum(duo.score)} : ${rollNum(star.score)}`
         : r === 0
-          ? `🌸 朵朵拿下这回合 ${duo.score} : ${star.score}`
-          : `⭐ 星星拿下这回合 ${star.score} : ${duo.score}`;
+          ? `🌸 朵朵拿下这回合 ${rollNum(duo.score)} : ${rollNum(star.score)}`
+          : `⭐ 星星拿下这回合 ${rollNum(star.score)} : ${rollNum(duo.score)}`;
     api.play(r === -1 ? "pop" : "win");
 
     if (progress.done) {
       const champ = progress.winner === 0 ? duo : star;
       showSplash(
-        `<div>${line}</div><div>🏆 ${champ.emoji} ${champ.name}赢下擂台赛!</div><div class="sub">回合比分 ${progress.wins[0]} : ${progress.wins[1]}</div>`,
+        `<div>${line}</div><div class="big">🏆 ${champ.emoji} ${champ.name}赢下擂台赛!</div><div class="sub">回合比分 ${progress.wins[0]} : ${progress.wins[1]}</div>`,
         () => finishMatch(champ),
       );
       return;
@@ -958,6 +1030,17 @@ export function mount(api: GameApi): { destroy: () => void } {
   function showSplash(html: string, next: () => void): void {
     splashEl.innerHTML = `${html}<div class="sub" style="margin-top:6px">(点一下可以跳过)</div>`;
     splashEl.classList.remove("dua-hidden");
+    // 比分数字滚动跳字:四步跳到终值;弱动效时模板里已直接写终值
+    if (!reduceMotion) {
+      for (const el of Array.from(splashEl.querySelectorAll(".dua-roll"))) {
+        const to = Number((el as HTMLElement).dataset.to ?? "0");
+        for (let step = 1; step <= 4; step++) {
+          later(() => {
+            if (!destroyed) (el as HTMLElement).textContent = String(Math.round((to * step) / 4));
+          }, step * 90);
+        }
+      }
+    }
     let done = false;
     const run = () => {
       if (done || destroyed) return;
@@ -973,6 +1056,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function backToSetup(): void {
     playing = false;
     paused = false;
+    celebrate = null;
     life.clearTimers();
     skipShow = null;
     wrap.classList.remove("mp");
@@ -1001,62 +1085,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     api.play("tap");
   }
 
-  /* ---------------- 画面 ---------------- */
-
-  function drawFlower(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fillStyle = color;
-    for (let i = 0; i < 6; i++) {
-      ctx.beginPath();
-      const a = (Math.PI * 2 * i) / 6;
-      ctx.ellipse(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, r * 0.46, r * 0.34, a, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#FFF3B0";
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.44, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawStarShape(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const rad = i % 2 === 0 ? r : r * 0.46;
-      const a = (Math.PI * i) / 5 - Math.PI / 2;
-      const px = Math.cos(a) * rad;
-      const py = Math.sin(a) * rad;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawFace(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, dizzy: boolean): void {
-    ctx.fillStyle = "#4A4266";
-    if (dizzy) {
-      ctx.font = `${Math.round(r * 0.8)}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("@ @", x, y);
-      return;
-    }
-    ctx.beginPath();
-    ctx.arc(x - r * 0.28, y - r * 0.08, Math.max(1, r * 0.11), 0, Math.PI * 2);
-    ctx.arc(x + r * 0.28, y - r * 0.08, Math.max(1, r * 0.11), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#E07A9A";
-    ctx.lineWidth = Math.max(1, r * 0.09);
-    ctx.beginPath();
-    ctx.arc(x, y + r * 0.16, r * 0.24, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-  }
+  /* ---------------- 画面 ----------------
+   * 1.3 视觉升级:角色 / 目标 / 场地 / 特效全部走 art.ts 的绘制资产,
+   * 判定半径、场地几何、技能数值一个都不动 —— 只改画法。
+   */
 
   function drawCourt(f: Fighter): void {
     const ctx = f.canvas.getContext ? f.canvas.getContext("2d") : null;
@@ -1067,144 +1099,245 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (w <= 0 || h <= 0) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    const tNow = Math.max(0, roundTime);
 
-    // 底色与边界
-    ctx.fillStyle = f.seat === SEAT_DUO ? "#FFE6F0" : "#E3EDFF";
+    // 座位底色:保留粉 / 蓝阵营区分(对战可读性),但换成上浅下深的线性渐变
+    const seatBase = f.seat === SEAT_DUO ? "#FFE6F0" : "#E3EDFF";
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, shadeHex(seatBase, 0.04));
+    bg.addColorStop(1, shadeHex(seatBase, -0.04));
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = stage.tint;
-    ctx.beginPath();
-    const steps = 26;
-    for (let i = 0; i <= steps; i++) {
-      const ny = i / steps;
-      const half = boundaryHalfWidth(stage, ny);
-      const px = (0.5 - half) * w;
-      const py = ny * h;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    for (let i = steps; i >= 0; i--) {
-      const ny = i / steps;
-      const half = boundaryHalfWidth(stage, ny);
-      ctx.lineTo((0.5 + half) * w, ny * h);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(150,140,200,.45)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
 
-    // 地块
+    // 场地:主题渐变地面 + 每张场地自己的装饰(云 / 花点 / 木纹星光 / 糖纹)
+    drawStageGround(ctx, stage, w, h);
+
+    // 地块:果冻软垫,会滑的垫子带两侧速度线
     for (const b of stage.blocks) {
-      const r = blockRect(b, Math.max(0, roundTime));
-      ctx.fillStyle = "rgba(170,160,215,.42)";
-      const bx = r.x0 * w;
-      const by = r.y0 * h;
-      const bw = (r.x1 - r.x0) * w;
-      const bh = (r.y1 - r.y0) * h;
-      const rad = Math.min(8, bw / 2, bh / 2);
-      ctx.beginPath();
-      ctx.moveTo(bx + rad, by);
-      ctx.lineTo(bx + bw - rad, by);
-      ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + rad);
-      ctx.lineTo(bx + bw, by + bh - rad);
-      ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - rad, by + bh);
-      ctx.lineTo(bx + rad, by + bh);
-      ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - rad);
-      ctx.lineTo(bx, by + rad);
-      ctx.quadraticCurveTo(bx, by, bx + rad, by);
-      ctx.closePath();
-      ctx.fill();
+      const r = blockRect(b, tNow);
+      drawJellyPad(ctx, r.x0 * w, r.y0 * h, (r.x1 - r.x0) * w, (r.y1 - r.y0) * h, {
+        tint: stage.tint,
+        sway: (b.sway ?? 0) > 0,
+      });
     }
 
-    // 目标
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    // 目标:软气泡底 + 全绘制图标(小朵朵 / 切面星 / 金币 / 迷糊泡 / 礼盒,零 emoji)
     for (const t of f.targets) {
       const px = t.x * w;
       const py = t.y * h;
       const left = t.die - roundTime;
       ctx.globalAlpha = left < 0.5 && !reduceMotion ? 0.45 + 0.55 * (left / 0.5) : 1;
-      ctx.fillStyle = "rgba(255,255,255,.92)";
-      ctx.beginPath();
-      ctx.arc(px, py, TARGET_R * w, 0, Math.PI * 2);
-      ctx.fill();
-      const icon = t.kind === "bloom" ? f.emoji : t.kind === "coin" ? "🪙" : t.kind === "bomb" ? "💫" : "🎁";
-      ctx.font = `${Math.round(TARGET_R * w * 1.25)}px system-ui`;
-      ctx.fillStyle = "#4A4266";
-      ctx.fillText(icon, px, py + 1);
+      const R = TARGET_R * w;
+      drawTargetBubble(ctx, px, py, R);
+      const ri = R * 0.74;
+      if (t.kind === "bloom") {
+        if (f.seat === SEAT_DUO) drawDuoFlower(ctx, px, py, ri * 0.92);
+        else drawFacetStar(ctx, px, py, ri);
+      } else if (t.kind === "coin") {
+        drawKitCoin(ctx, px, py, ri);
+      } else if (t.kind === "bomb") {
+        drawBomb(ctx, px, py, ri, { t: tNow, reduceMotion });
+      } else {
+        drawGift(ctx, px, py, ri);
+      }
       ctx.globalAlpha = 1;
     }
 
-    // 小人
+    // 星屑爆点:收下目标那 0.25 秒(弱动效时根本不会入队)
+    for (const b of f.bursts) {
+      const age = roundTime - b.at;
+      if (age < 0 || age > 0.25) continue;
+      const p = age / 0.25;
+      const cx = b.x * w;
+      const cy = b.y * h;
+      ctx.globalAlpha = 1 - p;
+      ctx.strokeStyle = "rgba(255,255,255,.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, TARGET_R * w * (0.6 + p * 1.5), 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (Math.PI * 2 * i) / 3;
+        const d = TARGET_R * w * (0.4 + p * 1.8);
+        drawSparkStar(ctx, cx + Math.cos(a) * d, cy + Math.sin(a) * d, Math.max(2, TARGET_R * w * 0.24 * (1 - p * 0.5)), {
+          color: b.color,
+        });
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 小人:呼吸缩放(弱动效关闭)+ 胜者放大 + 影子随移动压扁拉伸
     const bx = f.x * w;
     const by = f.y * h;
-    const br = BODY_R * w;
     const dizzy = roundTime < f.spinUntil;
     const frozen = roundTime < f.frozenUntil;
+    const breath = reduceMotion ? 1 : 1 + 0.02 * Math.sin(tNow * 2.6 + f.seat * 1.7);
+    const winScale = celebrate && celebrate.seat === f.seat ? 1.16 : 1;
+    const br = BODY_R * w * breath * winScale;
+    const moveAmt = Math.min(1, Math.hypot(bx - f.lastDrawX, by - f.lastDrawY) / Math.max(1, BODY_R * w * 0.4));
+    f.lastDrawX = bx;
+    f.lastDrawY = by;
     ctx.fillStyle = "rgba(90,80,140,.18)";
     ctx.beginPath();
-    ctx.ellipse(bx, by + br * 0.9, br * 0.8, br * 0.3, 0, 0, Math.PI * 2);
+    ctx.ellipse(bx, by + br * 0.9, br * (0.8 + moveAmt * 0.25), br * (0.3 - moveAmt * 0.08), 0, 0, Math.PI * 2);
     ctx.fill();
-    if (f.seat === SEAT_DUO) drawFlower(ctx, bx, by, br, f.color);
-    else drawStarShape(ctx, bx, by, br * 1.12, f.color);
-    drawFace(ctx, bx, by, br, dizzy);
-
-    // 出手圈:生效那一段能够得更远,一眼看得出来
+    if (f.seat === SEAT_DUO) drawDuoFlower(ctx, bx, by, br);
+    else drawFacetStar(ctx, bx, by, br * 1.12);
     const phase = grabPhase(f.grabStart, roundTime);
+    const mood: FaceMood = dizzy
+      ? "dizzy"
+      : phase === "windup" || phase === "active"
+        ? "grab"
+        : f.score > other(f).score
+          ? "lead"
+          : "idle";
+    drawMascotFace(ctx, bx, by, br, { who: f.seat === SEAT_DUO ? "duo" : "star", mood, t: tNow, reduceMotion });
+
+    // 出手圈:双环脉冲 —— 内环实线,生效段换暖橙加粗,外环扩散淡出;
+    // 判定半径 grabRadius 的数值一个不动,只改画法
     if (phase !== "idle") {
-      ctx.strokeStyle = phase === "active" ? "rgba(255,180,90,.95)" : "rgba(255,210,150,.6)";
-      ctx.lineWidth = phase === "active" ? 3 : 2;
+      const rr = grabRadius(f.grabStart, roundTime) * w;
+      ctx.strokeStyle =
+        phase === "active" ? "rgba(255,150,60,.95)" : phase === "windup" ? "rgba(255,210,150,.7)" : "rgba(200,190,225,.55)";
+      ctx.lineWidth = phase === "active" ? 3.5 : 2;
       ctx.beginPath();
-      ctx.arc(bx, by, grabRadius(f.grabStart, roundTime) * w, 0, Math.PI * 2);
+      ctx.arc(bx, by, rr, 0, Math.PI * 2);
       ctx.stroke();
+      if (phase === "active" && !reduceMotion && f.grabStart !== null) {
+        const p = Math.min(1, Math.max(0, (roundTime - f.grabStart - GRAB_WINDUP) / GRAB_ACTIVE));
+        ctx.globalAlpha = 0.6 * (1 - p);
+        ctx.strokeStyle = "rgba(255,180,90,.9)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bx, by, rr * (1 + 0.45 * p), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     }
-    if (isProtected(f.skills, roundTime)) {
-      ctx.strokeStyle = "rgba(120,200,255,.9)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(bx, by, br * 1.6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (frozen) {
-      ctx.fillStyle = "rgba(160,220,255,.42)";
-      ctx.beginPath();
-      ctx.arc(bx, by, br * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 护盾泡:六边形微光盾面
+    if (isProtected(f.skills, roundTime)) drawShieldHex(ctx, bx, by, br * 1.7, { t: tNow, reduceMotion });
+    // 冰冻:冰晶罩(浅蓝渐变 + 冰锥 + 闪点)
+    if (frozen) drawIceShell(ctx, bx, by, br * 1.55);
+    // 双倍星光:头顶四芒星徽章,随呼吸微浮(弱动效静止)
     if (roundTime < f.doubleUntil) {
-      ctx.font = `${Math.round(br * 0.9)}px system-ui`;
-      ctx.fillText("✨", bx + br * 1.3, by - br * 1.1);
+      const bob = reduceMotion ? 0 : Math.sin(tNow * 3) * br * 0.1;
+      drawSparkStar(ctx, bx + br * 1.25, by - br * 1.35 + bob, br * 0.55, { color: "#FFE58A" });
     }
 
     // 飘字
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     for (const fl of f.floats) {
       const life = Math.max(0, fl.until - roundTime) / 0.8;
       ctx.globalAlpha = life;
       ctx.fillStyle = fl.color;
-      ctx.font = `900 ${Math.max(12, Math.round(w * 0.042))}px system-ui`;
-      ctx.fillText(fl.text, fl.x * w, fl.y * h - br * 1.6 - (1 - life) * 18);
+      const fs = Math.max(12, Math.round(w * 0.042));
+      ctx.font = `900 ${fs}px system-ui`;
+      const fy = fl.y * h - br * 1.6 - (1 - life) * 18;
+      if (fl.icon) {
+        // 技能浮字:左侧一枚白底手绘技能图标(替代 1.2 直接贴 spec.emoji)
+        const ir = fs * 0.5;
+        const tw = ctx.measureText(fl.text).width;
+        const sx = fl.x * w - (ir * 2 + 4 + tw) / 2;
+        ctx.beginPath();
+        ctx.arc(sx + ir, fy, ir, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,.85)";
+        ctx.fill();
+        drawSkillIcon(ctx, sx + ir, fy, ir * 0.55, fl.icon);
+        ctx.textAlign = "left";
+        ctx.fillStyle = fl.color;
+        ctx.fillText(fl.text, sx + ir * 2 + 4, fy);
+        ctx.textAlign = "center";
+      } else {
+        ctx.fillText(fl.text, fl.x * w, fy);
+      }
       ctx.globalAlpha = 1;
     }
 
-    // 左上角:下一招是什么、冷却走到哪了
+    // 左上角技能徽章:白底板 + 绘制图标(不再用 spec.emoji)+ 环形冷却扫描
     const skillId = f.skills.casting ? f.skills.casting.id : f.skills.current;
     const spec = SKILLS[skillId];
     const cd = cooldownRatio(f.skills, skillId, roundTime);
-    ctx.font = `700 13px system-ui`;
+    const label = `${spec.name}${cd > 0 ? " 冷却中" : " 就绪"}`;
+    ctx.font = `700 14px system-ui`;
+    const tw = ctx.measureText(label).width;
+    pathRoundRect(ctx, 5, 5, 30 + tw + 12, 24, 12);
+    ctx.fillStyle = "rgba(255,255,255,.72)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(19, 17, 10, 0, Math.PI * 2);
+    ctx.fillStyle = cd > 0 ? "rgba(235,232,245,.95)" : "#FFFFFF";
+    ctx.fill();
+    drawSkillIcon(ctx, 19, 17, 5.5, skillId);
+    // 冷却环:cooldownRatio 数值不动,走到哪画到哪;就绪时亮满一圈绿
+    ctx.beginPath();
+    if (cd > 0) {
+      ctx.strokeStyle = "rgba(150,140,200,.9)";
+      ctx.arc(19, 17, 10, -Math.PI / 2, -Math.PI / 2 + (1 - cd) * Math.PI * 2);
+    } else {
+      ctx.strokeStyle = "rgba(120,200,140,.95)";
+      ctx.arc(19, 17, 10, 0, Math.PI * 2);
+    }
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
     ctx.textAlign = "left";
-    ctx.fillStyle = cd > 0 ? "rgba(120,110,160,.75)" : "#5A4A80";
-    ctx.fillText(`${spec.emoji}${spec.name}${cd > 0 ? " 冷却中" : " 就绪"}`, 8, 14);
+    ctx.fillStyle = cd > 0 ? "rgba(120,110,160,.85)" : "#5A4A80";
+    ctx.fillText(label, 34, 17);
+    // AI 标识与让分:文字加半透明白圆角底板
     if (f.aiLevel) {
+      // 难度改画小星阶(1–4 颗),替代 AI_SPECS 里的 emoji——emoji 换台设备就变脸
+      const pips = AI_PIPS[f.aiLevel];
+      const pipW = pips * 9 + 2;
+      const aiLabel = `${AI_SPECS[f.aiLevel].label}人机`;
+      const aw = ctx.measureText(aiLabel).width + pipW;
+      pathRoundRect(ctx, w - aw - 22, 5, aw + 16, 22, 11);
+      ctx.fillStyle = "rgba(255,255,255,.72)";
+      ctx.fill();
+      for (let p = 0; p < pips; p++) {
+        drawMiniStar(ctx, w - aw - 14 + 4 + p * 9, 16, 3.6, "#E8B84A");
+      }
       ctx.textAlign = "right";
-      ctx.fillStyle = "rgba(90,80,130,.8)";
-      ctx.fillText(`${AI_SPECS[f.aiLevel].emoji} ${AI_SPECS[f.aiLevel].label}人机`, w - 8, 14);
+      ctx.fillStyle = "rgba(90,80,130,.9)";
+      ctx.fillText(aiLabel, w - 14, 16);
     }
     if (f.boost > 0) {
+      // 让分徽章:手绘小花替代帮手 emoji 字符(DOM 文案里的可以留,画布上不行)
+      const hLabel = `让分 +${Math.round(f.boost * 100)}%`;
       ctx.textAlign = "left";
+      const hw = ctx.measureText(hLabel).width + 14;
+      pathRoundRect(ctx, 5, 33, hw + 16, 22, 11);
+      ctx.fillStyle = "rgba(255,255,255,.72)";
+      ctx.fill();
+      drawMicroFlower(ctx, 18, 44, 5, "#E88AB0");
       ctx.fillStyle = "#B07A20";
-      ctx.fillText(`🤝 让分 +${Math.round(f.boost * 100)}%`, 8, 30);
+      ctx.fillText(hLabel, 27, 44);
     }
     ctx.textAlign = "center";
+
+    // 回合结算:胜者半场落一场主题粒子雨(朵朵花瓣 / 星星星屑;弱动效静态展示)
+    if (celebrate && celebrate.seat === f.seat) {
+      const fx = reduceMotion ? 0.4 : Math.min(1, (lastFrame - celebrate.startMs) / CELEBRATE_MS);
+      for (let i = 0; i < 14; i++) {
+        const seedX = ((i * 53) % 17) / 17;
+        const seedY = ((i * 29) % 13) / 13;
+        const px = (seedX + (reduceMotion ? 0 : 0.02 * Math.sin(fx * 6 + i))) * w;
+        const py = ((seedY + fx * 1.15) % 1.05) * h;
+        ctx.globalAlpha = 0.85;
+        if (f.seat === SEAT_DUO) {
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(i + (reduceMotion ? 0 : fx * 4));
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5, 3, 0, 0, Math.PI * 2);
+          ctx.fillStyle = i % 2 === 0 ? "#FF9EC4" : "#FFC9DE";
+          ctx.fill();
+          ctx.restore();
+        } else {
+          drawSparkStar(ctx, px, py, 4.5, { color: i % 2 === 0 ? "#FFD86B" : "#FFE58A" });
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   /* ---------------- 主循环 ---------------- */
@@ -1231,6 +1364,13 @@ export function mount(api: GameApi): { destroy: () => void } {
         if (roundTime >= roundDuration) endRound();
       }
       for (const f of fighters) drawCourt(f);
+    } else if (celebrate) {
+      // 回合刚结束:趁幕布亮着,把胜者那半场的粒子雨演完
+      if (now - celebrate.startMs <= CELEBRATE_MS) {
+        for (const f of fighters) drawCourt(f);
+      } else {
+        celebrate = null;
+      }
     }
   }
 
