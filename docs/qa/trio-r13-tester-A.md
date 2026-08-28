@@ -39,4 +39,4 @@
 
 ## 水位
 
-进场主干 `5cbb6a80`；收尾 rebase `9176155d`。全库 **1154 files / 19431 tests**（一次跑有 gomoku 胜率 / snake-snack / bomb-buddies 5s 既有 flake，单测重跑全绿）。`npm run build` 绿。无 915×412 真机 CDP。未重做 N-59/48/58。
+进场主干 `5cbb6a80`。合入前再 rebase 过 `121ea896`（r13 B 已在主干）。合入 SHA **`7a832aa8`**（`git push origin HEAD:game-1.3`，无 force）。全库 **1154 files / 19431 tests** 一次全绿；`npm run build` 绿。无 915×412 真机 CDP。未重做 N-59/48/58。
