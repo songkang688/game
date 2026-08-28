@@ -240,6 +240,19 @@ export const MJ_CSS = `
   .mj-t-art{display:none;}
   .mj-t-txt{display:flex;}
 }
+/* N-75:矮横屏对局手牌整排线下。牌宽仍 44(N-41 勿回滚),收的是桌高,手牌钉底横滑 */
+@media (max-height:500px){
+  .mj-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
+  .mj-top{margin-bottom:4px;flex:0 0 auto;}
+  .mj-goal{flex:0 0 auto;font-size:14px;line-height:1.3;max-height:1.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mj-board{flex:1 1 auto;min-height:0;overflow:hidden;gap:4px;padding:4px;border-width:4px;}
+  .mj-river{min-height:28px;max-height:48px;overflow:auto;}
+  .mj-foe{min-height:22px;}
+  .mj-hand{position:sticky;bottom:0;z-index:5;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+    flex:0 0 auto;padding:4px 2px 6px;row-gap:0;
+    background:linear-gradient(180deg,rgba(30,95,67,0),rgba(30,95,67,.55) 18px,#1e5f43);}
+}
 @media (prefers-reduced-motion:reduce){
   .mj-fly{animation-duration:60ms;}
   .mj-slide{animation-duration:60ms;}

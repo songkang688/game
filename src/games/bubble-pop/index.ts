@@ -80,6 +80,14 @@ const CSS = `
 .bbp-over-s { font-size: 15px; font-weight: 700; color: #4FA3C7; line-height: 1.6; margin-bottom: 14px; }
 .bbp-line { height: 4px; background: repeating-linear-gradient(90deg, #FF9EC8 0 10px, transparent 10px 20px); border-radius: 2px; margin: 0 0 4px; }
 @media (max-width: 380px) { .bp-badge { font-size: 14px; } .bp-board { gap: 5px; } .bbp-chip { font-size: 14px; } }
+/* N-82:无尽泡泡海 12 行 × min-width 36 撑出 412。基线 36 保留,矮屏才收格 */
+@media (max-height: 500px) {
+  .bp-wrap { height: 100%; max-height: calc(100dvh - 76px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; padding: 8px; }
+  .bp-top { flex: 0 0 auto; }
+  .bp-board { flex: 1 1 auto; min-height: 0; width: min(100%, calc((100dvh - 148px) * 8 / 12)); max-height: min(240px, calc(100dvh - 148px)); margin: 0 auto; }
+  .bp-cell { min-width: 0; min-height: 0; }
+  .bp-msg { flex: 0 0 auto; max-height: 1.4em; overflow: hidden; margin-top: 6px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .bbp-pop { animation-duration: 16ms; }
   .bbp-ripple { animation: none; }

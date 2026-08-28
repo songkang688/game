@@ -112,7 +112,7 @@ export function canvasDisplayCapPx(nativeH: number, roomPx: number, min = MIN_CA
   return Math.max(min, cap);
 }
 
-const CSS = `
+export const CSS = `
 .cc-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#FFF2F8,#F5F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .cc-hud{display:flex;gap:8px;align-items:stretch;margin-bottom:6px;}
@@ -190,6 +190,20 @@ const CSS = `
   .cc-open{padding:9px 13px;font-size:14px;}
   .cc-face{min-width:64px;}
   .cc-stars{width:44px;}
+}
+/* N-76:矮横屏把轻/重/必杀钉进 412;训练场日志可滚,帧数据不改 */
+@media (max-height:500px){
+  .cc-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
+  .cc-hud{flex:0 0 auto;margin-bottom:2px;}
+  .cc-canvas{max-height:min(120px,32dvh);width:auto;margin:0 auto;}
+  .cc-msg{min-height:0;max-height:1.35em;overflow:hidden;margin-top:2px;flex:0 0 auto;}
+  .cc-stick{width:56px;height:56px;}
+  .cc-stick>i{width:28px;height:28px;margin:-14px 0 0 -14px;}
+  .cc-btn{min-width:48px;min-height:48px;font-size:14px;}
+  .cc-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;flex:0 0 auto;
+    background:linear-gradient(180deg,rgba(255,242,248,0),#FFF2F8 14px);padding-top:4px;}
+  .cc-info{max-height:52px;overflow:auto;margin-top:4px;font-size:14px;flex:0 0 auto;}
 }
 @media (prefers-reduced-motion:reduce){
   .cc-bar>i{transition:none;}
@@ -500,7 +514,12 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
     if (!Number.isFinite(canvasRect.top)) return;
     // 画布下面的家当(提示行 + 摇杆按钮排):高度不随画布显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    const short = (globalThis.innerHeight || 800) <= 500;
+    const px = canvasDisplayCapPx(
+      canvasRect.height,
+      clip - canvasRect.top - below - 4,
+      short ? 96 : MIN_CANVAS_DISPLAY_PX
+    );
     if (px !== null) {
       // CSS 里画布是 width:100%,只钳高会压扁人物;宽也按 backing 比例一起钳才是等比
       canvas.style.maxHeight = `${px}px`;

@@ -277,6 +277,18 @@ export const CSS = `
   .pcp-pads{--k:42px;margin-top:4px;}
   .pcp-pads[data-players="2"]{--k:34px;}
 }
+/* N-79:两人一起闯关 D-pad 540/578。无尽城堡塔画布本轮已在屏,此档只压双人闯关画布 */
+@media (max-height:500px){
+  .pcp-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;}
+  .pcp-hud{flex:0 0 auto;margin-bottom:4px;}
+  .pcp-cv{height:118px;}
+  .pcp-wrap[data-players="2"] .pcp-cv{height:118px;}
+  .pcp-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;--k:40px;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,245,250,0),#FFF5FA 16px);padding-top:4px;}
+  .pcp-pads[data-players="2"]{--k:36px;}
+  .pcp-tip{max-height:1.2em;overflow:hidden;margin-top:2px;}
+}
 @media (prefers-reduced-motion:reduce){
   .pcp-bar-fill,.pcp-toast{transition:none;}
 }
