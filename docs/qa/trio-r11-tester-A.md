@@ -4,7 +4,7 @@
 分支:`cursor/trio-r11-tester-a-c14c`，目标再合入 `game-1.3`。
 执行依据:`docs/qa/trio-r10-playbook.md`。
 方法:源码对账 + Vitest + preview **4179** + `/usr/local/bin/google-chrome`（`setBypassServiceWorker`）。主档 **915×412**；进度路 `Array(N).fill(1)` 后 `.l99-continue`。
-水位:merge 前本分支 `npm test` **1124 / 19360** 全绿、`npm run build` 绿。主干此时已报 1128 / 19369。测试只增不减。
+水位:merge 后交卷 `npm test` **1132 文件 / 19383 用例全绿**；`npm run build` 绿。相对主干交卷水位 1128/19369 只增不减。偶发红未为变绿改那些用例。
 
 ## 对账
 
