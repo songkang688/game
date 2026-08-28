@@ -5,6 +5,7 @@ export { meta };
 // 1.1 新玩法:5×5 / 6×6 大画板、旋转块(点一下转 90°)、缺块补齐(托盘里挑对的补回去)、限时拼。
 // 1.2 新增:碎片拖着走 + 磁性吸附(阈值 = 格宽 × 0.35)、预览三档、旋转撤销栈、大画板中途续拼。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { boardCapWidthPx, rectBottom, stageClipBottom } from "../stageFit";
 import { save } from "../../engine/save";
 import {
   buildFillPuzzle,
@@ -293,6 +294,41 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     btn.addEventListener("click", () => onTile(p));
     boardEl.appendChild(btn);
     tiles.push(btn);
+  }
+
+  /**
+   * r4 C-8:盘面 1fr 撑满宽、格子 aspect-ratio:1,矮横屏(915×412)下两排数字块
+   * 折叠线下。按舞台可视余量给盘面钳 max-width(宽收了高跟着收),格子守 44px
+   * 触摸底线,缩到底还装不下交给舞台滚动。量不到(单测桩)一个样式不写。
+   */
+  function fitBoard(): void {
+    if (typeof boardEl.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    boardEl.style.maxWidth = "";
+    boardEl.style.marginLeft = "";
+    boardEl.style.marginRight = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const b = boardEl.getBoundingClientRect();
+    if (!Number.isFinite(b.top) || !(b.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(b));
+    const cap = boardCapWidthPx({
+      h: b.height,
+      room: clip - b.top - below - 6,
+      cols: cfg.cols,
+      rows: cfg.rows,
+      gap: cfg.cols >= 5 ? 5 : 8,
+      minCellPx: 44,
+    });
+    if (cap !== null) {
+      boardEl.style.maxWidth = `${cap}px`;
+      boardEl.style.marginLeft = "auto";
+      boardEl.style.marginRight = "auto";
+    }
+  }
+  fitBoard();
+  later(fitBoard, 0);
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("resize", fitBoard);
   }
 
   /**
@@ -948,6 +984,9 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     destroy() {
       destroyed = true;
       levelDone = true;
+      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+        window.removeEventListener("resize", fitBoard);
+      }
       intervals.forEach((t) => clearInterval(t));
       intervals.clear();
       timeouts.forEach((t) => clearTimeout(t));

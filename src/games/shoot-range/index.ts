@@ -9,6 +9,7 @@ export { meta };
 //
 // 1.2 的三件事:手感三件套(feel12)、四类新靶(targets12)、
 // 连续投放的无尽靶场(endless12)与双人同屏(duo12)。
+import { canvasRoomPx } from "../stageFit";
 import {
   TOTAL_LEVELS,
   chapterOf,
@@ -1044,9 +1045,19 @@ function createField(opts: FieldOptions): FieldHandle {
   // ---- 绘制 ----------------------------------------------------------------
 
   function resize(): void {
-    const cssW = Math.max(240, box.clientWidth || wrap.clientWidth || 320);
-    const cssH = Math.min(320, Math.round((cssW / FIELD_W) * FIELD_H));
+    let cssW = Math.max(240, box.clientWidth || wrap.clientWidth || 320);
+    let cssH = Math.min(320, Math.round((cssW / FIELD_W) * FIELD_H));
+    // r4 C-8:矮横屏下方向键排折叠线下——按舞台可视余量(含自家键排/提示行)
+    // 再收一刀,宽跟着等比收(scale 按宽算,只收高会上下裁掉靶排);量不到退回老口径
+    const room = canvasRoomPx(canvas, wrap);
+    if (Number.isFinite(room) && room > 0 && cssH > room) {
+      cssH = Math.max(150, Math.floor(room));
+      cssW = Math.min(cssW, Math.round((cssH / FIELD_H) * FIELD_W));
+    }
     canvas.style.height = `${cssH}px`;
+    canvas.style.width = `${cssW}px`;
+    canvas.style.marginLeft = "auto";
+    canvas.style.marginRight = "auto";
     const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);

@@ -4,6 +4,7 @@ export { meta };
 // 长蛇争霸:开阔原野上的本地竞技。188 关战役 + 本机混战 + 缩圈无尽 + 同屏双人。
 // 场上所有「其他玩家」都是本机 AI,全程离线,不开任何网络连接。
 import { loadStars, mountLevelGame, totalStars, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { attachCanvasFit } from "../stageFit";
 import {
   compatFromMeta,
   describeModes,
@@ -863,6 +864,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     };
     later(() => opts.onDone(result), 340);
   }
+
+  // r4 C-4:画布固定 640×372 + width:100%,矮横屏显示高溢出把「💨 加速 / 🛑 急停」
+  // 顶出屏,按舞台可视余量钳显示高(等比收宽居中,物理分辨率与判定不动)
+  const paneFits = canvases.map((c) => attachCanvasFit(c, wrap));
+  offs.push(() => {
+    for (const f of paneFits) f.detach();
+  });
 
   function frame(ts: number): void {
     if (destroyed) return;

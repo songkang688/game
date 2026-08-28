@@ -4,6 +4,7 @@ export { meta };
 // 圆圆大作战:俯视竞技场。188 关战役 + 本地混战 + 缩圈无尽 + 同屏双人。
 // 所有「其他玩家」都是本机 AI,全程离线,不开任何网络连接。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { attachCanvasFit } from "../stageFit";
 import {
   compatFromMeta,
   describeModes,
@@ -799,6 +800,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     };
     later(() => opts.onDone(result), 320);
   }
+
+  // r4 C-8:画布固定 640×360 + width:100%,矮横屏显示高溢出把技能排顶出屏,
+  // 按舞台可视余量钳显示高(等比收宽居中,物理分辨率与判定不动)
+  const paneFits = canvases.map((c) => attachCanvasFit(c, wrap));
+  offs.push(() => {
+    for (const f of paneFits) f.detach();
+  });
 
   function frame(ts: number): void {
     if (destroyed) return;

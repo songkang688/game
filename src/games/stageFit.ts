@@ -145,11 +145,23 @@ export function attachCanvasFit(
     if (!Number.isFinite(clip)) return;
     // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
     canvas.style.maxHeight = "";
+    canvas.style.width = "";
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
     const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - margin, opts.minPx);
-    if (px !== null) canvas.style.maxHeight = `${px}px`;
+    if (px === null) return;
+    canvas.style.maxHeight = `${px}px`;
+    // 这一族画布 CSS 都是 width:100% + 固定分辨率缓冲:光钳高会把画面压扁。
+    // 按缓冲的固有比例把显示宽一起收(封顶 100%、居中),画面不变形;
+    // 缓冲跟着盒子走的款(每帧重配)量出来的就是当前比例,同样成立。
+    const ratio = canvas.width > 0 && canvas.height > 0 ? canvas.width / canvas.height : Number.NaN;
+    if (Number.isFinite(ratio)) {
+      canvas.style.width = `${Math.round(px * ratio)}px`;
+      canvas.style.maxWidth = "100%";
+      canvas.style.marginLeft = "auto";
+      canvas.style.marginRight = "auto";
+    }
   }
 
   fit();

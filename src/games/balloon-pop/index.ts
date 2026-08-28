@@ -2,6 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import { save } from "../../engine/save";
 import GUIDE from "./guide";
 import { CHAPTERS, LEVELS, mathExprFor, type BalloonLevel } from "./levels";
@@ -303,6 +304,37 @@ function confetti(sky: HTMLElement, x: number, y: number, color: string, n: numb
   }
 }
 
+/**
+ * r4 C-8:天空是固定 ${SKY_H}px 的绝对坐标舞台,矮横屏(915×412)下半截连同
+ * 底部升起的气球一起掉在 `.game-stage` 裁切线下。等比 transform:scale 收显示
+ * (原点顶部居中,margin-bottom 把布局高补回来):气球按钮热区跟着缩、
+ * 世界坐标 b.x/b.y 与升空判定一个数不动。56px 的气球缩到 44px 触摸底线为止
+ * (k≥0.79),再装不下的残余走书面登记。量不到(单测桩)一个样式不写。
+ */
+function attachSkyFit(skyEl: HTMLElement, wrap: HTMLElement, jan: Janitor): void {
+  const fit = (): void => {
+    if (typeof skyEl.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    skyEl.style.transform = "";
+    skyEl.style.marginBottom = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const r = skyEl.getBoundingClientRect();
+    if (!Number.isFinite(r.top) || !(r.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(r));
+    const room = clip - r.top - below - 4;
+    if (!(room > 0) || r.height <= room + 1) return;
+    const k = Math.max(0.79, room / r.height);
+    skyEl.style.transform = `scale(${k.toFixed(3)})`;
+    skyEl.style.transformOrigin = "top center";
+    skyEl.style.marginBottom = `-${Math.round(r.height * (1 - k))}px`;
+  };
+  fit();
+  jan.after(0, fit);
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    jan.on(window, "resize", fit);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 闯关：188 关
 // ---------------------------------------------------------------------------
@@ -356,6 +388,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const windEl = wrap.querySelector(".blp-wind") as HTMLElement | null;
   const lifeEl = wrap.querySelector(".blp-life") as HTMLElement;
   const msgEl = wrap.querySelector(".blp-msg") as HTMLElement;
+  attachSkyFit(skyEl, wrap, jan);
 
   msgEl.textContent =
     goal === "protect"
@@ -804,6 +837,7 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
   const bestEl = wrap.querySelector(".blp-best") as HTMLElement;
   const msgEl = wrap.querySelector(".blp-msg") as HTMLElement;
   const backBtn = wrap.querySelector(".blp-back") as HTMLButtonElement;
+  attachSkyFit(skyEl, wrap, jan);
 
   function refreshTop(): void {
     scoreEl.textContent = `💯 ${st.score}`;

@@ -18,13 +18,13 @@ import { describe, expect, it } from "vitest";
 const GAMES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("窗口4 r3 · W4R3-01 duo-vs-star 返回/暂停键触区(W4R2-05 残余)", () => {
-  it("现状钉住:.dvs-back 仍是 padding:7px 且无 min-height【待修:补 min-height:40px 后取反】", () => {
+  it("已修复:.dvs-back 补上 min-height:40px(三人组 r4 C-9 取反,BL-W4-03 关账)", () => {
     const source = readFileSync(join(GAMES_DIR, "duo-vs-star", "index.ts"), "utf8");
     const rule = source.slice(source.indexOf(".dvs-back{"), source.indexOf(".dvs-back:active"));
-    // 360×640 DPR2 玩法态实测 105×32:次要导航键,非玩法操作键,故记一般不升级;
-    // 修复(或书面并入 W4R1-06 存量 DOM 字号/内边距遗留清单)后更新本断言。
+    // 原钉:360×640 DPR2 玩法态实测 105×32(<40px 触区底线)。
+    // 三人组 r4 C-9 补 min-height:40px 后取反;padding 保持 7px 13px 不动。
     expect(rule).toContain("padding:7px 13px");
-    expect(rule).not.toContain("min-height");
+    expect(rule).toContain("min-height:40px");
   });
 
   it("回归守护:r2 修复的 .dvs-pad 七键 40px 底线与 gap:4 不回退(0c2c6da)", () => {

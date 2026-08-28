@@ -279,6 +279,8 @@ describe("destroy 之后不留东西", () => {
     try {
       // 限时 0.02 秒:推两帧就到点,finish 会排一个 320ms 的回调
       const { results, handle } = run({ cfg: tinyLevel({ timeSec: 0.02 }) });
+      // 画布钳高件挂载时排了一条 0ms 的补量,先冲掉,剩下的才是结算那一条
+      vi.advanceTimersByTime(0);
       dom.tick(3, 20);
       expect(vi.getTimerCount()).toBe(1);
       handle.destroy();

@@ -247,6 +247,21 @@ const CSS = `
   animation-duration:.45s;}
 @keyframes hhcall{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 .hh-keys{font-size:14px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
+/* 宽而矮的横屏(915×412 一族,r4 C-8):抽牌/出牌/暂停被顶出裁切线 60px——
+   行距/桌面留白/手牌内衬各收一号,键盘提示行让位,三颗主钮回到屏内 */
+@media (min-width:700px) and (max-height:520px){
+  .hh-wrap{gap:4px;padding:8px;}
+  .hh-table{min-height:82px;}
+  .hh-pile,.hh-deck,.hh-heap,.hh-top{width:56px;height:82px;}
+  .hh-hand{padding:6px 4px 4px;min-height:84px;}
+  .hh-banner{line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .hh-say{min-height:18px;line-height:1.3;}
+  .hh-keys{display:none;}
+  .hh-foe{padding:4px 6px;gap:2px;}
+  .hh-face{width:26px;height:26px;font-size:15px;}
+  .hh-backs{min-height:14px;}
+  .hh-back-c{width:10px;height:15px;}
+}
 .hh-fly{position:absolute;z-index:60;pointer-events:none;transition:transform .3s cubic-bezier(.3,.9,.4,1),opacity .3s ease;}
 .hh-fly-arc{animation:hharc .3s ease-out;}
 @keyframes hharc{0%,100%{transform:translateY(0)}45%{transform:translateY(-16px)}}
@@ -385,16 +400,26 @@ export function spinOf(card: Card): number {
 }
 
 /** 手牌宽度:窄屏也不低于 48px */
-export function cardWidthFor(width: number): number {
-  if (!Number.isFinite(width) || width <= 0) return 56;
-  if (width <= 360) return 50;
-  if (width <= 480) return 54;
-  return 60;
+export function cardWidthFor(width: number, height = Number.POSITIVE_INFINITY): number {
+  let w: number;
+  if (!Number.isFinite(width) || width <= 0) w = 56;
+  else if (width <= 360) w = 50;
+  else if (width <= 480) w = 54;
+  else w = 60;
+  // 矮横屏(915×412 一族,r4 C-8):手牌高是 1.45 倍宽,屏高吃紧时再收一号,
+  // 守住 48px(≥44px 触摸底线)
+  if (Number.isFinite(height) && height > 0 && height <= 520) w = Math.min(w, 48);
+  return w;
 }
 
 function viewportWidth(): number {
   const w = (globalThis as { innerWidth?: number }).innerWidth;
   return typeof w === "number" && w > 0 ? w : 480;
+}
+
+function viewportHeight(): number {
+  const h = (globalThis as { innerHeight?: number }).innerHeight;
+  return typeof h === "number" && h > 0 ? h : Number.POSITIVE_INFINITY;
 }
 
 function reduceMotion(): boolean {
@@ -733,7 +758,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       return;
     }
     const hand = state.players[showSeat]?.hand ?? [];
-    const w = cardWidthFor(viewportWidth());
+    const w = cardWidthFor(viewportWidth(), viewportHeight());
     const h = Math.round(w * 1.45);
     const playable = new Set(legalPlays(state, showSeat).map((c) => c.id));
     cursor = Math.max(0, Math.min(cursor, hand.length - 1));

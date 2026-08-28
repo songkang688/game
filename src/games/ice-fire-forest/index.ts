@@ -14,6 +14,7 @@ import {
   type PlayCtx,
   type PlayHandle,
 } from "../level99";
+import { canvasRoomPx } from "../stageFit";
 import { getLevelExtras } from "../../ui/level188Contract";
 import { CHAPTERS, GUIDE, analyzeLevel, type LevelAnalysis } from "./levels";
 import {
@@ -234,6 +235,16 @@ const CSS = `
 .iff-padwrap{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .iff-padname{font-size:12px;font-weight:900;}
 .iff-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+/* 宽而矮的横屏(915×412 一族,r4 C-8):冰火两副键盘让到左右两翼,
+   竖排只剩抬头/棋盘/提示;layout() 会同步给两翼留出键盘宽 */
+@media (min-width:700px) and (max-height:520px){
+  .iff-pads{max-width:none;}
+  .iff-pads .iff-padwrap{position:absolute;top:50%;transform:translateY(-50%);z-index:2;}
+  .iff-pads .iff-padwrap:first-child{left:8px;}
+  .iff-pads .iff-padwrap:last-child{right:8px;}
+  .iff-wrap{gap:5px;}
+  .iff-tip{padding:4px 8px;}
+}
 .iff-shell{display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;}
 .iff-shellhead{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;width:100%;}
 .iff-shelltitle{font-size:14px;font-weight:900;color:#5B5182;}
@@ -954,8 +965,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   let camReady = false;
 
   function layout(): void {
-    const availW = Math.max(200, (stage.clientWidth || 340) - 8);
-    const budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
+    let availW = Math.max(200, (stage.clientWidth || 340) - 8);
+    // 矮横屏媒体查询把两副键盘让到左右两翼(position:absolute):
+    // 棋盘宽给两翼各留一块,免得画面边缘被浮着的键盘压住
+    if (typeof getComputedStyle === "function" && getComputedStyle(icePad.el).position === "absolute") {
+      availW = Math.max(200, availW - 2 * ((icePad.el.offsetWidth || 150) + 16));
+    }
+    let budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
+    // r4 C-8:估算口径没算壳层抬头/自家双拍档键盘的实高,915×412 两副键盘 12 键
+    // 全折叠线下——量真实余量再收一刀(镜头会跟随,格子有 MIN_CELL 兜底;量不到退回老口径)
+    const measured = canvasRoomPx(canvas, wrap);
+    if (Number.isFinite(measured) && measured > 0) budgetH = Math.min(budgetH, Math.max(120, Math.floor(measured)));
     const fit = Math.min(availW / level.w, budgetH / level.h);
     // 小于 MIN_CELL 就不再压缩,改由摄像机跟随 —— 贴边看不清前方比看不见全图更难受
     baseCell = Math.max(MIN_CELL, Math.min(fit, MAX_CELL));
