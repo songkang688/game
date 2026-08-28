@@ -193,6 +193,8 @@ const CSS = `
 .se-log-line:nth-last-child(2){opacity:.72;}
 .se-log-line:nth-last-child(3){opacity:.5;}
 .se-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px;}
+/* display:flex 压过 UA 的 [hidden]{display:none},轮到电脑时这排要真的藏住 */
+.se-pad[hidden]{display:none;}
 .se-btn{min-width:88px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:16px;
   font-weight:900;cursor:pointer;background:#F6D9AE;color:#7a4a18;box-shadow:0 3px 0 #DDB981;padding:0 12px;}
 .se-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #DDB981;}

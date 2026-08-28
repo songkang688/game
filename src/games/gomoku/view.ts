@@ -146,6 +146,8 @@ export const CSS = `
 .gmk-mode:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(150,96,31,.25);}
 .gmk-mode-streak{background:#FFD7E4;color:#A8325C;box-shadow:0 3px 0 rgba(168,50,92,.25);}
 .gmk-claimbar{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap;}
+/* 同 modebar:display:flex 压过 UA 的 [hidden]{display:none},没禁手时这条要真的藏住 */
+.gmk-claimbar[hidden]{display:none;}
 /* 认输/让子这两颗不在 .gmk-btns 里,不补基础样式就是浏览器默认小按钮,手指点不着 */
 .gmk-claimbar button{border:none;border-radius:14px;min-height:${MIN_HIT_PX}px;padding:9px 14px;
   font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;}

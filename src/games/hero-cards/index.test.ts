@@ -262,8 +262,10 @@ describe("窄屏与动效红线", () => {
     expect(pxOf(ruleOf(narrow, ".hc-card"), "width")).toBeGreaterThanOrEqual(48);
   });
 
-  it("手牌横滑,窄屏挤不爆", () => {
-    expect(ruleOf(HC_CSS, ".hc-hand")).toContain("overflow-x:auto");
+  it("手牌换行,窄屏挤不爆也不用摸隐形滚动条", () => {
+    // 以前是 overflow-x:auto + 藏滚动条,手机上第 6 张开始就看不见了;
+    // 现在直接换行,抽再多牌也张张点得着
+    expect(ruleOf(HC_CSS, ".hc-hand")).toContain("flex-wrap:wrap");
     expect(ruleOf(HC_CSS, ".hc-seats")).toContain("flex-wrap:wrap");
   });
 
