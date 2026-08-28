@@ -131,7 +131,8 @@ const CSS = `
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .as-bar[hidden]{display:none;}
 .as-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;
+  min-height:44px;display:inline-flex;align-items:center;}
 .as-open.as-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
 .as-open:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
 .as-open:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
@@ -171,15 +172,17 @@ const CSS = `
    找物关同一套壳,竖屏与高屏零变化。判定/seed 不动。 */
 @media (max-height:500px) and (min-width:640px){
   .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
-    gap:4px 10px;align-items:start;}
-  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:calc(100dvh - 64px);}
-  .as-wrap>.as-clues{grid-column:2;max-height:28dvh;overflow:auto;padding:6px 8px;gap:3px;}
+    gap:4px 10px;align-items:stretch;height:100%;max-height:100%;min-height:0;overflow:hidden;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+  .as-wrap>.as-clues{grid-column:2;max-height:28%;overflow:auto;padding:6px 8px;gap:3px;}
   .as-wrap>.als-list{grid-column:2;max-height:56px;}
   .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
-  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:2;margin:0;}
+  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
+    background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
+.as-open,.as-back{min-height:44px;}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
 `;
 
@@ -983,6 +986,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     deduce ? "推理场景:按线索找出外星小朋友躲在哪个地方" : "找物场景:点出躲着外星小朋友和线索物的地方"
   );
   wrap.appendChild(canvas);
+  if (deduce) wrap.classList.add("as-deduce");
 
   if (deduce) {
     const box = document.createElement("div");
@@ -1023,6 +1027,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       : `${lv.hint} 直接点画面,或用 W A S D + F(方向键 + L 也行)挪光标,Esc 暂停。`;
   wrap.appendChild(tip);
   host.appendChild(wrap);
+  if (deduce) {
+    for (let p: HTMLElement | null = wrap; p; p = p.parentElement) {
+      if (typeof p.className === "string" && p.className.includes("game-stage")) {
+        if (p.scrollTop) p.scrollTop = 0;
+        break;
+      }
+    }
+  }
 
   const c2d = canvas.getContext("2d") as CanvasRenderingContext2D;
 
@@ -1131,9 +1143,13 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     let nextH = Math.round(cssW * (SCENE_H / SCENE_W));
     const vh = (globalThis as { innerHeight?: number }).innerHeight || 0;
     const vw = (globalThis as { innerWidth?: number }).innerWidth || 0;
-    // 矮宽横屏:画布跟左栏走,高度再钳一档,右边工具+D-pad 留在 412 里
+    const clip = (host.closest?.(".l99-stage") || host.closest?.(".game-stage") || host) as {
+      clientHeight?: number;
+    };
+    const room = Math.round(clip.clientHeight || vh);
+    // 矮宽横屏:按舞台余高钳,不要用整窗 innerHeight(壳层顶栏会让 D-pad 掉到 428)
     if (vh > 0 && vh <= 500 && vw >= 640) {
-      const cap = Math.max(120, Math.round(vh - 72));
+      const cap = Math.max(96, room - 8);
       if (nextH > cap) nextH = cap;
     }
     cssH = nextH;

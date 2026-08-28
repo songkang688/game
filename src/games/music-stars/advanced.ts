@@ -131,7 +131,7 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   }
 
   const wrap = document.createElement("div");
-  wrap.className = "mst-wrap";
+  wrap.className = cfg.mode === "score" ? "mst-wrap mst-scoreplay" : "mst-wrap";
   wrap.style.background = opts.background;
   injectCss(wrap);
   const head = document.createElement("div");

@@ -108,6 +108,8 @@ export function acceptsRepeat(key: string): boolean {
 
 /** 井画布显示高度的下限:比这还矮 20 行就真看不清了,剩下的交给舞台滚动兜底 */
 export const WELL_DISPLAY_MIN = 180;
+/** N-74 双人叠井时每口井再矮的下限:180×2 仍把井顶卷出 412 */
+export const WELL_DUO_MIN = 120;
 
 /**
  * 井画布该「显示」多高(null = 原生高度就装得下,一个字都不用写)。
@@ -173,8 +175,19 @@ const CSS = `
 .bd-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(130,150,200,.25);}
 .bd-over-t{font-size:21px;font-weight:900;color:#3f5b8a;margin-bottom:8px;}
 .bd-over-s{font-size:16px;font-weight:700;color:#54709b;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
-@media (min-width:760px){
+@media (min-width:640px){
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+}
+/* N-50 闯关七键 419;N-74 双人井被卷。先锁 wrap 再分栏,键 sticky */
+@media (max-height:500px){
+  .bd-wrap{max-height:calc(100dvh - 76px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .bd-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(238,244,255,.35),#F9FBFF);}
+  .bd-canvas{max-height:min(220px,52dvh);}
+}
+@media (min-width:640px) and (max-height:500px){
+  .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+  .bd-canvas{max-height:min(260px,62dvh);}
 }
 @media (max-width:360px){
   .bd-badge{padding:4px 8px;}
@@ -973,11 +986,16 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
     }
     // 井底下还有多高的「家当」(按钮排 + 提示行):这些高度不随井的显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(seatsHost.getBoundingClientRect()));
+    const tops = list.map((c) => (typeof c.getBoundingClientRect === "function" ? c.getBoundingClientRect().top : Number.NaN));
+    const stacked = list.length > 1 && Number.isFinite(tops[0]) && Number.isFinite(tops[1]) && Math.abs(tops[0] - tops[1]) > 40;
+    const share = stacked ? list.length : 1;
+    const minH = list.length > 1 ? WELL_DUO_MIN : WELL_DISPLAY_MIN;
+    const baseTop = stacked ? Math.min(...tops.filter((t) => Number.isFinite(t))) : Number.NaN;
     for (const c of list) {
       if (typeof c.getBoundingClientRect !== "function") continue;
-      const top = c.getBoundingClientRect().top;
+      const top = stacked && Number.isFinite(baseTop) ? baseTop : c.getBoundingClientRect().top;
       if (!Number.isFinite(top)) continue;
-      const px = wellDisplayPx(c.height, clip - top - below - 4);
+      const px = wellDisplayPx(c.height, (clip - top - below - 4) / share, minH);
       if (px !== null) {
         c.style.height = `${px}px`;
         // 宽交给内在比例(canvas 是 replaced 元素),max-width:100% 仍旧兜着窄屏

@@ -62,7 +62,9 @@ const CSS = `
 .hp-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:none;display:flex;flex-direction:column;gap:8px;
   background:linear-gradient(180deg,#FFF3E8,#F1F0FF);border-radius:18px;padding:10px;position:relative;}
-.hp-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;}
+.hp-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;
+  position:sticky;top:0;z-index:8;padding:4px 0 2px;
+  background:linear-gradient(180deg,#FFF3E8,#F1F0FF);}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .hp-bar[hidden]{display:none;}
 .hp-open{border:none;border-radius:16px;min-height:44px;padding:9px 16px;font-size:15px;font-weight:900;
@@ -97,7 +99,8 @@ const CSS = `
 .hp-tip{text-align:center;font-size:14px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
 @media (max-height:500px){
-  .hp-duo{gap:4px;}
+  .hp-duo{gap:4px;max-height:calc(100dvh - 72px);overflow:hidden;}
+  .hp-duo .hp-canvas{max-height:min(148px,36dvh);}
 }
 .hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;
   pointer-events:none;text-shadow:0 1px 0 #fff;}
@@ -1591,6 +1594,10 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
           break;
         }
         node = node.parentElement;
+      }
+      if (!Number.isFinite(room) || room <= 0) {
+        const vh = (globalThis as { innerHeight?: number }).innerHeight;
+        if (typeof vh === "number" && vh > 0 && vh <= 500) room = Math.max(0, vh - 96);
       }
       return duoCanvasHeightPx(DUO_CANVAS_WANT, room, duoGap());
     };

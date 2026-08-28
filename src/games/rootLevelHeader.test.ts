@@ -86,12 +86,14 @@ describe("N-37 关内抬头:管理员那一行不再独占", () => {
     expect(short).toMatch(/\.l99-tools\s*\{[^}]*overflow-x:\s*auto/);
   });
 
-  it("取反:整段挂在 :has(.l99-jump) 上 —— root 关着时逐像素不变", () => {
-    // 每一条选择器都必须带 :has(.l99-jump),否则会落到没开权限的孩子面上
+  it("取反:凡是动抬头/舞台的都挂在 :has(.l99-jump) 上 —— root 关着时逐像素不变", () => {
+    // 抬头与舞台是孩子面天天看的,这一档只准在「管理员开着」时生效。
+    // (同块里 N-63 的 .l99-wrap / .l99-view 是另一条账,不归这把尺子管)
     for (const line of short.split("\n")) {
+      if (!line.includes("{")) continue;
       const sel = line.split("{")[0].trim();
-      if (!sel || sel.startsWith("/*") || sel.startsWith("*") || !line.includes("{")) continue;
-      if (sel.startsWith("@")) continue;
+      if (!sel || sel.startsWith("/*") || sel.startsWith("*") || sel.startsWith("@")) continue;
+      if (!/\.l99-stagebar|\.l99-stage-wrap/.test(sel)) continue;
       expect(sel, `${sel} 必须挂在 :has(.l99-jump) 上`).toContain(":has(.l99-jump)");
     }
   });

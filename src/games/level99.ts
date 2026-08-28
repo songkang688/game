@@ -637,6 +637,10 @@ const L99_CSS = `
 /* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
+  /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
+  .l99-wrap{max-height:calc(100dvh - 136px);}
+  .l99-view{overscroll-behavior:contain;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;flex-wrap:nowrap;}
   /* r9-A 复测:width:100% 反而把工具排顶成独占一行 —— 抬头 56→100px,
      math-farm 三颗答案钮整排掉到舞台底下 33px。改成按内容宽、跟题名分这一行。 */
@@ -657,6 +661,12 @@ const L99_CSS = `
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
 }
+/* N-63:showMap(true) 的 scrollIntoView 会把 .game-stage 一起卷走,
+   挂在地图上面的模式条(保龄双人对战等) top 变负。舞台改由内部 .l99-view 滚,
+   模式条留在 flex 顶。四处 showMap(true) 与 N-39 聚焦都不改。 */
+.game-stage.game-stage--l99{overflow-y:hidden;display:flex;flex-direction:column;}
+.l99-host{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;height:100%;overflow:hidden;}
+.l99-host>.l99-wrap{flex:1 1 auto;min-height:0;}
 `;
 
 export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy: () => void } {
@@ -685,6 +695,28 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   view.className = "l99-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
+  pinL99Host();
+
+  function pinL99Host(): void {
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    const stage = closest?.(".game-stage") ?? null;
+    stage?.classList?.add("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && n !== stage) {
+      n.classList?.add("l99-host");
+      n = n.parentElement;
+    }
+  }
+
+  function unpinL99Host(): void {
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    closest?.(".game-stage")?.classList?.remove("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && !n.classList?.contains("game-stage")) {
+      n.classList?.remove("l99-host");
+      n = n.parentElement;
+    }
+  }
 
   function viewportWidth(): number {
     const w = (globalThis as { innerWidth?: number }).innerWidth;
@@ -970,7 +1002,21 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
           // 老浏览器不支持 options 就算了
         }
         cur.focus?.();
+        // N-63:scrollIntoView 会连 .game-stage 一起滚,模式条飞到负 top。
+        // 滚条已经交给 .l99-view,舞台顶归零;hop-pads 当前关仍在地图盒里。
+        // 不写 wrap.closest:node 单测桩没有 closest,初次 showMap(true) 会整库红
+        let p: { className?: unknown; scrollTop?: number; parentElement?: unknown } | null = wrap;
+        while (p) {
+          if (typeof p.className === "string" && p.className.includes("game-stage")) {
+            if (typeof p.scrollTop === "number" && p.scrollTop > 0) p.scrollTop = 0;
+            break;
+          }
+          p = (p.parentElement as typeof p) ?? null;
+        }
       }
+      // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
+      const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;
+      if (stageEl) stageEl.scrollTop = 0;
     }
   }
 
@@ -1145,6 +1191,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         "resize",
         onResize
       );
+      unpinL99Host();
       wrap.remove();
     }
   };

@@ -269,6 +269,9 @@ export const CSS = `
   .fc-boardwrap{max-height:min(200px,42dvh);max-width:min(200px,42dvh,calc(100dvh - 148px));flex:0 1 auto;}
   .fc-msg{min-height:0;max-height:2.2em;overflow:hidden;}
   .fc-seats{margin-bottom:4px;}
+  /* r14:height:100% 在自滚舞台上等于 auto,骰子仍 587。用 dvh 真钳 */
+  .fc-wrap{max-height:calc(100dvh - 76px);}
+  .fc-boardwrap{max-height:min(156px,38dvh);}
 }
 @media (prefers-reduced-motion:reduce){
   .fc-token,.fc-token-arc{transition:none;}
