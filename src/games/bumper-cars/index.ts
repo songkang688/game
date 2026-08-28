@@ -90,7 +90,9 @@ const P_COLOR = ["#e8558f", "#3f7fd6"];
 const CSS = `
 .bc-wrap{--bc-ink:#4a4266;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--bc-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
-  touch-action:none;position:relative;}
+  /* 1.3 手机端修复:壳只留 pan-y——舞台竖着能滚,手指落在壳上得划得动;
+     吃拖动手势的摇杆(.bc-stick)与按住不放的冲撞/刹车键各自挂 touch-action:none */
+  touch-action:pan-y;position:relative;}
 .bc-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
 /* 比分与剩余车数走这个芯片。规格第八节要求字号 ≥ 14px:这是比赛里唯一
    要用余光扫的数字,再小就得低头找,所以下面两个 @media 只收内边距,不动字号。 */
@@ -121,7 +123,8 @@ const CSS = `
 /* 冲撞键与刹车键是手指全程按住的两颗,热区不许低于 44px(规格第八节)。
    下面窄屏 / 矮屏两档只收宽度和字号,高度锁死 44。 */
 .bc-acts button{border:none;border-radius:13px;height:44px;min-height:44px;width:60px;font-size:13px;
-  font-weight:900;cursor:pointer;font-family:inherit;color:#fff;line-height:1.2;}
+  font-weight:900;cursor:pointer;font-family:inherit;color:#fff;line-height:1.2;
+  touch-action:none;}
 .bc-acts button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bc-acts--p0 button{background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 3px 0 #bf3a70;}
 .bc-acts--p1 button{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 3px 0 #2f63aa;}
