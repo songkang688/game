@@ -14,6 +14,16 @@
 | **N-183** | `.pcp-act` 本分支已 44（N-151），只回归 |
 | **N-184** | `.hh-catch` 本分支已 44（N-148），只回归 |
 
+## 三视口（无头 Chrome）
+
+| 选择器 | 390×844 | 915×412 | 1024×768 |
+| --- | --- | --- | --- |
+| `.dvs-mode` | **h107 IN** | **h89–107 IN** | **h89–107 IN** |
+| `.dvs-lessonbtn` | **h101**（第3课可滚） | **h83** | **h83 IN** |
+| `.sn-open` | **h44 IN** | **h44 IN** | **h44 IN** |
+| `.dr-softbtn` | **h44 IN** | **h44 IN** | **h44 IN** |
+| `.pcp-act` / `.hh-catch` | CSS 已 44（N-151 / N-148），本拍只回归 | 同左 | 同左 |
+
 ## 测试
 
-`src/games/hotspot.r39b.test.ts`。
+`src/games/hotspot.r39b.test.ts`。`npm run build` 绿。
