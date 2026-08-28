@@ -1034,10 +1034,53 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
 // 战役
 // ---------------------------------------------------------------------------
 
-/** 窄屏也塞得下的格子尺寸:盘面加上间隙不超过可用宽度 */
-export function cellPxFor(size: number, width: number, seats = 1): number {
+/**
+ * 窄屏也塞得下的格子尺寸:盘面加上间隙不超过可用宽度;
+ * 给了竖向预算(heightPx)时,盘面高度同样不许超——
+ * 横屏 640×360 上只按宽算会给出 116px 一格、4×4 盘面 494px 高,
+ * 而 `.game-stage` 的可视高只剩 ~280px:盘面下半截连同按钮排一起被裁掉。
+ * 竖向预算量不出来(Infinity / NaN / ≤0)时行为和从前一字不差。
+ */
+export function cellPxFor(size: number, width: number, seats = 1, heightPx = Number.POSITIVE_INFINITY): number {
   const usable = Math.max(200, Math.min(width, 520) - 24) / seats;
-  return Math.max(34, Math.floor((usable - (size + 1) * GAP) / size));
+  let cell = Math.floor((usable - (size + 1) * GAP) / size);
+  if (Number.isFinite(heightPx) && heightPx > 0) {
+    cell = Math.min(cell, Math.floor((heightPx - (size + 1) * GAP) / size));
+  }
+  return Math.max(34, cell);
+}
+
+/** 桌面上盘面以外的「家当」大约占的高度:目标行 + 名牌 + 方向按钮排 + 提示行 + 留白 */
+export const TABLE_CHROME_PX = 170;
+
+/**
+ * 盘面的竖向预算:量得到平台舞台(`.game-stage`,定高会裁内容)的下沿就用
+ * 「裁切线 − host 顶 − 桌面家当」;量不到(测试桩 / 还没上屏)就不设限,
+ * `cellPxFor` 随之退回「只按宽算」的老行为。
+ */
+export function boardHeightBudget(host: HTMLElement | null, chrome = TABLE_CHROME_PX): number {
+  if (!host || typeof host.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+  let clip = Number.NaN;
+  let node: HTMLElement | null = host.parentElement ?? null;
+  for (let i = 0; node && i < 8; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+      if (typeof node.getBoundingClientRect !== "function") break;
+      const r = node.getBoundingClientRect();
+      // 滚动口是 padding box:clientHeight 量得出就用它(白边一并扣掉)
+      const inner =
+        typeof node.clientHeight === "number" && node.clientHeight > 0
+          ? (node.clientTop || 0) + node.clientHeight
+          : r.height;
+      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) clip = r.top + inner;
+      break;
+    }
+    node = node.parentElement ?? null;
+  }
+  const top = host.getBoundingClientRect().top;
+  if (!Number.isFinite(clip) || !Number.isFinite(top)) return Number.POSITIVE_INFINITY;
+  const room = clip - top - chrome;
+  // 量出非正数说明还没排好版(或家当估大了):别把盘面钳没,交给舞台滚动兜底
+  return room > 0 ? room : Number.POSITIVE_INFINITY;
 }
 
 function viewportWidth(): number {
@@ -1049,6 +1092,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = levelConfig(ctx.level);
   let settled = false;
   let foeReached = false;
+  const budget = boardHeightBudget(stage);
 
   const seats: SeatOpts[] = [
     {
@@ -1058,7 +1102,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: cfg.stepLimit,
-      cell: cellPxFor(cfg.size, viewportWidth(), cfg.race ? 2 : 1),
+      cell: cellPxFor(cfg.size, viewportWidth(), cfg.race ? 2 : 1, budget),
       sfx: ctx.sfx,
       onDone: () => undefined
     }
@@ -1071,7 +1115,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: 0,
-      cell: Math.round(cellPxFor(cfg.size, viewportWidth(), 2) * 0.9),
+      cell: Math.round(cellPxFor(cfg.size, viewportWidth(), 2, budget) * 0.9),
       sfx: () => undefined,
       onDone: (s) => {
         if (s.reached) foeReached = true;
@@ -1279,7 +1323,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth()),
+          cell: cellPxFor(cfg.size, viewportWidth(), 1, boardHeightBudget(stage)),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
@@ -1303,6 +1347,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const cfg = versusConfig(tier, target);
     chip.textContent = `🤝 对手:${AI_TIER_LABELS[tier]} · 目标 ${cfg.target}`;
     let foeReached = false;
+    const budget = boardHeightBudget(stage);
     table = createTable(stage, {
       goalText: `比谁先合到 ${cfg.target}`,
       banner: `${AI_TIER_LABELS[tier]}:${AI_TIER_BLURBS[tier]}`,
@@ -1316,7 +1361,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2),
+          cell: cellPxFor(cfg.size, viewportWidth(), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1327,7 +1372,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2),
+          cell: cellPxFor(cfg.size, viewportWidth(), 2, budget),
           sfx: () => undefined,
           onDone: (s) => {
             if (s.reached) foeReached = true;
@@ -1352,6 +1397,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   function runDuo(seed: number): void {
     stage.innerHTML = "";
     chip.textContent = "👫 朵朵 WASD · 星星 方向键";
+    const budget = boardHeightBudget(stage);
     table = createTable(stage, {
       goalText: "两块盘一起叠,比谁的最大块更大",
       split: true,
@@ -1364,7 +1410,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2),
+          cell: cellPxFor(4, viewportWidth(), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1375,7 +1421,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed: seed + 1,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2),
+          cell: cellPxFor(4, viewportWidth(), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }

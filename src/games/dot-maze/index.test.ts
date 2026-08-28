@@ -164,7 +164,8 @@ describe("模式菜单", () => {
     for (const label of ["无尽迷宫", "抢豆对战", "双人追逃", "无尽迷宫"]) {
       byText(label)!.dispatch("click");
       flushFrames(dom, 4);
-      expect(windowListenerCount(dom)).toBe(baseline + 1);
+      // 一局在 window 上恰好挂两个:keydown(方向键)+ resize(画布显示高跟着舞台余量走)
+      expect(windowListenerCount(dom)).toBe(baseline + 2);
       byText("换个玩法")!.dispatch("click");
       expect(windowListenerCount(dom)).toBe(baseline);
     }

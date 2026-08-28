@@ -143,6 +143,25 @@ export function project(cam: Camera, x: number, z: number, y = 0): { sx: number;
   };
 }
 
+/** 画布再矮也不能低于这个高度:低于它蓄力条和前面几座台面就挤在一起看不清了 */
+export const STAGE_MIN_H = 170;
+
+/**
+ * 画布该多高:想按宽算出 want,可视余量却只有 room(root 顶到 `.game-stage`
+ * 裁切线),画布下面的说明行还要占 below。
+ *
+ * 只按宽算的后果在横屏上量到过:640×360 上 `clamp(cssW×1.06, 280, 460)` 给出
+ * 460px,而舞台可视高只剩 ~280px——画布下半截(角色、蓄力条)全在裁切线以下,
+ * 这是一款「按住蓄力、看条松手」的游戏,看不见条等于闭眼玩。
+ * 量不出 room(测试桩 / 独立挂载 / 没有裁切祖先)时原样返回 want,老行为一字不差。
+ */
+export function stageHeightPx(want: number, room: number, below: number, min = STAGE_MIN_H): number {
+  if (!Number.isFinite(want)) return want;
+  if (!Number.isFinite(room) || room <= 0) return want;
+  const fits = Math.floor(room - Math.max(0, Number.isFinite(below) ? below : 0) - 4);
+  return Math.max(min, Math.min(want, fits));
+}
+
 /** 画面能装下多少纵深:决定 scale。台面最远也要能看见前面三四座 */
 export function fitScale(w: number, h: number): number {
   return Math.max(0.5, Math.min(w / 480, h / 450));
@@ -484,9 +503,51 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   const cam: Camera = { x: 0, z: 0, scale: 1, w: 360, h: 400, shake: 0 };
 
   // ---- 画布尺寸 ----
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** root 顶到平台舞台(.game-stage,定高会裁内容)裁切线还剩多少;量不到返回 NaN */
+  function stageRoomPx(): number {
+    if (typeof root.getBoundingClientRect !== "function") return Number.NaN;
+    let node: HTMLElement | null = root.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (!Number.isFinite(r.top) || !Number.isFinite(inner) || inner <= 0) break;
+        const top = root.getBoundingClientRect().top;
+        return Number.isFinite(top) ? r.top + inner - top : Number.NaN;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /** 画布下面同一屏还有多高的家当(说明行 / 提示行):量最外层 .hp-wrap 下沿与 root 下沿之差 */
+  function belowChromePx(): number {
+    if (typeof root.getBoundingClientRect !== "function") return 0;
+    let node: HTMLElement | null = root.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("hp-wrap")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        return Math.max(0, rectBottom(node.getBoundingClientRect()) - rectBottom(root.getBoundingClientRect()));
+      }
+      node = node.parentElement ?? null;
+    }
+    return 0;
+  }
+
   function resize(): void {
     const cssW = Math.max(240, host.clientWidth || root.clientWidth || 360);
-    const cssH = opts.height ?? Math.round(clamp(cssW * 1.06, 280, 460));
+    // 双人上下分屏(opts.height)有自己的一套定高,这里只钳单人画布
+    const cssH =
+      opts.height ?? stageHeightPx(Math.round(clamp(cssW * 1.06, 280, 460)), stageRoomPx(), belowChromePx());
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
@@ -497,6 +558,9 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     cam.horizon = horizonFor(cssH);
   }
   resize();
+  // 挂载那一刻可能还没排好版,量不准余量;抽空补量一次。
+  // 不用 rAF:测试桩的 flushFrames 一帧只弹一个回调,多排一个会把主循环挤后一帧。
+  const fitTimer = setTimeout(() => resize(), 0);
 
   const ctx = canvas.getContext("2d") as Ctx | null;
 
@@ -1017,6 +1081,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     destroy() {
       cancelAnimationFrame(raf);
       raf = 0;
+      clearTimeout(fitTimer);
       hot.removeEventListener("pointerdown", onDown as EventListener);
       hot.removeEventListener("touchstart", onDown as EventListener);
       win.removeEventListener("pointerup", onUp);
