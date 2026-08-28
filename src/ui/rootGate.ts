@@ -240,6 +240,13 @@ const ROOT_GATE_CSS = `
 .rootgate-btn.rootgate-ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a}
 .rootgate-btn.rootgate-off{background:linear-gradient(180deg,#7c7396,#615980);box-shadow:0 4px 0 #4b4463}
 .rootgate-btn:focus-visible,.rootgate-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px}
+/* r18(N-93):915×412 弹窗内容 463px > 弹窗 max-height 379px,「打开」要往下滚才点得到。
+   矮横屏收间距、放宽一点让时长胶囊排成一行,主按钮回到首屏;热区 44/46 一个不降。 */
+@media (max-height:500px){
+  .rootgate{max-width:min(560px,84vw);gap:6px}
+  .rootgate-durs{flex-wrap:nowrap}
+  .rootgate-desc,.rootgate-phone{line-height:1.4}
+}
 `;
 
 function ensureStyle(): void {
