@@ -184,7 +184,7 @@ const CSS = `
   color:#7b6aa0;font-weight:700;line-height:1.8;}
 .dvs-keys b{color:#b0538c;}
 .dvs-pickrow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0 2px;}
-.dvs-pick{border:none;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:800;cursor:pointer;
+.dvs-pick{border:none;border-radius:999px;padding:6px 11px;min-height:44px;font-size:13px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 2px 5px rgba(140,120,190,.2);}
 .dvs-pick.on{outline:3px solid #ff9ec4;color:#b0538c;}
 .dvs-picklabel{text-align:center;font-size:12.5px;font-weight:800;color:#8a7aa6;margin-top:8px;}
@@ -193,7 +193,7 @@ const CSS = `
   font-weight:900;color:#fff;cursor:pointer;font-family:inherit;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
-.dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:40px;font-size:13.5px;font-weight:900;cursor:pointer;
+.dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:13.5px;font-weight:900;cursor:pointer;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
@@ -271,13 +271,17 @@ const CSS = `
     display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:6px;
   }
   .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
-  .dvs-canvas{grid-column:2;max-width:100%;}
-  .dvs-pads{
-    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
-    pointer-events:none;padding:0 2px 6px;background:transparent;
-  }
-  .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
-  .dvs-pad .dvs-padname{width:auto;}
+  .dvs-canvas{grid-column:2;grid-row:2;max-width:100%;}
+  /* N-94/N-101:旧写法把 .dvs-pads 放 grid-row:4,14 个键全掉折线下(915 实测 400~746)。
+     display:contents 让两块垫直接入格,各排成 2 列小网格分居画布左右,与画布同屏 */
+  .dvs-pads{display:contents;}
+  .dvs-pad{pointer-events:auto;display:grid;grid-template-columns:repeat(2,minmax(44px,46px));
+    gap:4px;align-content:center;justify-content:center;align-self:center;}
+  .dvs-pad:first-of-type{grid-column:1;grid-row:2;}
+  .dvs-pad:last-of-type{grid-column:3;grid-row:2;}
+  .dvs-pad .dvs-padname{grid-column:1 / -1;width:auto;}
+  /* N-94:选人屏「开打 ▶」915 实测 439~488 折线下——sticky 钉在滚动舞台可视底 */
+  .dvs-menu .dvs-go{position:sticky;bottom:6px;z-index:3;}
 }
 `;
 
