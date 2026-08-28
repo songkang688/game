@@ -3,6 +3,7 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
+import { boardCapWidthPx, rectBottom, stageClipBottom } from "../stageFit";
 import { CHAPTERS, LEVELS, type BubbleLevel } from "./levels";
 import {
   BIG_GROUP,
@@ -80,6 +81,12 @@ const CSS = `
 .bbp-over-s { font-size: 15px; font-weight: 700; color: #4FA3C7; line-height: 1.6; margin-bottom: 14px; }
 .bbp-line { height: 4px; background: repeating-linear-gradient(90deg, #FF9EC8 0 10px, transparent 10px 20px); border-radius: 2px; margin: 0 0 4px; }
 @media (max-width: 380px) { .bp-badge { font-size: 14px; } .bp-board { gap: 5px; } .bbp-chip { font-size: 14px; } }
+/* r5 N-7:矮横屏格径已压到 44px 底线,边距再挤一挤才装得下最后一排 */
+@media (min-width: 700px) and (max-height: 520px) {
+  .bp-wrap { padding: 6px 12px; }
+  .bp-top { margin-bottom: 4px; }
+  .bp-msg { margin-top: 4px; min-height: 18px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .bbp-pop { animation-duration: 16ms; }
   .bbp-ripple { animation: none; }
@@ -666,9 +673,40 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   setup();
 
+  /* r5 N-7 配方 B 之 3:矮横屏 40 颗泡泡半盘折叠线下——按舞台可视余量给盘面
+     钳条 max-width(格径宽高两把尺取小,底线沿 BL-W6-03 的 44px 口径),
+     缩到底还装不下交给舞台滚动。量不到(单测桩)一个样式不写。 */
+  function fitBoard(): void {
+    if (typeof boardEl.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function")
+      return;
+    boardEl.style.maxWidth = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const b = boardEl.getBoundingClientRect();
+    if (!Number.isFinite(b.top) || !(b.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(b));
+    const cap = boardCapWidthPx({
+      h: b.height,
+      room: clip - b.top - below - 6,
+      cols: COLS,
+      rows,
+      gap: 4,
+      minCellPx: 44,
+    });
+    if (cap === null) return;
+    boardEl.style.maxWidth = `${cap}px`;
+    boardEl.style.marginLeft = "auto";
+    boardEl.style.marginRight = "auto";
+  }
+  fitBoard();
+  bag.after(fitBoard, 0);
+  const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasResize) window.addEventListener("resize", fitBoard);
+
   return {
     destroy() {
       levelDone = true;
+      if (hasResize) window.removeEventListener("resize", fitBoard);
       bag.close();
       wrap.remove();
     },
