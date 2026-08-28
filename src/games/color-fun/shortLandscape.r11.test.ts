@@ -37,7 +37,7 @@ describe("N-43 color-fun 矮横屏双栏（配方 G/J）", () => {
     const short = media("(max-height:500px)");
     expect(short).toContain(".clf-stage{min-height:0;}");
     const dock = media("(max-height:500px) and (min-width:640px)");
-    expect(dock).toContain("grid-template-columns:minmax(0,1fr) minmax(220px,38%)");
+    expect(dock).toContain("grid-template-columns:minmax(0,1fr) minmax(280px,42%)");
     expect(dock).toContain('grid-area:stage');
     expect(dock).toContain('grid-area:ops');
     expect(dock).toContain("position:sticky");

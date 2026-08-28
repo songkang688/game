@@ -26,7 +26,7 @@ describe("N-44 math-farm 竖式插图矮横屏收高", () => {
     const short = FARM_CSS.slice(FARM_CSS.indexOf("@media (max-height: 500px)"));
     const end = short.indexOf("@media", 10);
     const block = end < 0 ? short : short.slice(0, end);
-    expect(block).toContain(".mtf-illus { max-height: 56px;");
+    expect(block).toContain(".mtf-illus { max-height: 40px;");
     expect(block).toContain(`width: ${MIN_CROP_PX}px; height: ${MIN_CROP_PX}px;`);
     expect(block).toContain(".mtf-quizhost .qz-choice { min-height: 46px; }");
     expect(MIN_CROP_PX).toBeGreaterThanOrEqual(16);

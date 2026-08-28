@@ -201,7 +201,7 @@ export const CLF_CSS = `
   .clf-stage{min-height:0;}
 }
 @media (max-height:500px) and (min-width:640px){
-  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,42%);
     grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
     align-items:stretch;gap:6px 10px;padding:6px 8px;}
   .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
@@ -209,12 +209,13 @@ export const CLF_CSS = `
   .clf-wrap>.clf-preview{grid-area:preview;}
   .clf-wrap>.clf-legend{grid-area:legend;}
   .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
-    max-height:min(260px,calc(100dvh - 88px));align-self:stretch;}
-  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:6px;
+    max-height:min(200px,calc(100dvh - 120px));align-self:stretch;}
+  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:4px;
     width:100%;max-width:100%;}
-  .clf-wrap .clf-chips{max-height:44px;}
-  .clf-wrap .clf-mixer{max-width:100%;}
-  .clf-wrap .clf-palette{max-width:100%;justify-content:center;}
+  .clf-wrap .clf-chips{max-height:36px;}
+  .clf-wrap .clf-mixer,.clf-wrap .clf-tools,.clf-wrap .clf-primaries{flex-wrap:nowrap;max-width:100%;}
+  .clf-wrap .clf-palette{max-width:100%;justify-content:center;padding:0 2px;}
+  .clf-wrap .clf-msg{min-height:0;}
 }
 `;
 
@@ -385,6 +386,13 @@ export function fitColoringStage(
     }
     if (wrap.scrollHeight > room + 1) {
       wrap.style.maxHeight = `${Math.floor(room)}px`;
+      const dock = !!view.matchMedia?.("(max-height: 500px) and (min-width: 640px)")?.matches;
+      if (dock) {
+        // N-43:矮横屏双栏已经把操作排钉在画布右侧,禁止再把整屏卷进 .clf-scrolly
+        wrap.style.overflowY = "hidden";
+        wrap.style.overscrollBehavior = "";
+        return;
+      }
       wrap.style.overflowY = "auto";
       wrap.style.overscrollBehavior = "contain";
       // 真的滚起来了才让画布放开竖向手势——「挤一挤」那一档挂了不代表在滚
