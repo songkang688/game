@@ -42,4 +42,4 @@
 
 ## 水位
 
-进场未单跑全库（主干刚含 r11 A `6a013600`）。收尾 `npm test && npm run build` 数字写在交卷 SHA 说明。
+进场主干 `a12c157b`。收尾全库：**1144 files / 19414 tests 全绿**；`npm run build`（tsc + vite）绿。本环境无 915×412 真机 CDP。
