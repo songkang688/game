@@ -18,6 +18,9 @@ import GUIDE from "./guide";
 import {
   BL_COLORS,
   BL_GOLD,
+  BL_HALL_LIFT_ALPHA,
+  BL_HALL_TINT,
+  BL_HALL_TINT_ALPHA,
   FOLLOW_IN_MS,
   FOLLOW_OUT_MS,
   FOLLOW_ZOOM,
@@ -805,6 +808,12 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     g.clearRect(0, 0, view.w, view.h);
     // 球道两侧的暗底(梯形之外的馆内地面)
     g.fillStyle = "#3b3556";
+    g.fillRect(0, 0, view.w, view.h);
+    // C-2 粉彩夜场(方案 A):暗底提暖一档 —— 提亮 6%(≈shade(+6))再叠 4% 粉紫,
+    // 「灰紫」调成「粉紫」;主道与灯箱随后原样压顶,亮度预算一分不动
+    g.fillStyle = withAlpha("#FFFFFF", BL_HALL_LIFT_ALPHA);
+    g.fillRect(0, 0, view.w, view.h);
+    g.fillStyle = withAlpha(BL_HALL_TINT, BL_HALL_TINT_ALPHA);
     g.fillRect(0, 0, view.w, view.h);
     // 修复员装饰件:两侧邻道暗剪影 + 馆内立柱竖线
     // (纯静态,画在跟球运镜之前 —— 不进缩放)
