@@ -651,6 +651,12 @@ const L99_CSS = `
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
 }
+/* N-63:showMap(true) 的 scrollIntoView 会把 .game-stage 一起卷走,
+   挂在地图上面的模式条(保龄双人对战等) top 变负。舞台改由内部 .l99-view 滚,
+   模式条留在 flex 顶。四处 showMap(true) 与 N-39 聚焦都不改。 */
+.game-stage.game-stage--l99{overflow-y:hidden;display:flex;flex-direction:column;}
+.l99-host{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;height:100%;overflow:hidden;}
+.l99-host>.l99-wrap{flex:1 1 auto;min-height:0;}
 `;
 
 export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy: () => void } {
@@ -679,6 +685,26 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   view.className = "l99-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
+  pinL99Host();
+
+  function pinL99Host(): void {
+    const stage = wrap.closest(".game-stage") as HTMLElement | null;
+    stage?.classList.add("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && n !== stage) {
+      n.classList.add("l99-host");
+      n = n.parentElement;
+    }
+  }
+
+  function unpinL99Host(): void {
+    wrap.closest(".game-stage")?.classList.remove("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && !n.classList.contains("game-stage")) {
+      n.classList.remove("l99-host");
+      n = n.parentElement;
+    }
+  }
 
   function viewportWidth(): number {
     const w = (globalThis as { innerWidth?: number }).innerWidth;
@@ -965,6 +991,9 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         }
         cur.focus?.();
       }
+      // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
+      const stageEl = wrap.closest(".game-stage") as HTMLElement | null;
+      if (stageEl) stageEl.scrollTop = 0;
     }
   }
 
@@ -1139,6 +1168,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         "resize",
         onResize
       );
+      unpinL99Host();
       wrap.remove();
     }
   };

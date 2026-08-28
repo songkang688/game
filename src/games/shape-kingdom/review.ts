@@ -173,6 +173,15 @@ const REVIEW_CSS = `
    万一它就是正解，这一关直接卡死）。答题器的 .qz-wrap 是公共文件生的、本档不许动，
    但它挂在哪儿是本款说了算——给它一个本款自己的宿主，再由 fitIntoStage 钳住宿主。 */
 .shk-quizhost{min-width:0;}
+/* N-37 残余:root 直达行叠在深关题面上,三张选项 top 453。只收本款宿主,clock/识字不走这条。 */
+@media (max-height:500px){
+  .l99-stage-wrap:has(.l99-jump) .shk-round{margin:0 0 2px;gap:2px;}
+  .l99-stage-wrap:has(.l99-jump) .shk-banner{padding:3px 8px;font-size:13px;}
+  .l99-stage-wrap:has(.l99-jump) .shk-hinttext{padding:4px 8px;font-size:13px;line-height:1.35;}
+  .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt{font-size:20px;min-height:36px;padding:2px 8px;}
+  .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt svg,
+  .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt img{max-height:40px;}
+}
 `;
 
 export interface ReviewOptions {

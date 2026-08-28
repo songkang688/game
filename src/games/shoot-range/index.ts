@@ -181,7 +181,8 @@ export const CSS = `
 .shr-tip{margin-top:6px;text-align:center;font-size:14px;font-weight:700;color:#8A6A7E;line-height:1.5;}
 .shr-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .shr-mode{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
+  font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;
+  min-height:44px;display:inline-flex;align-items:center;}
 .shr-mode.shr-mode-vs{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .shr-mode.shr-mode-co{background:linear-gradient(180deg,#9FD8AE,#6FB98A);box-shadow:0 4px 0 #4E8E67;}
 .shr-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #C25A80;}
