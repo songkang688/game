@@ -1984,6 +1984,38 @@ html {
 }
 
 @media (max-height: 500px) {
+  /* N-202：915×412 暂停列仍 58，遮罩 20+弹窗 18 把标题和「回首页」裁掉。
+     只收 overlay/dialog 边距与暂停说明，不把 .btn 压回 44。 */
+  .overlay {
+    padding: 6px 12px;
+  }
+
+  .dialog {
+    max-height: calc(var(--vv-h, 100dvh) - 12px);
+    padding: 8px 16px 8px;
+  }
+
+  @supports (height: 100svh) {
+    .dialog {
+      max-height: calc(var(--vv-h, 100svh) - 12px);
+    }
+  }
+
+  .dialog-title {
+    font-size: 20px;
+    margin-bottom: 2px;
+  }
+
+  .pause-content .dialog-text {
+    display: none;
+  }
+
+  .dialog-buttons {
+    margin-top: 8px;
+    gap: 6px;
+    padding-top: 6px;
+  }
+
   /* N-89:915×412 关内顶栏再收 ~28px 给 sticky 底键；热区仍 ≥44。勿改 orb/snake paneH=200 */
   .game-screen .game-topbar {
     padding: 0;
