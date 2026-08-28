@@ -322,6 +322,7 @@ const CSS = `
 @media (max-height:840px) and (min-height:501px){
   .hh-btns{position:sticky;bottom:0;z-index:5;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(246,242,255,.25),#f6f2ff 40%);}
+  .hh-hidden{min-height:64px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hh-fly{display:none;}

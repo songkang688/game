@@ -438,6 +438,8 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 | duo-rush `.dr-canvas` | 840 档 `max-height:min(52dvh,320px)`；默认 `.dr-canvas` 规则仍无 max-height；**不隐藏** `.dr-keys` | 平板横屏 |
 | 收藏册 | 840&&501&&min-width:641 撑满 overlay；**不盲拷** 500 的 72×84 预览 | 1024×768 |
 | rootGate / farm runner / 拼音 scene·timed | **不要**扩 840（N-109 明文平板零变化；禁止盲拷清单） | — |
+| hue-hand | 840 暗牌区 `min-height:64px`，**不盲拷** 500 的 48px | 1024×768 |
+| mine-garden | 840 钉 `.mn-tools` sticky，**不拷** 500 的 `mn-msg min-height:0` | 1024×768 |
 
 ## 附：第 3 轮环境水位
 

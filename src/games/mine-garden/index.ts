@@ -429,6 +429,10 @@ export const MN_CSS = `
   .mn-duo{flex-wrap:nowrap;gap:8px;}
   .mn-duo>div{flex:1 1 0;min-width:0;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .mn-tools{position:sticky;bottom:0;z-index:5;margin-top:6px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,251,236,.2),#F4FBEC 36%);}
+}
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}
   .mn-cell.mn-bloom{animation:none;}

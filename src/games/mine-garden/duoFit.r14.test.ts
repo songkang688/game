@@ -17,4 +17,12 @@ describe("N-71 mine-garden 双人同屏末行", () => {
   it("U-21 中高视口也按余高钳格", () => {
     expect(SRC).toContain("vh > 500 && vh <= 840");
   });
+
+  it("840 档钉工具行,不盲拷 500 档收消息高", () => {
+    expect(SRC).toContain("@media (max-height:840px) and (min-height:501px)");
+    const at = SRC.indexOf("@media (max-height:840px) and (min-height:501px){");
+    const block = SRC.slice(at, SRC.indexOf("@media (prefers-reduced-motion", at));
+    expect(block).toContain(".mn-tools{position:sticky;bottom:0");
+    expect(block).not.toContain(".mn-msg{min-height:0");
+  });
 });
