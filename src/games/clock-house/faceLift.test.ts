@@ -53,6 +53,18 @@ describe("W8R1-07 · liftFaceBody 换装工序", () => {
     expect(lifted).toContain('data-h="4" data-q="1"');
   });
 
+  it("真机 innerHTML 把 line 写成 </line>、属性乱序也能换装", () => {
+    const serial =
+      `<line stroke-width="6" stroke="#e8590c" y2="40.0" x2="50.0" y1="50" x1="50" stroke-linecap="round"></line>` +
+      `<line stroke="#1971c2" stroke-width="4" x1="50" y1="50" x2="80.0" y2="50.0" stroke-linecap="round"></line>` +
+      `<circle fill="#5c4a7d" r="3.4" cy="50" cx="50"></circle>`;
+    const lifted = liftFaceBody(serial);
+    expect(lifted).toContain("clk-lift-hour");
+    expect(lifted).toContain("clk-lift-minute");
+    expect(lifted).toContain('class="clk-hub"');
+    expect(lifted).not.toContain("<line");
+  });
+
   it("幂等：换过的钟面再喂进来是恒等映射", () => {
     expect(liftFaceBody(lifted)).toBe(lifted);
   });
