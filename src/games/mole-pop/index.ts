@@ -4,6 +4,7 @@ export { meta };
 // 地鼠嘭嘭:188 关十大地洞闯关 + 无尽地鼠场。
 // 1.1 新机制:出题地鼠(算式牌)、连击槽(嘭嘭时间)、护盾鼠(连打两下)、夜视关(月光圈)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import { save } from "../../engine/save";
 import {
   buildQuizCard,
@@ -92,7 +93,7 @@ const CSS = `
 .mp-combofill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFC46B, #F0714A); border-radius: 8px; transition: width .2s; }
 .mp-combo.mp-combo-on .mp-combofill { background: linear-gradient(90deg, #FF9A3C, #E8452C); animation: mpBlaze .5s ease infinite alternate; }
 @keyframes mpBlaze { from { opacity: .7; } to { opacity: 1; } }
-.mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-left: auto; margin-right: auto; }
 .mp-hole { aspect-ratio: 1; min-width: 56px; min-height: 56px; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: none; position: relative; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
 .mp-hole:active { transform: scale(.93); }
 /* 命中不震屏,只让洞口轻轻下沉三帧 */
@@ -549,10 +550,34 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   }
   renderTop();
 
+  // 915×412 横屏九洞有 6 个在折叠线下(r4 C-5):洞是 aspect-ratio:1 的方格,
+  // 盘面宽 = 盘面高,量出舞台可视余量后钳盘面宽即钳高;
+  // 44px 热区红线兜底(3 洞 + 两道 gap),命中判定与谱面零改动
+  function fitBoard(): void {
+    if (destroyed) return;
+    if (typeof boardEl.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    boardEl.style.maxWidth = "";
+    const rect = boardEl.getBoundingClientRect();
+    if (!Number.isFinite(rect.top) || !(rect.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(rect));
+    const room = clip - rect.top - below - 4;
+    if (Number.isFinite(room) && room > 0 && rect.height > room + 1) {
+      const minSide = 3 * 44 + 2 * 12;
+      boardEl.style.maxWidth = `${Math.max(minSide, Math.floor(room))}px`;
+    }
+  }
+  fitBoard();
+  // 挂载那一刻可能还没排好版,下一拍补量一次(计时统一走 bag,destroy 一并清)
+  bag.after(fitBoard, 0);
+  window.addEventListener("resize", fitBoard);
+
   return {
     destroy() {
       destroyed = true;
       ended = true;
+      window.removeEventListener("resize", fitBoard);
       bag.clearAll();
       wrap.remove();
     },

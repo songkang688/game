@@ -4,6 +4,7 @@ export { meta };
 // 贪吃毛毛虫:188 关十座花园 + 无尽花园。
 // 1.1 新机制:双身位(两条镜像同走)、传送星门、会移动的小刺猬、限定长度过窄门(剪刀果)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { attachCanvasFit } from "../stageFit";
 import { save } from "../../engine/save";
 import {
   CHAPTERS,
@@ -643,6 +644,10 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerUp);
 
+  // 360×640 裁 203、915×412 出屏 498:显示高按舞台可视余量收,方向键排回屏内
+  // (r4 playbook C-3;格子判定按 rect 换算,一像素不碰)
+  const fit = attachCanvasFit(canvas, wrap);
+
   /**
    * 主循环：一拍走一格的状态机没变，只是把「什么时候走下一格」交给累计时间，
    * 中间那几帧用来把虫身插值画顺 —— 速度曲线因此可以随时变。
@@ -683,6 +688,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       ended = true;
       cancelAnimationFrame(raf);
       clearTimeout(doneTimer);
+      fit.detach();
       // 插值计时 / 张嘴金闪帧 / 砖点亮记录全部归零
       fx.reset();
       window.removeEventListener("keydown", onKeyDown);

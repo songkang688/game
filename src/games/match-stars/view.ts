@@ -13,6 +13,7 @@
  * `visualRowOf(i) !== rowOf(i)` 这句话在 `fall` 段里恒成立，单测就是拿它当验收铁则的。
  */
 import type { SoundName } from "../level99";
+import { boardCapWidthPx, stageClipBottom } from "../stageFit";
 import {
   asSlide,
   planEndMs,
@@ -377,6 +378,30 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
   const rowOf = (i: number): number => Math.floor(i / cols);
   const colOf = (i: number): number => i % cols;
+
+  // 360×640 有 24 格、915×412 有 48 格在折叠线下(r4 C-7):三消要整盘规划,
+  // 格边长按「宽高两把尺取小」——量舞台可视余量,按 rows/cols 反推盘宽上限;
+  // 消除判定与盘面数据零改动,粒子坐标走 pitch() 自适应
+  function fitBoard(): void {
+    if (destroyed) return;
+    if (typeof root.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(root);
+    if (!Number.isFinite(clip)) return;
+    root.style.maxWidth = "";
+    root.style.marginInline = "";
+    const rect = root.getBoundingClientRect();
+    if (!Number.isFinite(rect.top) || !(rect.height > 0)) return;
+    const cap = boardCapWidthPx({ h: rect.height, room: clip - rect.top - 4, cols, rows });
+    if (cap !== null) {
+      root.style.maxWidth = `${cap}px`;
+      // 收窄后盘面居中;负 bleed 的贴边设计只在满宽时有意义
+      root.style.marginInline = "auto";
+    }
+  }
+  fitBoard();
+  const fitTimer = typeof setTimeout === "function" ? setTimeout(fitBoard, 0) : null;
+  const hasWin = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasWin) window.addEventListener("resize", fitBoard);
 
   function pitch(): number {
     const w = board.clientWidth || root.clientWidth || 0;
@@ -906,6 +931,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       destroyed = true;
       cancelAnimationFrame(raf);
       raf = 0;
+      if (fitTimer !== null) clearTimeout(fitTimer);
+      if (hasWin) window.removeEventListener("resize", fitBoard);
       runner.clear();
       for (const t of fxTimers) clearTimeout(t);
       fxTimers.clear();

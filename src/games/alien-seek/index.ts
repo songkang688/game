@@ -7,6 +7,7 @@ export { meta };
 // 推理关不给看,只给 3~5 条线索,靠排除法点中唯一的那个藏身点。
 // 三种玩法:188 关八大场景战役、无尽(越找越多越找越快)、双人同屏抢答。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { MIN_CANVAS_DISPLAY_PX, rectBottom, stageClipBottom } from "../stageFit";
 import { save } from "../../engine/save";
 import {
   CHAPTERS,
@@ -111,7 +112,7 @@ const P_NAME = ["朵朵", "星星"];
 const CSS = `
 .as-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
-.as-canvas{width:100%;display:block;border-radius:16px;background:#28234d;touch-action:none;cursor:pointer;}
+.as-canvas{width:100%;display:block;margin:0 auto;border-radius:16px;background:#28234d;touch-action:none;cursor:pointer;}
 .as-clues{background:#fffdf6;border-radius:14px;padding:9px 12px;display:flex;flex-direction:column;gap:5px;
   box-shadow:0 2px 8px rgba(160,150,190,.22);}
 .as-clue{font-size:13px;font-weight:700;color:#5f5280;line-height:1.5;display:flex;gap:7px;align-items:flex-start;}
@@ -1114,6 +1115,23 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
 
   function syncSize(): void {
     cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
+    // 横屏矮屏/平板上画布出屏 209px、D-pad 与望远镜排折叠线下(r4 C-6):
+    // 高按舞台可视余量收一刀,宽跟着等比缩;点击换算走 getBoundingClientRect,
+    // 场景坐标(SCENE_W×SCENE_H)与判定一像素不碰
+    if (typeof canvas.getBoundingClientRect === "function" && typeof wrap.getBoundingClientRect === "function") {
+      const clip = stageClipBottom(wrap);
+      if (Number.isFinite(clip)) {
+        const rect = canvas.getBoundingClientRect();
+        const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(rect));
+        const room = clip - rect.top - below - 4;
+        if (Number.isFinite(room) && room > 0) {
+          const maxH = Math.max(MIN_CANVAS_DISPLAY_PX, Math.floor(room));
+          if (cssW * (SCENE_H / SCENE_W) > maxH) {
+            cssW = Math.max(240, Math.floor(maxH / (SCENE_H / SCENE_W)));
+          }
+        }
+      }
+    }
     cssH = Math.round(cssW * (SCENE_H / SCENE_W));
     view = clampView(view, viewport());
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
@@ -1123,6 +1141,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       canvas.width = bw;
       canvas.height = bh;
     }
+    // 收窄后画布不再铺满整宽:定死显示宽并居中,width:100% 的 CSS 让位给内联值
+    canvas.style.width = `${cssW}px`;
     canvas.style.height = `${cssH}px`;
     c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
@@ -1702,6 +1722,9 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   window.addEventListener("keyup", onKeyUp);
 
   syncSize();
+  // 挂载那一刻可能还没排好版,下一拍补量一次;转屏/改窗也要重量
+  const sizeTimer = setTimeout(syncSize, 0);
+  window.addEventListener("resize", syncSize);
   last = performance.now();
   raf = requestAnimationFrame(frame);
 
@@ -1710,6 +1733,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       destroyed = true;
       finished = true;
       cancelAnimationFrame(raf);
+      clearTimeout(sizeTimer);
+      window.removeEventListener("resize", syncSize);
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);

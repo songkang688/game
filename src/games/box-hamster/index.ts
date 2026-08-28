@@ -123,6 +123,8 @@ const CSS = `
 .bh-tags{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
 .bh-tag{background:#ffffffcc;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;color:#7A5433;}
 .bh-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.bh-modebar[hidden]{display:none;}
 .bh-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E8A85E,#CE8639);box-shadow:0 4px 0 #A96A28;}
 .bh-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #A96A28;}

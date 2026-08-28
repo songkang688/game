@@ -1,0 +1,143 @@
+/**
+ * 画布显示高按「舞台可视余量」收一刀(三人组 r4/r5 走查配方 B 之 1 的共享件)。
+ *
+ * 这一族病灶的共因:画布分辨率按屏宽或固定比例定,显示层 `width:100%;height:auto`,
+ * 横屏矮屏(915×412)与平板(1024×768)上显示高远超 `.game-stage` 的可视高,
+ * 画布下半截连同虚拟按键(触屏的主输入)一起掉在折叠线以下——实时玩法不能边玩边滚。
+ *
+ * 修法照 dot-maze `a16caf46`:量 `.game-stage` 的裁切下沿,减掉画布下面自家家当
+ * (按钮排 / 提示行,量 wrap 下沿与画布下沿的差就全含了),给显示层钳一条 `max-height`。
+ * canvas 是带内在比例的 replaced 元素,超过 max-height 时浏览器会连宽一起等比收,
+ * 画面不变形;指针输入都按 `rect.width / rect.height` 换算,显示缩放不碰任何判定。
+ *
+ * 量不到(单测桩、还没挂上壳)就一个样式不写,永不抛。
+ */
+
+/** 画布显示高的下限:比这更矮画面就看不清了,低于它宁可交给舞台滚动 */
+export const MIN_CANVAS_DISPLAY_PX = 160;
+
+/** 画布该「显示」多高(null = 余量装得下,一个样式都不用写) */
+export function canvasDisplayCapPx(
+  nativeH: number,
+  roomPx: number,
+  min = MIN_CANVAS_DISPLAY_PX
+): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
+interface RectLike {
+  top: number;
+  bottom?: number;
+  height: number;
+}
+
+/** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+export function rectBottom(r: RectLike): number {
+  return Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+}
+
+/**
+ * 往上找平台舞台(.game-stage,定高会裁内容)的可视下沿;量不到返回 NaN。
+ * 用 clientHeight 口径(舞台有 4px 边框,rect.bottom 会多算,1.2 窗口 5 翻过车)。
+ */
+export function stageClipBottom(from: HTMLElement | null | undefined): number {
+  let node: HTMLElement | null = from?.parentElement ?? null;
+  for (let i = 0; node && i < 12; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+      if (typeof node.getBoundingClientRect !== "function") break;
+      const r = node.getBoundingClientRect();
+      const inner =
+        typeof node.clientHeight === "number" && node.clientHeight > 0
+          ? (node.clientTop || 0) + node.clientHeight
+          : r.height;
+      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+      break;
+    }
+    node = node.parentElement ?? null;
+  }
+  return Number.NaN;
+}
+
+export interface CanvasFitHandle {
+  /** 排版变了(resize / 关内重排)再量一次 */
+  refit: () => void;
+  /** destroy 时摘监听,幂等 */
+  detach: () => void;
+}
+
+/**
+ * 方格盘(aspect-ratio:1 的格子 + 等 gap)按「高预算」反推容器最大宽。
+ * 盘高 = rows×cell + (rows-1)×gap,cell = (宽 - (cols-1)×gap) / cols:
+ * 给定可视余量 roomPx,解出宽上限;格子有下限(minCellPx),缩到底还装不下
+ * 就贴着下限交给舞台滚动(BL-W6-03 口径)。装得下返回 null,一个样式不写。
+ */
+export function boardCapWidthPx(opts: {
+  /** 盘面此刻的显示高 */
+  h: number;
+  /** 可视余量 */
+  room: number;
+  cols: number;
+  rows: number;
+  gap?: number;
+  minCellPx?: number;
+}): number | null {
+  const { h, room, cols, rows } = opts;
+  if (!Number.isFinite(h) || h <= 0) return null;
+  if (!Number.isFinite(room) || room <= 0) return null;
+  if (!(cols > 0) || !(rows > 0)) return null;
+  if (h <= room + 1) return null;
+  const gap = Number.isFinite(opts.gap) ? (opts.gap as number) : 0;
+  const minCell = Number.isFinite(opts.minCellPx) ? (opts.minCellPx as number) : 26;
+  const cap = Math.floor(((room - (rows - 1) * gap) * cols) / rows + (cols - 1) * gap);
+  const floor = Math.ceil(cols * minCell + (cols - 1) * gap);
+  return Math.max(floor, cap);
+}
+
+/**
+ * 给一块画布挂上「按可视余量钳显示高」:挂载时量一次、下一帧补量一次、resize 重量。
+ * `wrap` 是画布所在的自家容器——wrap 下沿减画布下沿就是「画布下面的家当」实高,
+ * 按钮排 / 提示行不随画布显示高变,量一次就是稳的。
+ */
+export function attachCanvasFit(
+  canvas: HTMLCanvasElement,
+  wrap: HTMLElement,
+  opts: { margin?: number; minPx?: number } = {}
+): CanvasFitHandle {
+  const margin = Number.isFinite(opts.margin) ? (opts.margin as number) : 4;
+  let detached = false;
+
+  function fit(): void {
+    if (detached || !canvas.style) return;
+    if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    canvas.style.maxHeight = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - margin, opts.minPx);
+    if (px !== null) canvas.style.maxHeight = `${px}px`;
+  }
+
+  fit();
+  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
+  const timer = typeof setTimeout === "function" ? setTimeout(fit, 0) : null;
+  const hasWin = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasWin) window.addEventListener("resize", fit);
+
+  return {
+    refit: fit,
+    detach() {
+      if (detached) return;
+      detached = true;
+      if (timer !== null) clearTimeout(timer);
+      if (hasWin) window.removeEventListener("resize", fit);
+    },
+  };
+}

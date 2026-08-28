@@ -237,6 +237,8 @@ export const CSS = `
 .pcp-key-swap{background:#DFF0FF;color:#3F72A8;}
 .pcp-tip{margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#96658C;line-height:1.5;}
 .pcp-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.pcp-modebar[hidden]{display:none;}
 .pcp-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;}
 .pcp-mode.pcp-mode-duo{background:linear-gradient(180deg,#9BC7F2,#6E9FD4);box-shadow:0 4px 0 #55799F;}
@@ -2270,7 +2272,18 @@ export function mount(api: GameApi): PrincePrincessHandle {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 进关先把模式条收起来:横屏矮屏上它常驻 82px,把触控键顶到折叠线下
+      // (1.3 三人组第 5 轮走查;回地图 destroy 里放回来,侧模式开着不替它放)
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle?.destroy?.();
+            if (!current && !direct) bar.hidden = false;
+          },
+        };
+      },
       mapHint: "每章第 1 关是不掉心的练习关;路上的小旗走过就点亮,摔下去回小旗,宝石都还在。",
       grandMessage: "188 关全部走完,王子和公主一起坐上了王座,你就是王国的小英雄!",
       guide: buildGuide(),

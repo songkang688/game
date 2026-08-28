@@ -57,6 +57,7 @@ import {
   type TowerState
 } from "./logic";
 
+import { attachCanvasFit } from "../stageFit";
 import { candyDarken, candyLighten, paintCandyBrick } from "../../art/kit/candyBrick";
 import {
   BK_PALETTE,
@@ -116,7 +117,9 @@ interface Capsule {
 }
 
 const CSS = `
-.brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
+/* wrap 层只禁横划不禁竖划(pan-y):万一还有裁切,舞台的滚动兜底得留着;
+   画布与按钮各自 touch-action:none,拖板手感不受影响 */
+.brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: pan-y; position: relative; }
 .brk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
 .brk-badge { background: #fff; border: 1px solid rgba(224,210,232,.9); border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(93,74,110,.16); font-size: 14px; white-space: nowrap; }
 .brk-power { min-height: 20px; text-align: center; font-size: 14px; font-weight: 700; color: #7A5AA8; letter-spacing: 1px; }
@@ -1197,6 +1200,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if ((e.key === "ArrowLeft" && dir === -1) || (e.key === "ArrowRight" && dir === 1)) dir = 0;
   });
 
+  // 横屏矮屏/平板上画布出屏 615px、左右按钮掉在折叠线下(r4 C-2):按可视余量钳显示高
+  const fit = attachCanvasFit(canvas, wrap);
+
   resetBalls();
   renderTop();
   draw();
@@ -1210,6 +1216,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      fit.detach();
       clearDebris(debris);
       portalPulse.clear();
       jan.destroy();
@@ -1641,6 +1648,9 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   });
   jan.on(backBtn, "click", () => back());
 
+  // 无尽砖塔同款钳高:横屏矮屏上按钮排要在屏内
+  const fit = attachCanvasFit(canvas, wrap);
+
   reset();
   loop();
 
@@ -1649,6 +1659,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
       disposed = true;
       over = true;
       cancelAnimationFrame(raf);
+      fit.detach();
       clearDebris(debris);
       jan.destroy();
       wrap.remove();
