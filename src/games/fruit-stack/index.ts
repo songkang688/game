@@ -13,6 +13,7 @@ export { meta };
 //  - 双人同屏:两人各一个容器,朵朵 A/D + F,星星 方向键 + L;
 //  - 无尽:全链条开放,记最高分与最大的那颗果。
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import { AI_LABEL, chooseDropX, type AiLevel } from "./ai";
 import { SPRITE_PAD, blinkAlpha, createFx, fruitSprite } from "./art";
@@ -869,7 +870,8 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
     const gap = opts.seats > 1 ? 10 : 0;
     const per = (avail - gap) / opts.seats;
-    const roomH = Math.max(220, (window.innerHeight || 720) - 300);
+    const guessed = Math.max(220, (window.innerHeight || 720) - 300);
+    const roomH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
     const byH = (roomH / lv.box.h) * lv.box.w;
     const widthPx = Math.max(120, Math.min(per, byH));
     for (const b of bowls) b.layout(widthPx);

@@ -10,8 +10,8 @@
  *     mole-pop 天线星 = 三颗描边星 + 单杆天线(无电光件)、
  *     brave-path 钥匙/锁 = 同心环头 + 锁梁锁身(无「一路小圆点链」);
  *  3. 360px 布局的静态根因:文档级 overflow-x:hidden 兜底 +
- *     首页 .tabs / 战役 .l99-tabs 两条页签条是设计内横滑容器(overflow-x:auto),
- *     这是 38 个运行时采样点文档级溢出全 0 的结构性保证;
+ *     首页 .tabs 是设计内横滑容器(overflow-x:auto)，战役章节页签改为换行
+ *     （真机上隐藏滚动条的横滑会被当成「切掉了」），选关地图改走竖滑;
  *  4. 金币三件套:brave-path 金币图标高光弧 / 内环暗缘 / 落影椭圆齐备,非平涂黄圆。
  */
 import { readdirSync, readFileSync } from "node:fs";
@@ -129,9 +129,10 @@ describe("窗口6 r3 tester · 360px 布局静态根因钉(壳层滚动容器只
     expect(css).toMatch(/\.tabs\s*\{[^}]*overflow-x:\s*auto/);
   });
 
-  it("战役章节页签 .l99-tabs 是设计内横滑容器(overflow-x:auto)", () => {
+  it("战役章节页签 .l99-tabs 窄屏换行，不再靠隐藏横向滚动条", () => {
     const src = readFileSync(join(__dirname, "level99.ts"), "utf8");
-    expect(src).toMatch(/\.l99-tabs\{[^}]*overflow-x:auto/);
+    expect(src).toMatch(/\.l99-tabs\{[^}]*flex-wrap:wrap/);
+    expect(src).not.toMatch(/\.l99-tabs\{[^}]*overflow-x:auto/);
   });
 });
 

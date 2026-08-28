@@ -15,6 +15,8 @@ export type { StorageLike, GameProgress, BestStars } from "./save";
 export { createLoop, attachCanvas } from "./loop";
 export type { LoopController, CanvasHandle } from "./loop";
 export { collectGames, loadGames } from "./loader";
+export { stagePlayRoom } from "./stageRoom";
+export type { StageRoom } from "./stageRoom";
 // 1.2 的两块共享基建也从这里出口:约定是「从 ../../engine 导入」,
 // 只放在各自文件里的话,别的窗口按约定拿不到,多半会各造一份
 export {

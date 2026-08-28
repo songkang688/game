@@ -233,13 +233,20 @@ describe("样式表的无障碍红线", () => {
     }
   });
 
+  it("游戏舞台竖向可滑，不再 overflow:hidden 把选关和棋盘裁死", () => {
+    const stageRules = [...CSS.matchAll(/(?:^|})\s*\.game-stage\s*\{([^}]*)\}/gm)].map((m) => m[1]);
+    expect(stageRules.join("\n")).toMatch(/overflow-y:\s*auto/);
+    expect(stageRules.some((b) => /^\s*overflow:\s*hidden\s*;/m.test(b))).toBe(false);
+  });
+
   it("四个目标断点都有对应的适配规则", () => {
-    // 320(超窄)、375/420(手机)、768(平板)、矮屏横放
+    // 320(超窄)、375/420(手机)、768(平板)、矮屏横放、手机竖屏常见高度
     expect(CSS).toMatch(/@media \(max-width: 340px\)/);
     expect(CSS).toMatch(/@media \(max-width: 380px\)/);
     expect(CSS).toMatch(/@media \(max-width: 420px\)/);
     expect(CSS).toMatch(/@media \(min-width: 700px\) and \(max-width: 1024px\)/);
     expect(CSS).toMatch(/@media \(max-height: 560px\)/);
+    expect(CSS).toMatch(/@media \(max-height: 740px\)/);
   });
 
   it("prefers-reduced-motion 下位移、抖动、循环动画全部停掉", () => {

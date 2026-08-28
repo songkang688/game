@@ -80,6 +80,13 @@ describe("360px 布局", () => {
     expect(lay.fontPx).toBeGreaterThanOrEqual(13);
   });
 
+  it("剩余高度不够时整桌缩进视口，不再按 560px 把球桌画出屏幕", () => {
+    const lay = tableLayout(360, 280);
+    expect(lay.vertical).toBe(true);
+    expect(lay.cssH).toBeLessThanOrEqual(280);
+    expect(lay.cssW).toBeGreaterThan(0);
+  });
+
   it("宽屏是横版，长边朝右", () => {
     const lay = tableLayout(1024);
     expect(lay.vertical).toBe(false);

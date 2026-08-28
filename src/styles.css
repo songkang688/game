@@ -841,7 +841,9 @@ button {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  padding-bottom: 14px;
+  max-height: 100dvh;
+  min-height: 0;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
 }
 
 .game-topbar {
@@ -879,13 +881,19 @@ button {
 
 .game-stage {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   border: 4px solid #fff;
   border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: var(--shadow);
-  overflow: hidden;
+  /* 竖向必须能滑：选关地图、关内 HUD 叠高时不能再只裁不滚 */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* ---------- 弹窗 ---------- */
@@ -1729,10 +1737,28 @@ html {
   }
 }
 
+/* 手机竖屏常见高度：顶栏收一收，把垂直空间还给舞台 */
+@media (max-height: 740px) {
+  .game-screen {
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .game-topbar {
+    padding: 4px 0;
+    gap: 6px;
+  }
+
+  .game-title {
+    min-height: 44px;
+    padding: 2px 12px;
+    font-size: clamp(16px, 3.8vw, 20px);
+  }
+}
+
 /* 矮屏横放(比如 1280×800 分屏、平板横屏):游戏舞台别被顶栏挤没 */
 @media (max-height: 560px) {
   .game-screen {
-    padding-bottom: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
   }
 
   .game-topbar {
