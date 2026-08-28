@@ -249,6 +249,14 @@ export function mount(api: GameApi): { destroy: () => void } {
       .slb-map-tip { text-align: center; color: #5E6880; font-weight: 700; font-size: 14px; margin-top: 12px; }
       .slb-crew { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
       .slb-crew span { background: #fff; border-radius: 12px; padding: 5px 9px; font-size: 12px; font-weight: 700; color: #56637F; box-shadow: 0 2px 5px rgba(120,160,220,.2); }
+      /* N-124 模式:915×412 钉重来/选关,不改 WORLD 物理台面 */
+      @media (max-height:820px) and (pointer:coarse){
+        .slb-wrap{max-height:calc(100dvh - 108px);overflow:hidden;}
+        .slb-coach{padding:4px 10px;max-height:3.2em;overflow:hidden;}
+        .slb-ctrl{position:sticky;bottom:0;z-index:5;flex:0 0 auto;padding-top:4px;
+          background:linear-gradient(180deg,rgba(234,246,255,0),#EAF6FF 28%);}
+        .slb-stagebox{min-height:0;}
+      }
     </style>
     <div class="slb-map">
       <div class="slb-map-head">

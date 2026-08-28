@@ -177,6 +177,18 @@ export const CSS = `
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
   .xq-wrap{max-width:min(248px,52dvh);max-height:100%;overflow:hidden;}
 }
+/* N-124 模式:915×412 自由对战开始钮,840/500 档原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .xq-wrap:has(.xq-start){max-width:min(640px,96%);max-height:calc(100dvh - 108px);overflow:auto;
+    display:flex;flex-direction:column;box-sizing:border-box;}
+  .xq-panel{gap:6px;}
+  .xq-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  .xq-seg button{min-height:44px;}
+  .xq-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
+  .xq-start{position:sticky;bottom:0;z-index:5;min-height:44px;background:#FFB3CD;}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
+}
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}
 }
