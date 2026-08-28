@@ -4,15 +4,28 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CHAPTERS } from "./levels";
+import { isDrawLevel } from "./draw";
+import { CHAPTERS, LEGACY_CHAPTER_COUNT } from "./levels";
 
 const REVIEW = readFileSync(new URL("./review.ts", import.meta.url), "utf8");
 const QUIZ = readFileSync(new URL("../quiz99.ts", import.meta.url), "utf8");
 
 describe("N-37 r15 · shape-kingdom root×深关提示条让位", () => {
   it("第 91 关（下标 90）仍是答题关走回顾壳，不是作图关", () => {
-    const total = CHAPTERS.reduce((n, ch) => n + ch.count, 0);
-    expect(total).toBeGreaterThanOrEqual(91);
+    const total = CHAPTERS.reduce((n, ch) => n + ch.size, 0);
+    expect(total).toBe(188);
+    let acc = 0;
+    let chapter = 0;
+    let idx = 0;
+    for (let c = 0; c < CHAPTERS.length; c++) {
+      if (acc + CHAPTERS[c].size > 90) {
+        chapter = c;
+        idx = 90 - acc;
+        break;
+      }
+      acc += CHAPTERS[c].size;
+    }
+    expect(isDrawLevel(chapter, idx, LEGACY_CHAPTER_COUNT)).toBe(false);
   });
 
   it("只收 .shk-round / .shk-quizhost，公共 .qz-choice 基线未改成线下收热区", () => {
