@@ -440,6 +440,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     playView.style.display = "none";
     mapView.style.display = "";
     renderMap();
+    // 矮横屏上页签/无尽塔占掉首屏,接着打的那格常在折叠线下——直接滚到它(r5 N-23)
+    const cur = gridEl.querySelector(".slb-cell.slb-next") as HTMLElement | null;
+    if (cur && typeof cur.scrollIntoView === "function") {
+      try {
+        cur.scrollIntoView({ block: "center" });
+      } catch {
+        // 老浏览器不支持 options 就算了
+      }
+    }
   }
 
   /* ---------------- 关卡运行时状态 ---------------- */

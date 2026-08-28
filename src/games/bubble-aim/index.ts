@@ -289,6 +289,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-lv .mech { font-size: 10px; min-height: 13px; }
       .ba-lv.locked { background: #E3EAF2; box-shadow: 0 3px 0 #CBD6E2; cursor: not-allowed; }
       .ba-lv.locked .num { color: #9AA9BC; }
+      .ba-lv.cur { box-shadow: 0 0 0 3px #FFB800, 0 3px 0 #C7DEF2; }
       .bba-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
       .bba-mode { border: none; border-radius: 14px; padding: 8px 12px; font-size: 13px; font-weight: 800; background: #FFE7B8; color: #8A5A12; cursor: pointer; box-shadow: 0 3px 0 #E7C489; }
       .bba-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 #E7C489; }
@@ -360,6 +361,14 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     mapSubEl.textContent = `⭐ ${totalStars()}/${LEVELS.length * 3} · 通关 ${progress.stars.filter((s) => s > 0).length}/${LEVELS.length}`;
     endlessBtn.textContent = bestEndless > 0 ? `♾️ 无尽墙 · 最好 ${bestEndless} 分` : "♾️ 无尽墙";
     themesEl.innerHTML = "";
+    // 当前该打的关:第一个还没拿星的关;全通就落在最后一关(r5 N-23:打开地图直接看到它)
+    let curIdx = LEVELS.length - 1;
+    for (let i = 0; i < LEVELS.length; i++) {
+      if (!(progress.stars[i] > 0)) {
+        curIdx = i;
+        break;
+      }
+    }
     THEMES.forEach((th, t) => {
       const start = themeStart(t);
       const size = THEME_SIZES[t];
@@ -383,7 +392,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
         const btn = document.createElement("button");
         btn.type = "button";
         const open = unlocked(i);
-        btn.className = open ? "ba-lv" : "ba-lv locked";
+        btn.className = open ? (i === curIdx ? "ba-lv cur" : "ba-lv") : "ba-lv locked";
         const s = progress.stars[i];
         const icons = levelMechanisms(def).map((m) => MECH_INFO[m].icon).join("");
         btn.innerHTML = `
@@ -406,6 +415,15 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     msgEl.textContent = allCleared()
       ? "全部通关！还可以回去刷三星哦！"
       : "点亮的关卡都能玩，一路打到星尘试炼！";
+    // 地图 3000 多像素长,每次打开都停第 1 关等于让孩子手滚半天——直接滚到当前关
+    const cur = themesEl.querySelector(".ba-lv.cur") as HTMLElement | null;
+    if (cur && typeof cur.scrollIntoView === "function") {
+      try {
+        cur.scrollIntoView({ block: "center" });
+      } catch {
+        // 老浏览器不支持 options 就算了
+      }
+    }
   }
 
   // ---------- 关卡 ----------

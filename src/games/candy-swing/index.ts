@@ -444,6 +444,7 @@ export function mount(api: GameApi): CandySwingHandle {
       .cs-lv .s { font-size: 10px; letter-spacing: 1px; }
       .cs-lv.locked { background: rgba(255,255,255,.45); cursor: default; box-shadow: none; }
       .cs-lv.locked .n { color: #A99DB5; }
+      .cs-lv.cur { box-shadow: 0 0 0 3px #FFB800, 0 3px 0 rgba(0,0,0,.12); }
       .cs-chapter.night .cs-lv { background: rgba(255,255,255,.92); }
       .cs-chapter.night .cs-lv.locked { background: rgba(255,255,255,.22); }
       .cs-chapter.moonfair .cs-lv { background: rgba(255,255,255,.92); }
@@ -542,6 +543,14 @@ export function mount(api: GameApi): CandySwingHandle {
     mapTotalEl.textContent = `⭐ ${bestTotal()} / ${totalStars()} · 共 ${LEVELS.length} 关`;
     bestEl.textContent = towerBest > 0 ? `最好成绩 ${towerBest} 颗糖` : "看能吃到第几颗";
     chaptersEl.innerHTML = "";
+    // 当前该打的关:第一个还没拿星的关;全通就落在最后一关(r5 N-23)
+    let curIdx = LEVELS.length - 1;
+    for (let i = 0; i < LEVELS.length; i++) {
+      if (!(progress.stars[i] > 0)) {
+        curIdx = i;
+        break;
+      }
+    }
     CHAPTERS.forEach((ch, ci) => {
       const box = document.createElement("div");
       box.className = `cs-chapter ${ch.theme}`;
@@ -561,7 +570,7 @@ export function mount(api: GameApi): CandySwingHandle {
         const btn = document.createElement("button");
         btn.type = "button";
         const unlocked = levelUnlocked(i);
-        btn.className = unlocked ? "cs-lv" : "cs-lv locked";
+        btn.className = unlocked ? (i === curIdx ? "cs-lv cur" : "cs-lv") : "cs-lv locked";
         const got = progress.stars[i];
         btn.innerHTML = unlocked
           ? `<span class="n">${i + 1}</span><span class="s">${"★".repeat(got)}${"☆".repeat(3 - got)}</span>`
@@ -589,6 +598,16 @@ export function mount(api: GameApi): CandySwingHandle {
     mapEl.classList.remove("cs-hidden");
     // 宽屏放宽只给地图页:画布是 3:4 定比,进关铺到 720px 宽会竖着装不下
     wrap.className = "cs-wrap cs-view-map";
+    // 10 章纵铺近 2000px,每次都停第一章等于让孩子手滚半天——直接滚到当前关
+    // (要等地图取消隐藏后再滚,不然量不到位置)
+    const cur = chaptersEl.querySelector(".cs-lv.cur") as HTMLElement | null;
+    if (cur && typeof cur.scrollIntoView === "function") {
+      try {
+        cur.scrollIntoView({ block: "center" });
+      } catch {
+        // 老浏览器不支持 options 就算了
+      }
+    }
   }
 
   // ---------- 关卡装载 ----------
