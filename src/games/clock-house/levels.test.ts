@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CORE_CLOCK_TYPES, typeOfKind } from "./kinds";
-import { formatClock, type Quarter } from "./logic";
+import { formatClock, hourHandAngle, minuteHandAngle, type Quarter } from "./logic";
 import {
   allowedQuarters,
   buildQuestions,
@@ -690,14 +690,35 @@ const LEGACY_DIGEST = "5a314feb42c6eb7f65c23ccf5b08d08a0f9a4a2804193fd0d2c7933ad
  * 顺手补了 `role="img"`。孩子看得见的题面、选项、正确项一个字节都没动。
  *
  * 摘要锁不放水：这里把标签按钟面自己的 `data-h` / `data-q` 还原成 1.1 的写法、
- * 去掉新加的 `role`，还原完的字节流必须和 1.1 的摘要**一模一样**——
- * 也就是说这一条仍然钉着「除了那个读屏属性，前 99 关没有第二处改动」。
+ * 去掉新加的 `role`，并把 L-2 换装过的针/轴心/刻度还原成 1.1 细线钟面，
+ * 还原完的字节流必须和 1.1 的摘要**一模一样**——题面数字、选项、正确项仍钉死，
+ * 只允许渲染层换皮。
  */
+function legacyClockSVG(hour: number, quarter: Quarter, size: number, label: string): string {
+  const cx = 50, cy = 50;
+  const hA = ((hourHandAngle(hour, quarter) - 90) * Math.PI) / 180;
+  const mA = ((minuteHandAngle(quarter) - 90) * Math.PI) / 180;
+  let ticks = "";
+  for (let i = 0; i < 12; i++) {
+    const a = ((i * 30 - 90) * Math.PI) / 180;
+    const nx = cx + Math.cos(a) * 36;
+    const ny = cy + Math.sin(a) * 36;
+    ticks += `<text x="${nx.toFixed(1)}" y="${(ny + 3.4).toFixed(1)}" font-size="9" font-weight="800" text-anchor="middle" fill="#5c4a7d">${i === 0 ? 12 : i}</text>`;
+  }
+  return `<svg data-h="${hour}" data-q="${quarter}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-label="${label}">
+    <circle cx="${cx}" cy="${cy}" r="46" fill="#fff" stroke="#845ef7" stroke-width="5"/>
+    ${ticks}
+    <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(hA) * 20).toFixed(1)}" y2="${(cy + Math.sin(hA) * 20).toFixed(1)}" stroke="#e8590c" stroke-width="6" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(mA) * 30).toFixed(1)}" y2="${(cy + Math.sin(mA) * 30).toFixed(1)}" stroke="#1971c2" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="3.4" fill="#5c4a7d"/>
+  </svg>`;
+}
+
 function asLegacyHtml(html: string): string {
   return html.replace(
-    /(<svg data-h="(\d+)" data-q="(\d)"[^>]*?) role="img" aria-label="[^"]*"(>)/g,
-    (_all, head: string, h: string, q: string, tail: string) =>
-      `${head} aria-label="${formatClock(Number(h), Number(q) as Quarter)}"${tail}`
+    /<svg data-h="(\d+)" data-q="(\d)" width="(\d+)" height="\3" viewBox="0 0 100 100" role="img" aria-label="[^"]*">[\s\S]*?<\/svg>/g,
+    (_all, h: string, q: string, size: string) =>
+      legacyClockSVG(Number(h), Number(q) as Quarter, Number(size), formatClock(Number(h), Number(q) as Quarter))
   );
 }
 
