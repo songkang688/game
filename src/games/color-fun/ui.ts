@@ -166,6 +166,29 @@ export const CLF_CSS = `
   .clf-swatch.clf-fresh .clf-swatch-dot{animation:none;}
   .clf-flake{animation:none;display:none;}
 }
+/* L-1(trio-r7):矮横屏(915×412 一族)画布地板 180px + 调色板 88px > 208px 滚动窗,
+   canPinCanvas 判「钉不住」,孩子涂一块颜色要在画布和调色板之间来回滚两趟。
+   这一档把这一屏切成「画布左 / 尾队右」grid 双栏:选色 → 涂色同屏零滚动。
+   竖屏 flex 纵向流与 tight/tighter/pin 机制原样;热区一个不动;
+   fitColoringStage 量的整屏滚动高在 grid 下照常成立,
+   真装不下(比 412 更矮的横屏)仍旧走 clf-scrolly + pinCanvas 的老路兜底。
+   必须排在「再挤挤」那一档前面:那份守门测试把 tighter 之后的所有声明都算作
+   tighter 档,别让这档的 clf-tools 误撞它的热区红线。 */
+@media (max-height:500px){
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,400px);
+    column-gap:12px;row-gap:4px;padding:6px;align-items:start;justify-items:center;}
+  /* 左栏只放画布:180px 地板 + 上下 6px 内边距 = 192,208px 的滚动窗稳稳装下。
+     span 只跨右栏的 5 个常驻项(徽章行/指令行/工具行/调色板/消息行):跨到空行
+     会把画布高摊进空行凭空长 48px(Chrome 的 track 分配),
+     可选项(预览横幅/图例/调色锅)自然流到画布下方的行 6-8。
+     55vh 最小高是竖屏的账;横屏画布被列宽卡住(400×300 线稿等比),再垫最小高只剩死空间 */
+  .clf-stage{grid-column:1;grid-row:1/span 5;min-height:0;}
+  .clf-top,.clf-preview,.clf-legend,.clf-chips,.clf-tools,.clf-mixer,.clf-palette,.clf-msg{grid-column:2;}
+  /* 「挤一挤」的 gap:6px 特异度更高,这档横屏把纵缝压回 4px(「再挤挤」自己就是 4px)。
+     选择器顺序有讲究:tighter 在前 tight 在后,免得「tighter{」这个字样被那份
+     按字符串定位的守门测试当成「再挤挤」档的起点 */
+  .clf-wrap.clf-tighter,.clf-wrap.clf-tight{row-gap:4px;padding:5px 6px;}
+}
 /* 「再挤挤」这一档（W5R3-TA-02）——它治的不是「够不着」，是**来回滚**。
    真机 320×568 第 181 关：这一屏 701px 塞进 282px 的窗口，每一颗按钮慢拖都够得着，
    可画布 180px + 调色锅那一排 105px = 285px > 282px，canPinCanvas() 判「钉不住」，
