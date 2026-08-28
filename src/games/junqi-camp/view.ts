@@ -181,6 +181,16 @@ export const CSS = `
   .jq-hoist .fx-flag{animation:none!important;}
   .jq-btn:active{transform:none;}
 }
+/* N-64:jq-duoplay confirm row. .jq-mode untouched. stage min-height 300 pushed pause off-screen */
+@media (max-height:500px){
+  .jq-duoplay .jq-stage{height:min(48dvh,220px);min-height:140px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
+  .jq-duoplay .jq-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
+  .jq-duoplay .jq-legend{display:none;}
+}
 `;
 
 function reducedMotion(): boolean {

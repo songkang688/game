@@ -128,6 +128,14 @@ export const CSS = `
 @media (prefers-reduced-motion:reduce){ .dc-cell{transition-duration:.06s;} .dc-btn:active{transform:none;}
   .dc-cell.dc-flip2,.dc-petal,.dc-cell.dc-parade{animation-duration:.05s;}
   .dc-rain .dc-petal{animation:none;opacity:0;} }
+/* N-65:dc-duoplay board width; 8-col landscape pushed cancel/pause off 412 */
+@media (max-height:500px){
+  .dc-duoplay .dc-board{max-width:min(280px,56dvh);}
+  .dc-duoplay .dc-row{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,236,.3),#fff8ec 40%);}
+  .dc-duoplay .dc-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
+  .dc-duoplay .dc-count{max-height:2.2em;overflow:hidden;}
+}
 `;
 
 function reducedMotion(): boolean {

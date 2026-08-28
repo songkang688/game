@@ -36,6 +36,17 @@ export const BLOOM_MS = 440;
 /** 吃子花瓣飘散的收尾时长（毫秒） */
 export const CAPTURE_FX_MS = 640;
 
+/** N-66:双人同屏收方盘,不进 styles.css,单人/人机不加 .cg-duoplay */
+export const DUO_SHORT_CSS = `
+@media (max-height:500px){
+  .cg-wrap.cg-duoplay{max-height:100%;overflow:hidden;}
+  .cg-wrap.cg-duoplay .cg-frame{width:min(240px,52dvh);max-width:52dvh;margin:0 auto;}
+  .cg-wrap.cg-duoplay .cg-board{width:100%;margin-inline:0;}
+  .cg-wrap.cg-duoplay .cg-sq{min-width:0;min-height:0;}
+  .cg-wrap.cg-duoplay .cg-log{display:none;}
+}
+`;
+
 export interface SeatPlan {
   name: string;
   emoji: string;
@@ -157,7 +168,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   const reducedMotion = prefersReducedMotion();
   const slideMs = reducedMotion ? SLIDE_MS_REDUCED : SLIDE_MS;
 
-  const wrap = el("div", "cg-wrap");
+  const duoPlay = opts.seats[0].ai === null && opts.seats[1].ai === null;
+  const wrap = el("div", duoPlay ? "cg-wrap cg-duoplay" : "cg-wrap");
   const head = el("div", "cg-head");
   const bannerEl = el("div", "cg-banner", banner);
   const tools = el("div", "cg-tools");

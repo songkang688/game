@@ -135,7 +135,7 @@ export const CSS = `
 .gmk-seg button:focus-visible{outline:3px solid #C2497E;outline-offset:2px;}
 .gmk-tierblurb{font-size:14px;color:#8A6B45;font-weight:700;margin-top:6px;min-height:21px;line-height:1.5;}
 .gmk-start{border:none;border-radius:18px;padding:13px;font-size:18px;font-weight:900;background:#FFB3CD;color:#86285A;
-  cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
+  cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;min-height:48px;}
 .gmk-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
 .gmk-modebar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 0 10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
@@ -170,6 +170,12 @@ export const CSS = `
   /* N-67:设置页 CTA 431——248 外壳把选项折高。有开始钮时放宽,进局仍 248 */
   .gmk-wrap:has(.gmk-start){max-width:420px;}
   .gmk-start{position:sticky;bottom:0;z-index:5;margin-top:6px;}
+}
+/* N-67:自由对战设置页 CTA。进局 248 钳盘勿再挤 */
+@media (max-height:500px){
+  .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
+  .gmk-panel .gmk-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
+  .gmk-panel{gap:8px;}
 }
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
