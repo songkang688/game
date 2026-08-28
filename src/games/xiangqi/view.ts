@@ -188,6 +188,7 @@ export const CSS = `
   .xq-record{grid-column:1;max-height:28px;}
   .xq-btns{grid-column:2;grid-row:3 / span 4;flex-direction:column;flex-wrap:nowrap;margin-top:0;
     position:sticky;top:0;align-self:start;}
+  .xq-btns button{flex:0 0 auto;}
   .xq-msg{grid-column:1;}
 }
 @media (prefers-reduced-motion:reduce){

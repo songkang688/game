@@ -17,5 +17,6 @@ describe("N-10 xiangqi r11 矮横屏工具行钉底", () => {
     expect(CSS).toContain("@media (min-width:800px) and (max-height:430px)");
     expect(CSS).toContain(".xq-boardhost{grid-column:1");
     expect(CSS).toContain("flex-direction:column;flex-wrap:nowrap");
+    expect(CSS).toContain(".xq-btns button{flex:0 0 auto;}");
   });
 });
