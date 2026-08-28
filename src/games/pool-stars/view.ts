@@ -239,6 +239,8 @@ const CSS = `
 .ps-ballrow{display:inline-flex;gap:2px;align-items:center;line-height:0;min-height:21px;}
 .ps-ballrow svg{display:block;}
 .ps-pockets{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;}
+/* display:flex 压过 UA 的 [hidden]{display:none},不选袋时这排要真的藏住 */
+.ps-pockets[hidden]{display:none;}
 .ps-veil{position:absolute;inset:0;background:rgba(250,255,252,.95);border-radius:16px;z-index:6;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:16px;}
 .ps-veil-t{font-size:20px;font-weight:900;color:#3f8f68;}

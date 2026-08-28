@@ -226,6 +226,8 @@ export const CSS = `
 .fc-goal{text-align:center;font-size:16px;font-weight:800;color:#2f6b96;line-height:1.5;margin-bottom:6px;
   overflow-wrap:anywhere;}
 .fc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.fc-modebar[hidden]{display:none;}
 .fc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3a5a72;text-align:center;overflow-wrap:anywhere;}
 .fc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#63AEDE,#3F8ABE);box-shadow:0 4px 0 #2F6D9B;}
@@ -1529,7 +1531,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "每一关的骰序都是固定的，同一关重玩点数一模一样——想清楚每个点数该给哪一架用。",
       grandMessage: "188 关全部飞完，整片天空的航线都被你摸熟啦！",
       guide,

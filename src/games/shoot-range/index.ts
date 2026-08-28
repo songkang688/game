@@ -188,7 +188,8 @@ export const CSS = `
 .shr-topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .shr-back{border:none;border-radius:999px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#A2557C;box-shadow:0 3px 0 rgba(190,140,170,.3);white-space:nowrap;}
-.shr-toggle{border:none;border-radius:999px;padding:5px 10px;font-size:14px;font-weight:800;cursor:pointer;
+/* 5px 竖向内边距量出来才 29px 高,手机上小拇指都嫌挤,垫到 36px 起 */
+.shr-toggle{border:none;border-radius:999px;min-height:36px;padding:6px 12px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#FFF0F6;color:#A2557C;box-shadow:0 2px 0 rgba(190,140,170,.3);white-space:nowrap;
   flex:0 0 auto;}
 .shr-toggle[aria-pressed="false"]{background:#F0EDF2;color:#8B8291;}

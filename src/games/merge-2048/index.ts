@@ -221,6 +221,8 @@ export const MG_CSS = `
 .mg-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .mg-modebar,.mg-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mg-modebar[hidden]{display:none;}
 .mg-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5f2e;text-align:center;overflow-wrap:anywhere;}
 .mg-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;min-height:44px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E8A93C,#CE8C22);box-shadow:0 4px 0 #A96F17;}
@@ -1088,6 +1090,16 @@ function viewportWidth(): number {
   return typeof w === "number" && w > 0 ? w : 420;
 }
 
+/**
+ * 舞台真实可用宽。innerWidth 没扣壳层(舞台边框、选关容器、桌面 padding,合计约 60px),
+ * 直接进公式的话 390px 手机上盘面右列会被裁掉。
+ * 额外 -12:mg-wrap 两侧 padding(20)加 mg-board 边框(16)比 cellPxFor 预留的 24 多出来的部分。
+ */
+function stageWidth(stage: HTMLElement): number {
+  const w = stage.clientWidth;
+  return w > 0 ? w - 12 : viewportWidth() - 60;
+}
+
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = levelConfig(ctx.level);
   let settled = false;
@@ -1102,7 +1114,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: cfg.stepLimit,
-      cell: cellPxFor(cfg.size, viewportWidth(), cfg.race ? 2 : 1, budget),
+      cell: cellPxFor(cfg.size, stageWidth(stage), cfg.race ? 2 : 1, budget),
       sfx: ctx.sfx,
       onDone: () => undefined
     }
@@ -1115,7 +1127,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: 0,
-      cell: Math.round(cellPxFor(cfg.size, viewportWidth(), 2, budget) * 0.9),
+      cell: Math.round(cellPxFor(cfg.size, stageWidth(stage), 2, budget) * 0.9),
       sfx: () => undefined,
       onDone: (s) => {
         if (s.reached) foeReached = true;
@@ -1323,7 +1335,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 1, boardHeightBudget(stage)),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 1, boardHeightBudget(stage)),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
@@ -1361,7 +1373,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2, budget),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1372,7 +1384,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2, budget),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 2, budget),
           sfx: () => undefined,
           onDone: (s) => {
             if (s.reached) foeReached = true;
@@ -1410,7 +1422,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2, budget),
+          cell: cellPxFor(4, stageWidth(stage), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1421,7 +1433,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed: seed + 1,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2, budget),
+          cell: cellPxFor(4, stageWidth(stage), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
@@ -1528,7 +1540,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "选一个角守住,只往两个方向滑,大块就不会乱跑。",
       grandMessage: "188 关全部合完,合成杯冠军就是你！",
       guide,

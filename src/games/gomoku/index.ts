@@ -1134,7 +1134,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 96px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "每题都在限定步数内必胜，不用提示解开才是 3 星～",
       grandMessage: "188 道残局全部解开，你的算杀已经很有大师样子了！",
       guide: guideBook,

@@ -98,7 +98,8 @@ const CSS = `
 .sn-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .sn-badge { background: linear-gradient(180deg, #FFFFFF, #F3F9EC); border: 1px solid #DCE9CD; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #67A05B; box-shadow: 0 2px 6px rgba(120,180,110,.25); font-size: 14px; }
 .sn-badge.sn-shut { color: #C2456F; }
-.sn-canvas { width: 100%; border-radius: 16px; display: block; background: #F4FBEF; }
+/* 画布靠划动转弯,不拦掉浏览器手势的话,真机上一划就变成滚页面 + pointercancel */
+.sn-canvas { width: 100%; border-radius: 16px; display: block; background: #F4FBEF; touch-action: none; }
 .sn-pad { display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 48px 48px; gap: 6px; justify-content: center; margin-top: 10px; }
 .sn-btn { border: none; border-radius: 14px; font-size: 22px; background: #BEE8B0; color: #3F6B36; cursor: pointer; box-shadow: 0 3px 0 #9CCC8E; touch-action: none; padding: 0; }
 .sn-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #9CCC8E; }
@@ -108,6 +109,8 @@ const CSS = `
 .sn-right { grid-column: 3; grid-row: 2; }
 .sn-msg { text-align: center; min-height: 20px; color: #67A05B; font-weight: 700; margin-top: 8px; font-size: 14px; }
 .sn-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.sn-bar-modes[hidden] { display: none; }
 .sn-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FC468, #5E9E4A); box-shadow: 0 4px 0 #487A38; }
 .sn-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #487A38; }
 .sn-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }

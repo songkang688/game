@@ -100,6 +100,8 @@ const CSS = `
 .frc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBBB77; }
 .frc-msg { text-align: center; min-height: 20px; color: #D08A3E; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.45; }
 .frc-modebar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.frc-modebar[hidden] { display: none; }
 .frc-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFE0B8; color: #A05C1E; cursor: pointer; box-shadow: 0 3px 0 #EFC291; }
 .frc-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFC291; }
 .frc-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }

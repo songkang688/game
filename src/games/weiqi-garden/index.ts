@@ -14,6 +14,7 @@ import {
   type ModeEntry
 } from "../../engine";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import guide from "./guide";
 import {
   BLACK,
@@ -283,6 +284,8 @@ export const WQ_CSS = `
 .wq-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FBF7EE,#F2EFE6);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .wq-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.wq-modebar[hidden]{display:none;}
 .wq-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#6A5A42;text-align:center;overflow-wrap:anywhere;}
 .wq-open{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#8C7A5B,#6F6047);box-shadow:0 4px 0 #574B38;}
@@ -293,7 +296,8 @@ export const WQ_CSS = `
 .wq-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:16px;font-weight:800;color:#6A5A42;
   box-shadow:0 2px 6px rgba(150,130,90,.22);overflow-wrap:anywhere;}
 .wq-chip b{color:#A8763A;}
-.wq-scroll{overflow:auto;-webkit-overflow-scrolling:touch;border-radius:14px;max-width:100%;}
+.wq-scroll{overflow:auto;-webkit-overflow-scrolling:touch;border-radius:14px;max-width:100%;width:fit-content;
+  margin:0 auto;}
 .wq-canvas{display:block;touch-action:manipulation;border-radius:14px;background:#E8D9B5;}
 .wq-lens{display:block;border-radius:12px;background:#E8D9B5;box-shadow:0 2px 8px rgba(120,100,60,.3);}
 .wq-lensbox{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:6px;flex-wrap:wrap;}
@@ -1106,9 +1110,15 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
 
 function hostWidth(host: HTMLElement): number {
   const w = (host as { clientWidth?: number }).clientWidth;
-  if (typeof w === "number" && w > 80) return w;
-  const iw = (globalThis as { innerWidth?: number }).innerWidth;
-  return typeof iw === "number" && iw > 80 ? Math.min(iw - 32, 520) : 320;
+  const byWidth = (() => {
+    if (typeof w === "number" && w > 80) return w;
+    const iw = (globalThis as { innerWidth?: number }).innerWidth;
+    return typeof iw === "number" && iw > 80 ? Math.min(iw - 32, 520) : 320;
+  })();
+  // 平板横屏的短边是高度:棋盘按宽度铺满会把下面的按钮顶出屏,得同时受舞台高度约束。
+  // 220 是棋盘上下的徽章行 + 提示语 + 按钮排的合计;量不到舞台时退回按宽度算,行为不变。
+  const room = stagePlayRoom(host, { w: byWidth, h: byWidth + 220 });
+  return Math.max(240, Math.min(byWidth, room.h - 220));
 }
 
 // ---------------------------------------------------------------------------
@@ -1618,7 +1628,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先数气、再看眼,最后才想劫 —— 这三步能解掉大半的题。",
       grandMessage: "188 关全部走完,九路十三路十九路都拿下啦!",
       guide,

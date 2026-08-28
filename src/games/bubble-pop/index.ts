@@ -67,6 +67,8 @@ const CSS = `
 @keyframes bbpRipple { 0% { box-shadow: 0 0 0 0 rgba(120,190,240,.55); } 100% { box-shadow: 0 0 0 18px rgba(120,190,240,0); } }
 .bbp-mark { font-size: .72em; color: #ffffffcc; text-shadow: 0 1px 1px rgba(80,110,140,.45); pointer-events: none; }
 .bbp-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.bbp-bar[hidden] { display: none; }
 .bbp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FBEE0, #4E97BD); box-shadow: 0 4px 0 #3B7794; }
 .bbp-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3B7794; }
 .bbp-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }

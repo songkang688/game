@@ -314,6 +314,8 @@ export const MN_CSS = `
 .mn-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#F4FBEC,#E9F5E0);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
 .mn-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mn-modebar[hidden]{display:none;}
 .mn-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#41633A;text-align:center;overflow-wrap:anywhere;}
 .mn-open,.mn-back{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#6FA85A,#568844);box-shadow:0 4px 0 #416832;}
@@ -1619,7 +1621,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,雷区能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "数字说的是它周围 8 格里有几颗刺种。第一下永远安全，放心点。",
       grandMessage: "188 关全部扫完，从小苗床一路扫到园丁杯，这片花园全开了！",
       guide,

@@ -101,6 +101,8 @@ const CSS = `
 .pz-piece.pz-piece-used { opacity: .3; cursor: default; }
 .pz-msg { text-align: center; min-height: 22px; color: #7B7FD0; font-weight: 700; margin-top: 10px; font-size: 15px; }
 .pz-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.pz-bar-modes[hidden] { display: none; }
 .pz-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8E86E0, #6E64C8); box-shadow: 0 4px 0 #544BA4; }
 .pz-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #544BA4; }
 .pz-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }

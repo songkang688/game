@@ -144,6 +144,8 @@ export const CSS = `
   color:#7A234F;cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .xq-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
 .xq-modebar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.xq-modebar[hidden]{display:none;}
 .xq-mode{flex:1 1 150px;min-height:${MIN_HIT_PX}px;border:none;border-radius:16px;padding:12px 8px;font-size:15px;
   font-weight:900;cursor:pointer;font-family:inherit;background:#FFE1EC;color:#A82F63;box-shadow:0 4px 0 #E8A9C4;}
 .xq-mode-streak{background:#FFEFC7;color:#8A5A10;box-shadow:0 4px 0 #E8C97F;}
@@ -165,6 +167,10 @@ export const CSS = `
 @media (max-width:380px){
   .xq-btns button{flex:1 1 74px;min-height:${MIN_HIT_PX}px;padding:10px 2px;}
   .xq-badge{font-size:28px;}
+}
+/* 平板横屏高度是短边:460 宽的棋盘(高≈510)会把悔棋/提示那排顶出首屏,收窄一点整套都装得下 */
+@media (min-width:700px) and (max-height:840px){
+  .xq-wrap{max-width:380px;}
 }
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}

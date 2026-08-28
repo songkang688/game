@@ -125,6 +125,10 @@ export const MJ_CSS = `
 .mj-hand{display:flex;gap:3px;overflow-x:auto;padding:6px 2px 10px;scrollbar-width:thin;}
 .mj-hand::-webkit-scrollbar{height:5px;}
 .mj-hand::-webkit-scrollbar-thumb{background:#9ec9ae;border-radius:4px;}
+/* 手机竖屏一行装不下 14 张,横滚会把后几张藏出屏——换行摆两排,全部看得见 */
+@media (max-width:480px){
+  .mj-hand{flex-wrap:wrap;overflow-x:visible;row-gap:8px;}
+}
 .mj-gap{width:10px;flex:0 0 auto;}
 /* 牌体三层:象牙渐变顶面 + 右/下 2px 米黄侧墙(inset)+ 2px 传统绿底座 */
 .mj-tile{flex:0 0 auto;width:34px;height:46px;border-radius:7px;border:none;padding:0;cursor:pointer;position:relative;
@@ -198,6 +202,8 @@ export const MJ_CSS = `
 .mj-board .mj-msg{color:#e2f2e6;}
 .mj-river .mj-msg{color:#d9eddc;}
 .mj-modebar,.mj-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mj-modebar[hidden]{display:none;}
 .mj-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7c5a8e;text-align:center;overflow-wrap:anywhere;}
 .mj-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#D9538F,#BC3D75);box-shadow:0 4px 0 #972E5C;}
@@ -1903,7 +1909,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,牌桌能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "每一关都是先摆好一副胡牌再拆出来的,把闲牌打掉就一定能和。",
       grandMessage: "188 关全部开花,你就是花开麻将的小牌王!",
       guide,

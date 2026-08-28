@@ -128,6 +128,8 @@ const CSS = `
 .brk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBA987; }
 .brk-msg { text-align: center; min-height: 20px; color: #C97B5A; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.4; }
 .brk-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.brk-bar[hidden] { display: none; }
 .brk-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFD9C4; color: #8A4A20; cursor: pointer; box-shadow: 0 3px 0 #F0B594; }
 .brk-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #F0B594; }
 .brk-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }

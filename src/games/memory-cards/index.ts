@@ -108,6 +108,8 @@ const CSS = `
 @keyframes mmcGhost { 0%,100% { opacity: 1; } 50% { opacity: .35; transform: scale(.9); } }
 .mmc-msg { text-align: center; min-height: 22px; color: #6A9BD8; font-weight: 700; margin-top: 10px; font-size: 15px; line-height: 1.5; }
 .mmc-modes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mmc-modes[hidden] { display: none; }
 .mmc-open { border: none; border-radius: 999px; padding: 8px 16px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FA8DC, #4E86BC); box-shadow: 0 4px 0 #3C6C9C; }
 .mmc-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3C6C9C; }
 .mmc-toggle { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7A5AA0; box-shadow: 0 3px 0 rgba(120,90,160,.25); white-space: nowrap; }

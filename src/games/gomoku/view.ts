@@ -138,12 +138,20 @@ export const CSS = `
   cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .gmk-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
 .gmk-modebar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.gmk-modebar[hidden]{display:none;}
 .gmk-mode{border:none;border-radius:999px;min-height:${MIN_HIT_PX}px;padding:9px 16px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;background:#FFE8C8;color:#96601F;box-shadow:0 3px 0 rgba(150,96,31,.25);
   white-space:nowrap;}
 .gmk-mode:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(150,96,31,.25);}
 .gmk-mode-streak{background:#FFD7E4;color:#A8325C;box-shadow:0 3px 0 rgba(168,50,92,.25);}
 .gmk-claimbar{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap;}
+/* 同 modebar:display:flex 压过 UA 的 [hidden]{display:none},没禁手时这条要真的藏住 */
+.gmk-claimbar[hidden]{display:none;}
+/* 认输/让子这两颗不在 .gmk-btns 里,不补基础样式就是浏览器默认小按钮,手指点不着 */
+.gmk-claimbar button{border:none;border-radius:14px;min-height:${MIN_HIT_PX}px;padding:9px 14px;
+  font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;}
+.gmk-claimbar button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.12);}
 .gmk-claimtip{font-size:14px;font-weight:800;color:#A8325C;}
 .gmk-over{position:absolute;inset:0;background:rgba(255,250,245,.95);border-radius:18px;z-index:5;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
