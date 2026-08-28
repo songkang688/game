@@ -11,6 +11,15 @@
 | **N-195** | 上拍已关，本拍零改 |
 | **N-198** | 归 A，本拍不做 |
 
+## 三视口（无头 Chrome · `#/game/bowling-lane` 点无尽出现 HUD 暂停）
+
+| 选择器 | 390×844 | 915×412 | 1024×768 |
+| --- | --- | --- | --- |
+| `.bl-btn` | **44×67.2 IN** | **44×67.2 IN** | **44×67.2 IN** |
+| `.bl-pick` | 44×97.6 IN（未改规则） | 同左 | 同左 |
+
+`.l99-*` 本拍零改。
+
 ## 测试
 
-`src/games/hotspot.r46b.test.ts`。
+`src/games/hotspot.r46b.test.ts`、`hotspot.r27b.test.ts`、`hotspot.r45b.test.ts` 绿。`npm run build` 绿。
