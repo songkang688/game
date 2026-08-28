@@ -326,6 +326,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .bba-swap { min-width: 44px; min-height: 34px; background: #FFDCEB; color: #A8467A; box-shadow: 0 3px 0 #EEB6CF; }
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
       ${touchUpliftCss([".ba-btn", ".bba-mode", ".bba-swap"], { minWidth: true })}
+      .bba-mode,.bba-swap{min-height:44px;box-sizing:border-box;}
       ${bodyFontUpliftCss([".ba-msg"])}
     </style>
     <div class="ba-top">

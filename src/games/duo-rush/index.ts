@@ -406,6 +406,13 @@ export function mount(api: GameApi): { destroy: () => void } {
           box-shadow: 0 -8px 14px rgba(90,140,190,.16);
         }
       }
+      @media (max-height: 840px) and (min-height: 501px) {
+        .dr-btns {
+          position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
+          background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
+          box-shadow: 0 -8px 14px rgba(90,140,190,.16);
+        }
+      }
       @media (max-width: 480px) {
         .dr-setup { display: flex; flex-direction: column; }
         .dr-menu-cta {

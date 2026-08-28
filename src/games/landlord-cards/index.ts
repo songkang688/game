@@ -217,6 +217,7 @@ const CSS = `
 .ld-btn{border:none;border-radius:999px;min-height:42px;padding:8px 15px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#5b4a7a;background:linear-gradient(180deg,#fbf8ff,#e9e1fb);
   box-shadow:0 3px 0 rgba(80,60,110,.55);}
+.ld-btn{min-height:44px;}
 .ld-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(80,60,110,.55);}
 .ld-btn:disabled{opacity:.45;cursor:default;box-shadow:none;transform:none;}
 .ld-btn-go{background:linear-gradient(180deg,#f793b6,#e2648f);color:#fff;box-shadow:0 3px 0 #b8496f;}
