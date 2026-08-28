@@ -817,6 +817,25 @@ function mountArena(opts: ArenaOptions): Arena {
     canvas.height = Math.round(h * dpr);
   }
 
+  /**
+   * 每 REFIT_EVERY 帧补量一次画布余量。
+   *
+   * 挂载那一瞬间壳层顶栏 / l99 关卡条 / emoji 字体都还没回流完,量到的舞台余量比真
+   * 余量大——那一刀就钳松了(1280×800 双人对战实测:开局判「不用钳」,回流完画布压出
+   * 舞台 8px)。余量只有重量才知道,所以隔一会儿重来一次;显示宽没变就连 backing
+   * 都不碰,不会每次都重建画布缓冲。
+   */
+  const REFIT_EVERY = 20;
+  let refitTick = 0;
+
+  function refit(): void {
+    if (!ctx) return;
+    fitDisplay();
+    const w = Math.max(240, canvas.getBoundingClientRect().width || 320);
+    if (Math.abs(w - cssW) < 0.5) return;
+    resize();
+  }
+
   function draw(): void {
     if (!ctx) return;
     if (cssW <= 0) resize();
@@ -1143,6 +1162,7 @@ function mountArena(opts: ArenaOptions): Arena {
     }
     while (sparks.length && sparks[0].t > STARBURST_LIFE) sparks.shift();
     paintCards();
+    if (++refitTick % REFIT_EVERY === 0) refit();
     draw();
     raf = requestAnimationFrame(frame);
   }
