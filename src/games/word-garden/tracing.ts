@@ -142,8 +142,12 @@ export const WGD_CSS = `
   box-shadow:0 3px 8px rgba(140,110,60,.25);}
 .wgd-pad:focus-visible,.wgd-say:focus-visible,.wgd-garden-flower:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (max-width:400px){
-  .wgd-pad{width:min(86vw,300px);}
+  .wgd-pad{width:min(86vw,300px,var(--wgd-pad-room,300px));max-height:min(86vw,300px,var(--wgd-pad-room,300px));}
   .wgd-peek{font-size:16px;}
+}
+@media (max-height:500px){
+  .wgd-trace{min-height:0;padding:8px;gap:6px;}
+  .wgd-garden{max-height:10vh;min-height:36px;}
 }
 @media (prefers-reduced-motion:reduce){
   .wgd-next,.wgd-startdot,.wgd-bloom,.wgd-fall,.wgd-ink-oops{animation:none;}
@@ -258,6 +262,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   const countEl = wrap.querySelector(".wgd-count") as HTMLElement;
   const peekEl = wrap.querySelector(".wgd-peek") as HTMLElement;
   const pad = wrap.querySelector(".wgd-pad") as SVGSVGElement;
+  const padwrap = wrap.querySelector(".wgd-padwrap") as HTMLElement;
   const gardenEl = wrap.querySelector(".wgd-garden") as HTMLElement;
   const gardenRowEl = wrap.querySelector(".wgd-garden-row") as HTMLElement;
   const gardenCardEl = wrap.querySelector(".wgd-gardencard") as HTMLElement;
@@ -557,6 +562,13 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   render();
   msgEl.textContent = TRACE_INTRO;
   speak(TRACE_INTRO);
+  applyPadRoom();
+  fit.relayout();
+  const onWinResize = (): void => {
+    applyPadRoom();
+    fit.relayout();
+  };
+  wrap.ownerDocument?.defaultView?.addEventListener("resize", onWinResize);
 
   return {
     destroy() {
@@ -566,6 +578,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       path = [];
       unwatchSpeech();
       stopSpeaking();
+      wrap.ownerDocument?.defaultView?.removeEventListener("resize", onWinResize);
       pad.removeEventListener("pointerdown", onDown);
       pad.removeEventListener("pointermove", onMove);
       pad.removeEventListener("pointerup", onUp);

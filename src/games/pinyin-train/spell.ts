@@ -202,6 +202,17 @@ const CSS = `
   .pyt-slot{min-width:68px;}
   .pyt-view{font-size:${PINYIN_FONT_MIN + 8}px;}
 }
+@media (max-height:500px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(150px,34%) minmax(0,1fr);grid-auto-rows:auto;
+    min-height:0;height:100%;padding:8px;gap:6px;align-items:stretch;}
+  .pyt-top{grid-column:1/-1;}
+  .pyt-loco{display:none;}
+  .pyt-scene{grid-column:1;grid-row:2/-1;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-slots,.pyt-view,.pyt-say-row,.pyt-yard,.pyt-bottom{grid-column:2;}
+  .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
+  .pyt-yard{min-height:0;overflow-y:auto;}
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
 @media (prefers-reduced-motion:reduce){
   .pyt-wobble{animation:none;}
   .pyt-loco{transition:none;}
