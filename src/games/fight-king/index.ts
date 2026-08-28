@@ -184,6 +184,13 @@ const CSS = `
 .fk-pick{background:#fff;border-radius:16px;padding:10px;box-shadow:0 3px 10px rgba(140,120,190,.14);}
 .fk-pick-t{font-size:14px;font-weight:900;margin-bottom:6px;}
 .fk-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+/* N-25 矮屏把塔内出战八宫格收成一行，点「换人」才展开；选人菜单的 .fk-grid 不受 .fk-hero-row 管 */
+.fk-hero-summary{display:none;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.fk-hero-compact .fk-hero-summary{display:flex;}
+.fk-hero-compact:not(.fk-hero-open) .fk-pick-t{display:none;}
+.fk-hero-compact:not(.fk-hero-open) .fk-grid{display:none;}
+.fk-hero-now{font-size:15px;font-weight:900;color:#5b4890;}
+.fk-hero-swap{min-height:44px;}
 .fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}
@@ -230,7 +237,9 @@ const CSS = `
   align-items:center;justify-content:center;gap:10px;padding:16px;z-index:6;}
 .fk-pause-t{font-size:21px;font-weight:900;color:#8a5aa8;}
 .fk-pause-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.fk-pads{display:flex;gap:8px;margin-top:10px;}
+.fk-dock{position:sticky;bottom:0;z-index:5;margin-top:8px;
+  background:linear-gradient(180deg,rgba(245,240,255,0),#f5f0ff 12px);padding:6px 0 2px;}
+.fk-pads{display:flex;gap:8px;margin-top:0;}
 .fk-pad{flex:1;min-width:0;background:#fff8fc;border-radius:16px;padding:8px;display:flex;align-items:center;gap:8px;
   box-shadow:0 3px 10px rgba(140,120,190,.14);}
 .fk-stick{position:relative;width:96px;height:96px;flex:0 0 auto;border-radius:50%;background:#f0e9ff;
@@ -267,7 +276,8 @@ const CSS = `
 .fk-fd td.fk-fd-n{text-align:left;white-space:nowrap;}
 .fk-fd-plus{color:#3f8f5f;}
 .fk-fd-minus{color:#c05b5b;}
-.fk-scroll{overflow-x:auto;}
+.fk-scroll{overflow-x:auto;max-height:min(36vh,280px);overflow-y:auto;-webkit-overflow-scrolling:touch;}
+@media (max-height:500px){.fk-scroll{max-height:22vh;}}
 .fk-live{font-size:14px;font-weight:800;color:#5b4890;line-height:1.7;}
 .fk-btn:focus-visible,.fk-mode:focus-visible,.fk-ch:focus-visible,.fk-padbtn:focus-visible{
   outline:3px solid #3c2a6b;outline-offset:3px;}
@@ -311,6 +321,18 @@ const NARROW_PX = 520;
 
 /** 对局画面显示高的下限:再矮两个人就看不清了,低于它宁可交给舞台滚动 */
 export const FIGHT_MIN_H = 150;
+
+/**
+ * 格斗塔出战八宫格要不要收成一行「当前出战 · 换人」(N-25)。
+ * 只看视口，不碰 FIGHT_MIN_H / 判定。人机、双人、无尽没有这排宫格，函数也不会去动它们。
+ * 915×412 矮横屏、390×844 主流竖屏为 true；1024×768 / 1280×800 为 false。
+ */
+export function towerRosterCompact(innerW: number, innerH: number): boolean {
+  if (!Number.isFinite(innerW) || !Number.isFinite(innerH) || innerW <= 0 || innerH <= 0) return false;
+  if (innerH <= 500) return true;
+  if (innerW <= 420 && innerH <= 860) return true;
+  return false;
+}
 
 /**
  * 画面盒子(`.fk-stage`)该钳到多宽(null = 装得下,不用钳)。
@@ -801,25 +823,11 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     pads.appendChild(buildPad(1, characterById(o.p2).name));
   }
   if (!coarsePointer()) pads.classList.add("fk-hidden");
-  wrap.appendChild(pads);
 
-  const padToggle = button("fk-btn", "📱 触屏按键", () => {
-    pads.classList.toggle("fk-hidden");
-    o.sfx("tap");
-  });
-  bar.appendChild(padToggle);
-
-  /* ---------------- 训练模式面板 ---------------- */
-
-  const trainPanel = el("div", "fk-card");
-  const trainLive = el("div", "fk-live");
+  // N-25/N-31：键排(+训练场假人行) sticky 贴舞台底。内容装得下时仍在普通流里，无尽/人机不改观感。
+  const dock = el("div", "fk-dock");
   const dummyHint = el("div", "fk-train-hint");
   if (o.training) {
-    // 标题图标画制(visual-r2 修遗留#5):与菜单模式卡同一枚学士帽 SVG
-    const h = el("div", "fk-h");
-    h.innerHTML = `${modeIconSVG("training", 20)}<span> 训练场</span>`;
-
-    // 假人三选一：站立 / 蹲防 / 随机反击
     const modeRow = el("div", "fk-train-modes");
     modeRow.appendChild(el("span", "fk-sub", "假人："));
     const modeBtns: HTMLButtonElement[] = [];
@@ -836,10 +844,29 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     });
     modeBtns[DUMMY_MODES.indexOf(dummyMode)]?.classList.add("fk-ch-on");
     dummyHint.textContent = DUMMY_HINTS[dummyMode];
+    dock.appendChild(modeRow);
+  }
+  dock.appendChild(pads);
+  wrap.appendChild(dock);
+
+  const padToggle = button("fk-btn", "📱 触屏按键", () => {
+    pads.classList.toggle("fk-hidden");
+    o.sfx("tap");
+  });
+  bar.appendChild(padToggle);
+
+  /* ---------------- 训练模式面板 ---------------- */
+
+  const trainPanel = el("div", "fk-card");
+  const trainLive = el("div", "fk-live");
+  if (o.training) {
+    // 标题图标画制(visual-r2 修遗留#5):与菜单模式卡同一枚学士帽 SVG
+    const h = el("div", "fk-h");
+    h.innerHTML = `${modeIconSVG("training", 20)}<span> 训练场</span>`;
 
     const scroll = el("div", "fk-scroll");
     scroll.appendChild(frameTable(characterById(o.p1)));
-    trainPanel.append(h, modeRow, dummyHint, trainLive, scroll);
+    trainPanel.append(h, dummyHint, trainLive, scroll);
     wrap.appendChild(trainPanel);
   }
 
@@ -2145,7 +2172,16 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     // 塔里默认派 TOWER_HERO_ID 上场（见那条常量的注释）；上面这一排随时能换人
     let heroId: string = TOWER_HERO_ID;
-    const heroRow = el("div", "fk-card");
+    const heroRow = el("div", "fk-card fk-hero-row");
+    const summary = el("div", "fk-hero-summary");
+    const nowEl = el("span", "fk-hero-now", `当前出战：${characterById(heroId).name}`);
+    const swapBtn = button("fk-btn fk-hero-swap", "换人 ▾", () => {
+      const open = heroRow.classList.toggle("fk-hero-open");
+      swapBtn.textContent = open ? "收起 ▴" : "换人 ▾";
+      sfx("tap");
+    });
+    summary.append(nowEl, swapBtn);
+    heroRow.appendChild(summary);
     heroRow.appendChild(el("div", "fk-pick-t", "出战角色（随时可以换，换完从当前关继续）"));
     const grid = el("div", "fk-grid");
     const heroBtns: HTMLButtonElement[] = [];
@@ -2157,6 +2193,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       b.setAttribute("aria-label", `出战角色 ${ch.name}：${ch.style}`);
       b.addEventListener("click", () => {
         heroId = ch.id;
+        nowEl.textContent = `当前出战：${ch.name}`;
         sfx("pop");
         heroBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
         swapTip.textContent = "";
@@ -2169,6 +2206,18 @@ export function mount(api: GameApi): { destroy: () => void } {
     // 连着几场没赢下来就在这儿提一句「换个小伙伴试试」，平时是空的
     const swapTip = el("div", "fk-swap");
     heroRow.appendChild(swapTip);
+    const applyRosterCompact = (): void => {
+      const w = (globalThis as { innerWidth?: number }).innerWidth ?? 0;
+      const h = (globalThis as { innerHeight?: number }).innerHeight ?? 0;
+      const compact = towerRosterCompact(w, h);
+      heroRow.classList.toggle("fk-hero-compact", compact);
+      if (!compact) {
+        heroRow.classList.remove("fk-hero-open");
+        swapBtn.textContent = "换人 ▾";
+      }
+    };
+    applyRosterCompact();
+    window.addEventListener("resize", applyRosterCompact);
     view.insertBefore(heroRow, towerHost);
 
     let currentFight: FightHandle | null = null;
@@ -2237,6 +2286,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     );
 
     screenCleanup = () => {
+      window.removeEventListener("resize", applyRosterCompact);
       currentFight?.destroy();
       currentFight = null;
       tower.destroy();
