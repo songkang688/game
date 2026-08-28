@@ -132,6 +132,16 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .snk-beat i { animation: none; } }
 .snk-pad-off .sn-pad { display: none; }
 .snk-hint { text-align: center; font-size: 13px; color: #8A6A16; min-height: 18px; margin-top: 4px; }
+/* 模式宿主自己可滚:外层 .l99-host 是 overflow:hidden(N-63),无尽内容高过舞台时这里兜底 */
+.sn-modehost{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}
+/* 进无尽后地图宿主要真的让位:.l99-host 的 display:flex 会压过 hidden 的 UA display:none */
+.sn-levelhost[hidden]{display:none;}
+/* 中高度桌面档(1024×768 一类):方形画布按剩余高度钳边长,方向键不再被舞台裁掉 */
+@media (min-width:640px) and (min-height:501px) and (max-height:840px){
+  .sn-mode .sn-canvas{width:auto;max-width:100%;height:clamp(240px,calc(100dvh - 424px),656px);margin:0 auto;}
+  .sn-mode .sn-pad{margin-top:6px;}
+  .sn-mode .sn-msg{margin-top:4px;}
+}
 /* 矮横屏(915×412 一类):画布左、徽章+方向键右,方形画布按剩余高度钳边长 */
 @media (min-width:640px) and (max-height:500px){
   .sn-wrap{display:grid;grid-template-columns:minmax(0,auto) 200px;column-gap:14px;justify-content:center;align-items:start;padding:8px 12px;}
@@ -827,7 +837,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   const bar = document.createElement("div");
   bar.className = "sn-bar-modes";
   const levelHost = document.createElement("div");
+  levelHost.className = "sn-levelhost";
   const modeHost = document.createElement("div");
+  modeHost.className = "sn-modehost";
   modeHost.hidden = true;
   root.append(style, bar, levelHost, modeHost);
   api.root.appendChild(root);

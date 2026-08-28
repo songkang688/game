@@ -159,16 +159,16 @@ const CSS = `
   .cc-hud{grid-column:1 / -1;grid-row:1;margin-bottom:2px;}
   .cc-topline{min-height:20px;}
   .cc-ava{width:18px;height:18px;}
-  .cc-name{font-size:13px;}
+  .cc-name{font-size:16px;}
   .cc-timer{font-size:16px;}
   .cc-mid{min-width:64px;}
-  .cc-combo{min-height:0;font-size:12px;}
+  .cc-combo{min-height:0;}
   .cc-canvas{grid-column:2;grid-row:2;}
-  .cc-msg{grid-column:1 / -1;grid-row:3;margin-top:2px;min-height:0;font-size:12px;}
+  .cc-msg{grid-column:1 / -1;grid-row:3;margin-top:2px;min-height:0;font-size:16px;}
   .cc-pad{display:contents;}
   .cc-stick{grid-column:1;grid-row:2;}
   .cc-btns{grid-column:3;grid-row:2;max-width:150px;justify-content:center;}
-  .cc-info{grid-column:1 / -1;grid-row:4;max-height:44px;overflow-y:auto;padding:4px 8px;font-size:12px;}
+  .cc-info{grid-column:1 / -1;grid-row:4;max-height:44px;overflow-y:auto;padding:4px 8px;font-size:16px;}
 }
 .cc-modebar,.cc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */

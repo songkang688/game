@@ -80,6 +80,17 @@ const CSS = `
 .bbp-over-s { font-size: 15px; font-weight: 700; color: #4FA3C7; line-height: 1.6; margin-bottom: 14px; }
 .bbp-line { height: 4px; background: repeating-linear-gradient(90deg, #FF9EC8 0 10px, transparent 10px 20px); border-radius: 2px; margin: 0 0 4px; }
 @media (max-width: 380px) { .bp-badge { font-size: 14px; } .bp-board { gap: 5px; } .bbp-chip { font-size: 14px; } }
+/* 模式宿主自己可滚:外层 .l99-host 是 overflow:hidden(N-63),泡泡海高过舞台时这里兜底 */
+.bbp-modehost{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}
+/* 进泡泡海后地图宿主要真的让位:.l99-host 的 display:flex 会压过 hidden 的 UA display:none */
+.bbp-levelhost[hidden]{display:none;}
+/* 中高度桌面档(1024×768 一类):盘面限宽收泡径、盘内滚动,底行泡泡不再被舞台裁掉 */
+@media (min-width:640px) and (min-height:501px) and (max-height:840px){
+  .bbp-mode .bp-wrap{max-width:428px;margin:0 auto;max-height:calc(100dvh - 168px);
+    overflow-y:auto;overscroll-behavior:contain;}
+  .bbp-mode .bbp-line{position:sticky;top:0;z-index:3;}
+  .bbp-mode .bp-msg{position:sticky;bottom:0;z-index:3;background:#ffffffe6;border-radius:10px;padding:4px 8px;}
+}
 /* 矮横屏(915×412 一类):泡泡海「盘左、抬头右」。12 行×44px 泡径必然高过视口,
    故盘面限宽保 44px 热区、盘内滚动:涨潮虚线钉滚动视口顶、消息条钉底、开局停在海面 */
 @media (min-width:640px) and (max-height:500px){
@@ -942,7 +953,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   const bar = document.createElement("div");
   bar.className = "bbp-bar";
   const levelHost = document.createElement("div");
+  levelHost.className = "bbp-levelhost";
   const modeHost = document.createElement("div");
+  modeHost.className = "bbp-modehost";
   modeHost.hidden = true;
   root.append(style, bar, levelHost, modeHost);
   api.root.appendChild(root);

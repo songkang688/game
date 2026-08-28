@@ -13,6 +13,15 @@ describe("N-82 bubble-pop 无尽泡泡海 · 915×412", () => {
     expect(SRC).toContain("panel.scrollTop = panel.scrollHeight;");
   });
 
+  it("1024×768:盘限宽 428 收泡径 47、底行 973..1052→499..546;地图宿主 hidden 真让位,模式宿主可滚兜底", () => {
+    expect(SRC).toContain("@media (min-width:640px) and (min-height:501px) and (max-height:840px)");
+    expect(SRC).toContain(".bbp-mode .bp-wrap{max-width:428px;margin:0 auto;max-height:calc(100dvh - 168px);");
+    expect(SRC).toContain(".bbp-modehost{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}");
+    expect(SRC).toContain(".bbp-levelhost[hidden]{display:none;}");
+    expect(SRC).toContain('levelHost.className = "bbp-levelhost";');
+    expect(SRC).toContain('modeHost.className = "bbp-modehost";');
+  });
+
   it("涨潮判定与泡径热区零触碰:pushUpRow 溢出收摊、.bp-cell 36px 下限原句都在", () => {
     expect(SRC).toContain("const result = pushUpRow(next, COLS, seaColors(pushes), Math.random, seaFrozen(pushes));");
     expect(SRC).toContain("if (result.overflow) {");

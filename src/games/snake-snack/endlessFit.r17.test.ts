@@ -12,6 +12,15 @@ describe("N-81 snake-snack 无尽花园 · 915×412", () => {
     expect(SRC).toContain(".sn-pad{grid-column:2;grid-row:3;margin-top:6px;grid-template-columns:repeat(3,60px);grid-template-rows:46px 46px;justify-content:start;}");
   });
 
+  it("1024×768:画布钳 344(底 587)、方向键 999..1101→615..717;地图宿主 hidden 真让位,模式宿主可滚兜底", () => {
+    expect(SRC).toContain("@media (min-width:640px) and (min-height:501px) and (max-height:840px)");
+    expect(SRC).toContain(".sn-mode .sn-canvas{width:auto;max-width:100%;height:clamp(240px,calc(100dvh - 424px),656px);margin:0 auto;}");
+    expect(SRC).toContain(".sn-modehost{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}");
+    expect(SRC).toContain(".sn-levelhost[hidden]{display:none;}");
+    expect(SRC).toContain('levelHost.className = "sn-levelhost";');
+    expect(SRC).toContain('modeHost.className = "sn-modehost";');
+  });
+
   it("走格判定与划动转弯零触碰:CELL 常量、swipeDir、touch-action 原样", () => {
     expect(SRC).toContain("const CELL = 26;");
     expect(SRC).toContain("const SIZE = GRID * CELL;");

@@ -221,7 +221,7 @@ export const MJ_CSS = `
   .mj-hand{padding:2px 2px 4px;}
   .mj-tile{height:44px;}
   .mj-acts{margin-top:0;}
-  .mj-wrap>.mj-msg{margin-top:2px;min-height:0;font-size:14px;}
+  .mj-wrap>.mj-msg{margin-top:2px;min-height:0;}
 }
 .mj-modebar,.mj-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
