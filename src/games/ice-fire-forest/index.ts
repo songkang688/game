@@ -256,6 +256,14 @@ const CSS = `
   .iff-tip{grid-column:1;}
   .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
 }
+/* N-124 模式:768 不命中 500;粗指针中间档双垫仍并排,C-8 原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .iff-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;justify-items:stretch;}
+  .iff-hud,.iff-swapbar{grid-column:1/-1;}
+  .iff-board{grid-column:1;min-width:0;}
+  .iff-tip{grid-column:1;}
+  .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .iff-btn:active,.iff-pad button:active,.iff-swap:active{transform:none;}
 }

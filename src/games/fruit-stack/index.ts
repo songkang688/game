@@ -144,6 +144,16 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+/* N-124 模式:768 不命中 500;粗指针中间档钉投放键。玩法/物理零改 */
+@media (max-height:820px) and (pointer:coarse){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,244,248,.35),#FFF4F8 40%);}
+}
+/* N-122 模式:390×844 不命中 500/820;竖屏钉投放键,舞台可滚到底 */
+@media (max-width:430px) and (min-height:700px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:8px 0 4px;
+    background:linear-gradient(180deg,rgba(255,244,248,.2),#FFF4F8 32%);}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}
 }

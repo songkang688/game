@@ -281,6 +281,27 @@ const CSS = `
   .se-mode .se-seat-info{display:none;}
   .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
 }
+/* N-124 模式:768 不命中 500;粗指针钉行动排+收盘。r10/r14/r18 500 原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(280px,48dvh);max-width:min(280px,48dvh,calc(100dvh - 140px));}
+}
+@media (max-height:820px) and (min-width:700px) and (pointer:coarse){
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* N-122 模式:390×844 钉掷骰行,不拆 500 档 overflow:hidden 锁 */
+@media (max-width:430px) and (min-height:700px){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(52dvh,320px);max-width:min(52dvh,320px);}
+}
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
   .se-coin{transition:opacity 120ms linear;}

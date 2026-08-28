@@ -263,6 +263,20 @@ const CSS = `
   .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
   .ps-tip{max-width:340px;}
 }
+/* N-124 模式:768 不命中 500;粗指针中间档把控制列挪到台面右侧。N-12 500 原文不动 */
+@media (min-width:560px) and (max-height:820px) and (pointer:coarse){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+  .ps-tip{max-width:340px;}
+}
+/* N-122 模式:390×844 钉击球/暂停行 */
+@media (max-width:430px) and (min-height:700px){
+  .ps-row{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(250,255,252,.35),#FAFFFC 40%);}
+}
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}
   .ps-table{transform:none !important;}
@@ -555,6 +569,19 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     let availH = room.h;
     const ih = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 0;
     if (ih > 0 && ih <= 500 && viewportWidth() >= 560) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(120, Math.round(st.bottom - tb.top - 12))
+          : Math.max(120, room.h - 96);
+    } else if (
+      ih > 0 &&
+      ih <= 820 &&
+      viewportWidth() >= 560 &&
+      typeof globalThis.matchMedia === "function" &&
+      globalThis.matchMedia("(pointer:coarse)").matches
+    ) {
       const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
       const tb = tableBox.getBoundingClientRect?.();
       availH =
