@@ -176,6 +176,14 @@ export const CSS = `
   .xq-wrap{max-width:248px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
   .xq-wrap{max-width:min(248px,52dvh);max-height:100%;overflow:hidden;}
+  /* N-95:248px 钳宽是给棋盘的;自由对战设置面板套上会一列纵排 765px 高,
+     「开始下棋」滚不到——设置态放宽成多栏并自己开内滚,开局即摘类回棋盘钳宽。
+     max-height 用 dvh 减壳顶栏+关卡条预算(140):父级没显式高,100% 会解析成 auto 钳不住 */
+  .xq-wrap.xq-setup{max-width:min(680px,94%);max-height:calc(100dvh - 140px);
+    overflow-y:auto;overscroll-behavior:contain;}
+  .xq-setup .xq-panel{gap:8px;padding:6px 4px;}
+  .xq-setup .xq-seg button{padding:8px 6px;min-height:44px;}
+  .xq-setup .xq-start{padding:10px;}
 }
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}

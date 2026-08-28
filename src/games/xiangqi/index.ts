@@ -852,6 +852,8 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
     table?.destroy();
     table = null;
     root.innerHTML = "";
+    // N-95:矮横屏设置面板要多栏宽版(见 view.ts .xq-setup),开局时摘掉回棋盘钳宽
+    root.classList.add("xq-setup");
     const panel = document.createElement("div");
     panel.className = "xq-panel";
     root.appendChild(panel);
@@ -912,6 +914,7 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
   }
 
   function startGame(): void {
+    root.classList.remove("xq-setup");
     root.innerHTML = "";
     const ai = tier === "pvp" ? null : tier;
     table = mountTable(root, {
