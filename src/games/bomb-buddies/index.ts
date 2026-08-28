@@ -318,6 +318,11 @@ export const CSS = `
     grid-template-areas:"hud hud hud" "padl board padr" "tip tip tip";}
   .bmb-hud{grid-area:hud;}
   .bmb-board{grid-area:board;justify-self:center;}
+  /* N-96:格子到 MIN_CELL_PX=24 下限后棋盘仍装不下(915 实测底 439 出屏 27)——
+     纯显示钳:!important 盖掉 layout() 写的内联宽高,交给 canvas 内在比例等比收,
+     格子逻辑/判定坐标零触碰;182 = 壳顶栏+关卡条+HUD 行实测预算 */
+  .bmb-board canvas{width:auto!important;height:auto!important;
+    max-height:max(160px,calc(100dvh - 182px));margin-inline:auto;}
   .bmb-tip{grid-area:tip;}
   .bmb-pads{display:contents;position:static;background:none;padding:0;}
   .bmb-padwrap:first-child{grid-area:padl;}
