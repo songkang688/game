@@ -453,6 +453,11 @@ export const SP_CSS = `
   .sp-modetip{display:none;}
 }
 @media (max-height:500px){
+  /* N-99:915×412 上盘+键+消息行 446px 高,塞不进 178px 的舞台段,而 .sp-wrap 基础档是
+     overflow:hidden——盘底两排格子(391~504)永远滚不到。这一档改成花田自己竖着滚,
+     数字键/工具行下面两条 sticky 规则本来就是给滚动准备的,钉在可视底边不动。
+     题库/seed/判定零触碰;竖屏(高>500px)不进这一档,390×844 布局一个像素不变。 */
+  .sp-wrap{overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}

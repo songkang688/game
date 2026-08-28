@@ -109,6 +109,13 @@ export function createFarmLayer(
   style.textContent = FARM_CSS;
   stage.appendChild(style);
 
+  // r18 A:四层 absolute 的定位祖先本来落在 .l99-wrap(整张卡,含「🗺️ 选关/跳过」标题条),
+  // 农场天空把标题条整条盖住,孩子在任何视口都看不见回选关的钮(pointer-events:none 只是能盲点)。
+  // 舞台自己定位后四层锚进舞台。FARM_CSS 按契约只许写 mtf-/qz- 选择器,所以这一刀在运行时落,
+  // destroy 时原样放回(平台文件一个字节不改)。
+  const prevStagePos = stage.style?.position ?? "";
+  if (stage.style && !prevStagePos) stage.style.position = "relative";
+
   const scene = el("div", "mtf-scene");
   scene.innerHTML = farmSceneSvg();
   stage.appendChild(scene);
@@ -300,6 +307,7 @@ export function createFarmLayer(
       plots.remove();
       scene.remove();
       style.remove();
+      if (stage.style && !prevStagePos) stage.style.position = "";
     },
   };
 }

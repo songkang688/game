@@ -491,6 +491,17 @@ export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewp
 }
 
 /**
+ * N-100：进图聚焦允许的最大滚动量——把当前关整格卷到滚动盒底边再留 margin 的「最小滚动」。
+ * 章节 tab 折多行的款(word-garden 等六款)在 915×412 上 block:center 会把 .l99-view 卷到 300+，
+ * 「开始冒险 ▶」与工具行整段飞出视口顶；钳回这个值后 CTA 留在屏上、格子照样整格可见。
+ * 格子本来就在首屏时返回 0（一个像素都不滚）；量不出数（单测桩）也返回 0，绝不把 NaN 写进 scrollTop。
+ */
+export function mapEntryScrollCap(nodeBottomInContent: number, viewH: number, margin = 8): number {
+  if (!Number.isFinite(nodeBottomInContent) || !Number.isFinite(viewH) || viewH <= 0) return 0;
+  return Math.max(0, Math.ceil(nodeBottomInContent - viewH + margin));
+}
+
+/**
  * 没有专属攻略数据时，按章节自动拼一份「只讲方法、不给答案」的攻略。
  * 纯函数便于测试；具体游戏的细则由后续步骤补 `guide` 字段覆盖。
  */
@@ -640,7 +651,21 @@ const L99_CSS = `
   /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
      四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
   .l99-wrap{max-height:calc(100dvh - 136px);}
+  /* N-97:上面那条 276px 的钳位只该管地图档(给挂在图上面的模式条让位);关内也被它截走
+     整整 62px 舞台高,math-farm 末章末关三颗选项因此掉在裁切线下。关内放开回基础档的
+     height:100%,舞台吃满 .game-stage;地图档(:has 不中)一个像素不变。 */
+  .l99-wrap:has(.l99-stage-wrap){max-height:none;}
   .l99-view{overscroll-behavior:contain;}
+  /* N-100:地图头两行(进度+开始冒险、工具行)钉在滚动盒顶。word-garden 8 章的 tab 折三行
+     (156px),CTA 到当前关的跨度 396px > 276px 的滚动盒,聚焦怎么滚都有一头出屏 —— 钉住后
+     CTA/直达行常在,页签和格子在底下滚。工具行收成一条可横滚的行,小字注释藏起来
+     (完整文案仍在 input.title 上),与关内 stagebar 同配方;竖屏与平板不进这一档,零变化。 */
+  .l99-mapbar{position:sticky;top:0;z-index:3;background:#FFF7FB;margin:0 -10px;padding:6px 10px 4px;
+    box-shadow:0 4px 10px rgba(140,120,200,.14);}
+  .l99-mapbar .l99-head{margin-bottom:6px;}
+  .l99-mapbar .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;overflow-x:auto;gap:6px;margin:0;}
+  .l99-mapbar .l99-jump{flex-wrap:nowrap;gap:4px;}
+  .l99-mapbar .l99-jump-note{display:none;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
@@ -883,7 +908,13 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       startLevel(furthest);
     });
     head.appendChild(cont);
-    map.appendChild(head);
+    // N-100:进度+CTA、工具行包进 .l99-mapbar。基础档它就是个透明块,布局一个像素不变;
+    // 矮横屏(max-height:500px)钉在 .l99-view 顶 —— word-garden 这类章节 tab 折三行的图,
+    // CTA 和当前关本来就同屏放不下,聚焦一滚 CTA 必出顶,钉住后怎么滚都在。
+    const bar = document.createElement("div");
+    bar.className = "l99-mapbar";
+    bar.appendChild(head);
+    map.appendChild(bar);
 
     // 工具行：跳到当前关 + 攻略（壳层注册了才有）+ 跳关（壳层注册了才有）
     const tools = document.createElement("div");
@@ -901,7 +932,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     attachGuide(tools, () => furthestPlayable(stars, skips, total) + 1);
     attachSkip(tools, furthest, () => showMap(true));
     attachRootJump(tools, () => furthestPlayable(stars, skips, total));
-    map.appendChild(tools);
+    bar.appendChild(tools);
 
     const tabs = document.createElement("div");
     tabs.className = "l99-tabs";
@@ -1009,6 +1040,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         // 量不出矩形(单测桩)按「看不见」算,照旧滚,N-39 的聚焦行为不回退。
         const vr = typeof view.getBoundingClientRect === "function" ? view.getBoundingClientRect() : null;
         const nr = typeof cur.getBoundingClientRect === "function" ? cur.getBoundingClientRect() : null;
+        const scroll0 = typeof view.scrollTop === "number" ? view.scrollTop : 0;
         const seen = vr && nr
           ? nodeCurFullyVisible({ top: nr.top - vr.top, bottom: nr.bottom - vr.top }, vr.height)
           : false;
@@ -1016,6 +1048,14 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
           if (!seen) cur.scrollIntoView?.({ block: "center" });
         } catch {
           // 老浏览器不支持 options 就算了
+        }
+        // N-100:章节 tab 折多行的款(word-garden 等),915×412 进场 block:center 把 .l99-view
+        // 卷到 300+,「开始冒险 ▶」和 root 直达行整段飞出视口顶。center 滚过最小需要量时
+        // 钳回「格子贴滚动盒底边再留 8px」——进场档 CTA 因此留在屏上;深关档格子改贴底,
+        // 上方是孩子已通的关,N-39 的「整格可见+聚焦」不回退。没滚(seen)时一个像素不动。
+        if (!seen && vr && nr) {
+          const cap = mapEntryScrollCap(nr.bottom - vr.top + scroll0, vr.height);
+          if (typeof view.scrollTop === "number" && view.scrollTop > cap) view.scrollTop = cap;
         }
         cur.focus?.();
         // N-63:scrollIntoView 会连 .game-stage 一起滚,模式条飞到负 top。

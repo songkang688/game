@@ -170,6 +170,10 @@ const QUIZ_CSS = `
   .qz-ask { min-height: 20px; }
   .qz-say { min-height: 44px; padding: 6px 18px; }
   .qz-jump-go { min-height: 44px; padding: 8px 16px; }
+  /* N-97:root 档「🎫 直达这题」整行 44px 插在题面上方,矮横屏把三颗选项挤到裁切线下
+     (math-farm 末章末关 394~440 全 OUT)。这一档把管理员行排到答题区之后——孩子先看到
+     题面和选项,直达行往下滚一下就有;DOM 顺序、热区 44、竖屏与平板布局都不动。 */
+  .qz-jump { order: 9; }
   .qz-badge { padding: 3px 10px; }
 }
 `;
