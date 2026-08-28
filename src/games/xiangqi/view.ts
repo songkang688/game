@@ -116,7 +116,7 @@ export const CSS = `
 .xq-restart{background:#FFD9C4;color:#8A421F;}
 .xq-hint{background:#FFF0BF;color:#7A5A10;}
 .xq-help{background:#D9F2C4;color:#3E6A22;}
-.xq-back{background:#FFE0C2;color:#8A4E19;}
+.xq-back{background:#FFE0C2;color:#8A4E19;min-height:${MIN_HIT_PX}px;}
 .xq-confirm{background:#EDE2FF;color:#553A8B;}
 .xq-resign{background:#FFDDE4;color:#8E2B4A;}
 .xq-draw{background:#E2F0F5;color:#255E70;}

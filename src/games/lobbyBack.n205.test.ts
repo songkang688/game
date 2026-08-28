@@ -64,21 +64,40 @@ function classSuffix(sel: string, suffix: string): boolean {
   return re.test(sel) || new RegExp(`^\\.[\\w-]+-${suffix}$`).test(sel);
 }
 
+/** 牌背 / 土丘等装饰，不是大厅返回钮。 */
+function decorativeBack(body: string): boolean {
+  if (/pointer-events:\s*none/.test(body)) return true;
+  if (/\binset\s*:/.test(body)) return true;
+  if (/(?:^|;)\s*height:\s*[\d.]+%/.test(body)) return true;
+  const h = /(?:^|;)\s*height:\s*(\d+)px/.exec(body);
+  if (h && Number(h[1]) < 30) return true;
+  const w = /(?:^|;)\s*width:\s*(\d+)px/.exec(body);
+  if (w && Number(w[1]) < 30) return true;
+  return false;
+}
+
+function exactBackSel(sel: string): boolean {
+  return /^\.[\w-]+-back$/.test(sel.trim());
+}
+
 describe("N-205 大厅 *-back（排除 l99 / fs-back / oa-back）", () => {
   it("可点 *-back 须 ≥44 或 TOUCH 插值", () => {
     const hits: string[] = [];
     for (const file of walkSrc(GAMES)) {
       const rel = file.slice(GAMES.length).replace(/\\/g, "/");
       if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (rel.startsWith("fishing-star/")) continue;
+      if (rel.startsWith("orb-arena/")) continue;
       if (/\.test\.(ts|css)$/.test(rel)) continue;
       const src = readFileSync(file, "utf8");
       for (const r of rulesOf(src)) {
         if (/\.l99-/.test(r.sel)) continue;
-        if (/\.fs-back\b/.test(r.sel)) continue;
         if (/\.oa-back\b/.test(r.sel)) continue;
         if (/\.shr-back\b/.test(r.sel)) continue;
         if (!classSuffix(r.sel, "back")) continue;
-        if (!clickable(r.sel, r.body)) continue;
+        if (decorativeBack(r.body)) continue;
+        const colorBar = exactBackSel(r.sel) && /background/.test(r.body);
+        if (!clickable(r.sel, r.body) && !colorBar) continue;
         if (tallEnough(r.body)) continue;
         hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
       }
@@ -90,6 +109,20 @@ describe("N-205 大厅 *-back（排除 l99 / fs-back / oa-back）", () => {
     expect(FS_FISH).toMatch(/\.fs-back\{/);
     expect(OA).toMatch(/\.oa-back\{/);
     expect(FS_FISH).not.toMatch(/\.fs-back\{[^}]*min-height:44px/);
+    expect(OA).not.toMatch(/\.oa-back\{[^}]*min-height:44px/);
+  });
+
+  it("棋类/擂台色条与弹弓选关也声明 ≥44，水果叠叠 .fs-back 仍扫", () => {
+    const XQ = readFileSync(fileURLToPath(new URL("./xiangqi/view.ts", import.meta.url)), "utf8");
+    const GMK = readFileSync(fileURLToPath(new URL("./gomoku/view.ts", import.meta.url)), "utf8");
+    const DUA = readFileSync(fileURLToPath(new URL("./duo-arena/index.ts", import.meta.url)), "utf8");
+    const SLB = readFileSync(fileURLToPath(new URL("./sling-birds/index.ts", import.meta.url)), "utf8");
+    const FST = readFileSync(fileURLToPath(new URL("./fruit-stack/index.ts", import.meta.url)), "utf8");
+    expect(XQ).toMatch(/\.xq-back\{[^}]*min-height:\$\{MIN_HIT_PX\}px/);
+    expect(GMK).toMatch(/\.gmk-back\{[^}]*min-height:\$\{MIN_HIT_PX\}px/);
+    expect(DUA).toMatch(/\.dua-back\{[^}]*min-height:44px/);
+    expect(SLB).toMatch(/\.slb-back \{ min-height: 44px; \}/);
+    expect(FST).toMatch(/\.fs-back\{[^}]*min-height:44px/);
   });
 });
 

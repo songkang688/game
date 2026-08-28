@@ -20,3 +20,7 @@
 2. **暂停列太扁**：触控分组 `.btn, .icon-btn, … { min-height:44px }` 与 `.btn{min-height:58px}` 同优先级、后写获胜，量出来 44。分组后重申 `.btn{min-height:58px}`。不改 `dialogs.ts` 冷静期。
 
 闸：`src/ui/shell.r47.test.ts`。
+
+## 大厅 `*-back`（学习票曾写 N-203）
+
+学习票把「大厅 `*-back`」标成 **N-203**。本分支 **N-203 是结算 overlay 竖滚、N-204 是 915 overlay 收边**，不改号语义去抢票。大厅巡检用 **N-205**（见 `trio-r51-tester-A.md`）。排除 `.l99-*`；钓鱼 `.fs-back`、光球 `.oa-back` 归 B。N-105 无第四版。

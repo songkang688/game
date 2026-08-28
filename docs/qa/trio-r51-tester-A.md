@@ -10,8 +10,14 @@
 
 静态扫可点 `*-back` ≥44（或 TOUCH 插值）。排除 `.l99-*`、`.fs-back`、`.oa-back`、`.shr-back`、B 白名单文件。
 
-缺 44 的大厅返回（只加 `min-height:44px`，不改 padding）：
+缺 44 的大厅返回（只加 `min-height`，不改 padding）：
 
 `as-back` `blp-back` `bl-back` `brk-back` `bbp-back` `frc-back` `ld-back` `mp-back` `pz-back` `rbe-back`（36→44）`sn-back`。
+
+闸漏的色条 / 双类名（本拍补上，仍不改 padding）：
+
+`xq-back` `gmk-back`（`${MIN_HIT_PX}`）`dua-back` `mn-back` 色条、`slb-back`（钮本身已是 `.slb-btn` 48）。
+
+水果叠叠 `.fs-back` 已有 44，闸按文件排除钓鱼、仍扫叠叠。不改 `fishing-star` / `orb-arena`。
 
 闸：`src/games/lobbyBack.n205.test.ts`。

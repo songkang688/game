@@ -320,7 +320,7 @@ export const MN_CSS = `
 .mn-open,.mn-back{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#6FA85A,#568844);box-shadow:0 4px 0 #416832;}
 .mn-open:active,.mn-back:active{transform:translateY(2px);box-shadow:0 2px 0 #416832;}
-.mn-back{background:linear-gradient(180deg,#7E97C0,#65799C);box-shadow:0 4px 0 #4E5E7C;}
+.mn-back{background:linear-gradient(180deg,#7E97C0,#65799C);box-shadow:0 4px 0 #4E5E7C;min-height:44px;}
 .mn-back:active{box-shadow:0 2px 0 #4E5E7C;}
 .mn-field{position:relative;}
 .mn-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}

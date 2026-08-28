@@ -122,7 +122,7 @@ export const CSS = `
 .gmk-undo{background:#CDE6FF;color:#2A6099;}
 .gmk-hint{background:#D9F2C4;color:#4A7A2A;}
 .gmk-retry{background:#FFD9C4;color:#A0522D;}
-.gmk-back{background:#FFE0C2;color:#9A5A20;}
+.gmk-back{background:#FFE0C2;color:#9A5A20;min-height:${MIN_HIT_PX}px;}
 .gmk-claim{background:#FFD1DC;color:#A8325C;}
 .gmk-msg{text-align:center;min-height:20px;color:#B06AB3;font-weight:700;margin-top:8px;font-size:14px;line-height:1.5;}
 .gmk-panel{display:flex;flex-direction:column;gap:12px;padding:10px 6px;}
