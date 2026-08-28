@@ -1,7 +1,7 @@
 /**
- * trio-r38…r42 A：N-176 *-pick、N-179 *-lessonbtn、N-182 *-softbtn、N-185 *-catch、N-188 *-toggle。
+ * trio-r38…r44 A：N-176…188、N-191 overlay 复制体、N-194 *-lv。
  * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760 / --vv-h。
- * B 热区文件白名单（N-174/169/94/102/177/181/184/187）。
+ * B 热区文件白名单（含 N-189/190 red-blue-tap、N-192/193 bubble-aim/candy-swing）。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -21,10 +21,15 @@ const HH = readFileSync(fileURLToPath(new URL("./hue-hand/index.ts", import.meta
 const MMC = readFileSync(fileURLToPath(new URL("./memory-cards/index.ts", import.meta.url)), "utf8");
 const SNK = readFileSync(fileURLToPath(new URL("./snake-snack/index.ts", import.meta.url)), "utf8");
 const SHR = readFileSync(fileURLToPath(new URL("./shoot-range/index.ts", import.meta.url)), "utf8");
+const RBT = readFileSync(fileURLToPath(new URL("./red-blue-tap/arena.ts", import.meta.url)), "utf8");
+const RTE = readFileSync(fileURLToPath(new URL("./red-blue-tap/index.ts", import.meta.url)), "utf8");
+const RBE = readFileSync(fileURLToPath(new URL("./red-blue-race/index.ts", import.meta.url)), "utf8");
+const BA = readFileSync(fileURLToPath(new URL("./bubble-aim/index.ts", import.meta.url)), "utf8");
+const CS = readFileSync(fileURLToPath(new URL("./candy-swing/index.ts", import.meta.url)), "utf8");
 
-/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn、N-181 softbtn、N-184 hh-catch、N-187 mmc-toggle */
+/** N-174…187 + N-189/190 tap overlay、N-192/193 地图格 */
 const B_ALLOW_FILE =
-  /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king|hue-hand|memory-cards)\//;
+  /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king|hue-hand|memory-cards|red-blue-tap|bubble-aim|candy-swing)\//;
 
 const KIT_TOKEN =
   /TOUCH_MIN|MIN_HIT_PX|HUD_BTN_MIN_H|MIN_HOT|TOGGLE_MIN_H|MIN_TOUCH_PX|CHIP_MIN|SWATCH_MIN/;
@@ -72,6 +77,13 @@ function classSuffix(sel: string, suffix: string): boolean {
   if (/:(hover|active|focus)/.test(sel)) return false;
   const re = new RegExp(`(?:^|,)\\s*\\.[\\w-]+-${suffix}(?:\\.[\\w-]+)?\\s*$`);
   return re.test(sel) || new RegExp(`^\\.[\\w-]+-${suffix}$`).test(sel);
+}
+
+function isVsBtnOrRte(sel: string): boolean {
+  if (classSuffix(sel, "vs-btn")) return true;
+  if (jsSel(sel)) return false;
+  if (/:(hover|active|focus)/.test(sel)) return false;
+  return /(?:^|,)\s*\.rte-btn(?:\.[\w-]+)?\s*$/.test(sel);
 }
 
 describe("已做号不回退", () => {
@@ -212,6 +224,62 @@ describe("N-188 *-toggle", () => {
       for (const r of rulesOf(src)) {
         if (/\.shr-toggle\b/.test(r.sel)) continue;
         if (!classSuffix(r.sel, "toggle")) continue;
+        if (!clickable(r.sel, r.body)) continue;
+        if (tallEnough(r.body)) continue;
+        hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
+      }
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+});
+
+describe("N-191 *-vs-btn / .rte-btn", () => {
+  it("族存在；对照绿 over-btn 48；不扫 .rbt-vs-back；不替代 N-189/190", () => {
+    expect(RBT).toContain(".rbt-vs-btn {");
+    expect(RBT).toContain('again.className = "rbt-vs-btn"');
+    expect(RTE).toContain(".rte-btn {");
+    expect(RBT).toContain(".rbt-vs-back, .rbt-vs-mode {");
+    expect(RBE).toMatch(/\.rbe-over-btn \{[^}]*min-height: 48px/);
+    expect(RBE).toMatch(/\.rbv-over-btn \{[^}]*min-height: 48px/);
+  });
+
+  it("可点 *-vs-btn 与 .rte-btn 须 ≥44（B 的 rbt/rte 走文件白名单）", () => {
+    const hits: string[] = [];
+    for (const file of walkSrc(GAMES)) {
+      const rel = file.slice(GAMES.length).replace(/\\/g, "/");
+      if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (/\.test\.(ts|css)$/.test(rel)) continue;
+      const src = readFileSync(file, "utf8");
+      for (const r of rulesOf(src)) {
+        if (/\.rbt-vs-back\b/.test(r.sel)) continue;
+        if (!isVsBtnOrRte(r.sel)) continue;
+        if (!clickable(r.sel, r.body)) continue;
+        if (tallEnough(r.body)) continue;
+        hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
+      }
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+});
+
+describe("N-194 *-lv", () => {
+  it("族存在于 bubble-aim / candy-swing；不替代 N-144/192/193", () => {
+    expect(BA).toContain(".ba-lv {");
+    expect(CS).toContain(".cs-lv {");
+    expect(BA).toContain(".ba-lv-cur");
+    expect(CS).toContain(".cs-lv-cur");
+  });
+
+  it("可点 *-lv 关卡格须 ≥44（.ba-lv / .cs-lv 走 B 白名单；不扫 card-lv 文案）", () => {
+    const hits: string[] = [];
+    for (const file of walkSrc(GAMES)) {
+      const rel = file.slice(GAMES.length).replace(/\\/g, "/");
+      if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (/\.test\.(ts|css)$/.test(rel)) continue;
+      const src = readFileSync(file, "utf8");
+      for (const r of rulesOf(src)) {
+        if (/card-lv\b/.test(r.sel)) continue;
+        if (!classSuffix(r.sel, "lv")) continue;
         if (!clickable(r.sel, r.body)) continue;
         if (tallEnough(r.body)) continue;
         hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
