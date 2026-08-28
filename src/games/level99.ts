@@ -602,7 +602,9 @@ const L99_CSS = `
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
-.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
+/* position:relative:游戏挂的 inset:0 全屏景片(math-farm 等)锚到舞台本体,
+   不再往上找到 .l99-wrap 把「选关」抬头条整个盖住(按钮被盖还收点击=幽灵热区) */
+.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .l99-ov-big{font-size:56px;line-height:1;}
