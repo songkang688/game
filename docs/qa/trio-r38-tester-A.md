@@ -1,6 +1,6 @@
 # 三人组 r38 测试员 A
 
-> 同分支 `cursor/trio-r21-p0-n117-1cd5`。远程无 `trio-r38-playbook`。不回退 N-117…N-173 巡检闸。不改 B 游戏文件。N-105 无第四版。
+> 同分支 `cursor/trio-r21-p0-n117-1cd5`。playbook：PR #111。不回退 N-117…N-173 巡检闸、CTA 回卷、消消乐钳高、N-119/123。不改 B 游戏文件。N-105 无第四版。
 
 ## 本拍
 
@@ -8,6 +8,7 @@
 | --- | --- |
 | N-119 | 选关地图纯 CSS：可玩节点叠章节色高光、三星 `:has` 金边 `#F2C14A`、当前页签加厚投影。不改 DOM / `showMap` / `mapColumns` / tabs overflow。 |
 | N-123 | `styles.css` `@media (min-width:980px) and (min-height:600px)`：平板横屏 hero 拉满宽、气泡左对齐；网格 `minmax(210px,1fr)`。不命中 915×412。S-1 矮屏档不动。 |
+| N-176 | 静态扫可点 `*-pick` ≥44。不抢 N-174/169/94/102。 |
 
 ## Chrome 实测（preview `:4188`，puppeteer-core）
 
@@ -57,4 +58,9 @@ html 显式 `overflow-y:auto`；`.home-screen { touch-action: pan-y }`。N-105 �
 | 915 结算 | 时钟小屋真结算「再试本关 / 回地图」311–359，underBar=false。合成 overlay 三钮同样 308–356。 |
 
 抽验中另见：消消乐 915 末格初见 bottom=949，`.l99-stage` hidden 且 view room=0。已按舞台余量钳 `.mst-boardwrap`（实测 max-height 98px，滚到底末格 318–399 hitSelf）。判定未改。N-105 无新版本。
+
+## 续拍：N-176（PR #111 playbook）
+
+静态扫可点 `*-pick` ≥44 或 TOUCH/TOGGLE/SWATCH/CHIP 插值。对照 `.ps-pick` / `.bl-pick` / `.clf-pick`（SWATCH）。豁免 `*-picks`、`.fk-pick` / `.cc-pick` 容器、token/seat-pick。白名单不抢 `.rbg-pick`（N-174）、`.pfb-pick`（N-169）、`.dvs-pick`（N-94）、`.bc-pick`（N-102）。N-105 无新版本。
+
 
