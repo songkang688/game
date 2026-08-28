@@ -205,11 +205,12 @@ const CSS = `
 .fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 /* N-57：训练场选人壳把「开打」钉在舞台底。关内 .fk-train-shell 键排零触碰 */
 @media (max-height:500px){
-  .fk-select-shell .fk-bar-go{
+  .fk-select-shell .fk-select-foot{
     position:sticky;bottom:0;z-index:5;margin-bottom:0;
     background:linear-gradient(180deg,rgba(255,253,255,0),#fffdff 10px);
     padding:8px 0 2px;
   }
+  .fk-select-shell .fk-bar-go{position:static;background:none;padding:0;}
   .fk-select-shell .fk-info{min-height:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 }
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
@@ -2001,8 +2002,19 @@ export function mount(api: GameApi): { destroy: () => void } {
       });
       btns[DUMMY_MODES.indexOf(dummy)].classList.add("fk-ch-on");
       const hint = el("div", "fk-sub", DUMMY_HINTS[dummy]);
-      card.appendChild(row);
-      card.appendChild(hint);
+      const goRow = el("div", "fk-bar fk-bar-go");
+      goRow.style.marginTop = "8px";
+      goRow.appendChild(
+        button("fk-btn fk-btn-go", "开打 ▶", () => {
+          sfx("jump");
+          startPlain(mode, p1, p2, ai, dummy);
+        })
+      );
+      const foot = el("div", "fk-select-foot");
+      foot.append(row, hint, goRow);
+      card.appendChild(foot);
+      view.appendChild(card);
+      return;
     }
 
     if (mode === "endless") {

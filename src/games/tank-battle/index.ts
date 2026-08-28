@@ -177,7 +177,7 @@ const CSS = `
 .tkb-mode{border-radius:18px;padding:10px;background:linear-gradient(180deg,#f2f6ea,#fff4f8);
   display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:0;}
 .tkb-mode > *{min-width:0;}
-.tkb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;}
+.tkb-choose{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0;}
 .tkb-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a7a52;box-shadow:0 3px 0 rgba(110,130,80,.3);}
 .tkb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,130,80,.3);}
@@ -218,14 +218,17 @@ const CSS = `
 /* N-53：双人对战矮横屏把两套垫挪到画布右侧，单人态不走这条 */
 @media (max-height:500px) and (min-width:640px){
   .tkb-wrap:has(.tkb-pads-two){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;width:100%;}
-  .tkb-wrap:has(.tkb-pads-two) .tkb-hud,.tkb-wrap:has(.tkb-pads-two) .tkb-acts{grid-column:1/-1;}
-  .tkb-wrap:has(.tkb-pads-two) .tkb-board{grid-column:1;min-width:0;}
-  .tkb-wrap:has(.tkb-pads-two) .tkb-tip{grid-column:1;display:-webkit-box;-webkit-line-clamp:1;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-hud{grid-column:1;grid-row:1;flex-wrap:nowrap;overflow-x:auto;max-height:44px;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-acts{grid-column:2;grid-row:1;position:sticky;top:0;z-index:3;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-board{grid-column:1;grid-row:2;min-width:0;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-tip{grid-column:1;grid-row:3;display:-webkit-box;-webkit-line-clamp:1;}
   .tkb-wrap:has(.tkb-pads-two) .tkb-pads-two{
     grid-column:2;grid-row:2;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;
     width:auto;max-width:none;position:sticky;top:0;margin:0;
   }
   .tkb-chip{min-height:44px;display:inline-flex;align-items:center;}
+  .tkb-mode:has(.tkb-pads-two) > .tkb-choose{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;max-height:48px;gap:8px;}
+  .tkb-mode:has(.tkb-pads-two) > .tkb-choose .tkb-acts{flex-wrap:nowrap;margin:0;}
 }
 @media (prefers-reduced-motion:reduce){.tkb-key:active{transform:none;}}
 `;
@@ -978,9 +981,13 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const measured = stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
     if (opts.players !== 2) return Math.max(150, Math.min(430, measured));
     const padsBeside = shortLandscape();
-    const below = padsBeside
-      ? (acts.offsetHeight || 0) + 12
-      : (tip.offsetHeight || 0) + (acts.offsetHeight || 0) + (pads.offsetHeight || 0) + 12;
+    if (padsBeside) {
+      const ih = globalThis.innerHeight || 412;
+      const top =
+        typeof board.getBoundingClientRect === "function" ? board.getBoundingClientRect().top : 90;
+      return Math.max(96, Math.min(430, ih - (Number.isFinite(top) ? top : 90) - 8));
+    }
+    const below = (tip.offsetHeight || 0) + (acts.offsetHeight || 0) + (pads.offsetHeight || 0) + 12;
     return Math.max(150, Math.min(430, measured - below));
   }
 
@@ -988,7 +995,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const padReserve = opts.players === 2 && shortLandscape() ? 176 : 0;
     const availW = Math.max(220, (host.clientWidth || 340) - 8 - padReserve);
     const availH = boardRoom();
-    cell = Math.max(14, Math.floor(Math.min(availW / MAP_W, availH / MAP_H, 34)));
+    cell = Math.max(opts.players === 2 && shortLandscape() ? 10 : 14, Math.floor(Math.min(availW / MAP_W, availH / MAP_H, 34)));
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(MAP_W * cell * dpr);
     canvas.height = Math.round(MAP_H * cell * dpr);
@@ -1267,6 +1274,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   window.addEventListener("resize", onResize);
 
   layout();
+  timers.push(window.setTimeout(() => layout(), 0));
   refreshMini();
   refreshHud();
   raf = requestAnimationFrame(frame);
@@ -1593,8 +1601,10 @@ function buildVersus(
       if (t !== setup.ai) restart({ ai: t });
     }
   );
-  shell.box.insertBefore(arenaRow, shell.stage);
-  shell.box.insertBefore(aiRow, shell.stage);
+  const choose = document.createElement("div");
+  choose.className = "tkb-choose";
+  choose.append(arenaRow, aiRow);
+  shell.box.insertBefore(choose, shell.stage);
 
   const world = createWorld({
     rows: [...setup.arena.rows],

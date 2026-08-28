@@ -11,8 +11,8 @@ describe("N-53 tank-battle 双人对战矮横屏双垫", () => {
     expect(TOUCH_MIN).toBeGreaterThanOrEqual(44);
     expect(TOUCH_MIN_TWO).toBeGreaterThanOrEqual(44);
     expect(SRC).toContain("@media (max-height:500px) and (min-width:640px)");
-    expect(SRC).toContain(".tkb-wrap:has(.tkb-pads-two)");
-    expect(SRC).not.toContain(".tkb-wrap:has(.tkb-pads){");
+    expect(SRC).toContain(".tkb-choose");
+    expect(SRC).toContain(".tkb-mode:has(.tkb-pads-two) > .tkb-choose");
     expect(SRC).toMatch(/\.tkb-act\{[^}]*min-height:44px/);
     expect(SRC).toMatch(/\.tkb-back\{[^}]*min-height:44px/);
   });

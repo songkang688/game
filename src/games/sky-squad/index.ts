@@ -186,6 +186,7 @@ export const CSS = `
 /* N-56：双人合作只抬热区，不重钳已在屏的画布 */
 @media (max-height:500px) and (min-width:640px){
   .sks-pads[data-players="2"]{--k:44px;}
+  .sks-hud,.sks-topbar{position:sticky;top:0;z-index:4;background:rgba(234,242,255,.94);}
 }
 `;
 

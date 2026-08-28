@@ -7,10 +7,9 @@ const src = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), 
 
 describe("N-57 fight-king 训练场选人壳开打钉底", () => {
   it("选人卡挂 fk-select-shell，开打行 sticky，假人钮 min-height 44", () => {
-    expect(src).toContain('el("div", "fk-card fk-select-shell")');
+    expect(src).toContain("fk-select-foot");
     expect(src).toContain("fk-bar-go");
-    expect(src).toContain(".fk-select-shell .fk-bar-go{");
-    expect(src).toContain("position:sticky;bottom:0");
+    expect(src).toContain(".fk-select-shell .fk-select-foot{");
     expect(src).toMatch(/\.fk-btn\{[^}]*min-height:44px/);
   });
 

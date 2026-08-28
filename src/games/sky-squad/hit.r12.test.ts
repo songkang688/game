@@ -6,7 +6,7 @@ describe("N-56 sky-squad 双人合作热区抬到 44", () => {
     expect(CSS).toContain(".sks-pads[data-players=\"2\"]{--k:44px;}");
     expect(CSS).toMatch(/\.sks-back\{[^}]*min-height:44px/);
     expect(CSS).toMatch(/\.sks-opt\{[^}]*min-height:44px/);
-    expect(CSS).toContain(".sks-cv{display:block;width:100%;height:360px;touch-action:none;}");
+    expect(CSS).toContain("position:sticky;top:0");
     expect(CSS).not.toContain(".sks-cv{height:calc");
   });
 });

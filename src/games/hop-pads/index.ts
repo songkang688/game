@@ -96,7 +96,7 @@ const CSS = `
 .hp-over-s{font-size:16px;font-weight:700;color:#7C6350;line-height:1.6;max-width:300px;}
 .hp-tip{text-align:center;font-size:14px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
-@media (max-height:500px){.hp-duo{gap:4px;}}
+@media (max-height:500px){.hp-duo{gap:4px;}.hp-duo .hp-stage,.hp-duo .hp-canvas{max-height:148px;}}
 .hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;
   pointer-events:none;text-shadow:0 1px 0 #fff;}
 @media (max-width:420px){
@@ -178,7 +178,10 @@ export function duoPaneHeightPx(room: number, chrome: number, gap = 8): number {
   if (!Number.isFinite(room) || room <= 0) return DUO_PANE_FALLBACK;
   const tool = Math.max(0, Number.isFinite(chrome) ? chrome : 0);
   const each = Math.floor((room - tool - Math.max(0, gap)) / 2);
-  return Math.max(DUO_STAGE_MIN_H, each);
+  const view =
+    typeof globalThis.innerHeight === "number" && globalThis.innerHeight > 0 ? globalThis.innerHeight : 412;
+  const cap = Math.floor((view - 96 - tool) / 2);
+  return Math.max(DUO_STAGE_MIN_H, Math.min(each, cap));
 }
 
 /** 画面能装下多少纵深:决定 scale。台面最远也要能看见前面三四座 */

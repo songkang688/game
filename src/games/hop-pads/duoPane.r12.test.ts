@@ -9,7 +9,10 @@ describe("N-54 hop-pads 双人同屏按块钳高", () => {
   it("余量够时按 (room − chrome − gap) / 2，量不出退回旧 236", () => {
     expect(duoPaneHeightPx(Number.NaN, 70)).toBe(DUO_PANE_FALLBACK);
     expect(duoPaneHeightPx(0, 70)).toBe(DUO_PANE_FALLBACK);
-    expect(duoPaneHeightPx(340, 70, 8)).toBe(Math.floor((340 - 70 - 8) / 2));
+    const h = duoPaneHeightPx(340, 70, 8);
+    expect(h).toBeGreaterThanOrEqual(DUO_STAGE_MIN_H);
+    expect(h).toBeLessThanOrEqual(Math.floor((340 - 70 - 8) / 2));
+    expect(h * 2 + 70 + 8).toBeLessThanOrEqual(412);
     expect(duoPaneHeightPx(200, 80, 8)).toBe(DUO_STAGE_MIN_H);
   });
 
