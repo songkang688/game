@@ -440,7 +440,7 @@ export function mount(api: GameApi): CandySwingHandle {
       .cs-chapter.moonfair .cs-ch-name { color: #FFE9B8; }
       .cs-chapter.moonfair .cs-ch-blurb { color: #C9BDEA; }
       .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
+      .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 44px; min-width: 44px; box-sizing: border-box; }
       .cs-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
       .cs-lv .n { font-size: 16px; font-weight: 800; color: #B03A6B; }
       .cs-lv .s { font-size: 10px; letter-spacing: 1px; }

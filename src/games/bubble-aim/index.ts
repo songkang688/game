@@ -304,7 +304,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-th-head { font-weight: 800; font-size: 14px; margin-bottom: 2px; }
       .ba-th-blurb { font-size: 11px; opacity: 0.85; margin-bottom: 8px; }
       .ba-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .ba-lv { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 3px 0 #C7DEF2; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .ba-lv { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 3px 0 #C7DEF2; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 44px; min-width: 44px; box-sizing: border-box; }
       .ba-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 #C7DEF2; }
       .ba-lv .num { font-weight: 800; font-size: 15px; color: #2A6099; }
       .ba-lv .stars { font-size: 10px; letter-spacing: -1px; }
