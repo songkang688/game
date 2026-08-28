@@ -2481,3 +2481,528 @@ html {
     transition: none;
   }
 }
+
+/* ==========================================================================
+   chess-garden · 1.3 视觉升级（窗口 2 · 第 7 步 B，只在文件末尾追加）
+   花园居民棋子（内联 SVG）+ 石板草地棋盘 + 木篱笆外框 + 吃子花瓣 / 升变开花。
+   选择器全部带 .cg-wrap 前缀或用新类名，不覆盖上面被单测量过的规则体。
+   ========================================================================== */
+
+/* 木篱笆外框：box-shadow 双圈不占布局宽，360px 上一格照旧 ≥ 40px */
+.cg-frame {
+  position: relative;
+}
+
+.cg-wrap .cg-board {
+  box-shadow:
+    0 0 0 4px #c99c66,
+    0 0 0 8px #9d7038,
+    0 6px 16px rgba(120, 90, 50, 0.35);
+}
+
+/* 四角小花盆：纯装饰，不占格、不吃点击 */
+.cg-pot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.cg-pot svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cg-pot--tl {
+  left: -7px;
+  top: -15px;
+}
+
+.cg-pot--tr {
+  right: -7px;
+  top: -15px;
+}
+
+.cg-pot--bl {
+  left: -7px;
+  bottom: -13px;
+}
+
+.cg-pot--br {
+  right: -7px;
+  bottom: -13px;
+}
+
+/* 棋盘格：浅格暖石板 + 一根极淡石纹；深格草地绿 + 小草叶（按格序挑位置） */
+.cg-wrap .cg-sq--light {
+  background-color: #f2e8d5;
+  background-image: linear-gradient(
+    135deg,
+    transparent 45%,
+    rgba(160, 134, 100, 0.14) 48%,
+    rgba(160, 134, 100, 0.14) 52%,
+    transparent 55%
+  );
+}
+
+.cg-wrap .cg-sq--light:nth-child(even) {
+  background-image: linear-gradient(
+    45deg,
+    transparent 45%,
+    rgba(160, 134, 100, 0.12) 48%,
+    rgba(160, 134, 100, 0.12) 52%,
+    transparent 55%
+  );
+}
+
+.cg-wrap .cg-sq--dark {
+  background-color: #a8c88e;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M3 11 Q2.2 7 4 3.4 M7 11.4 Q7 6.6 6 3 M10.6 11 Q11.6 7.6 10 4.6' fill='none' stroke='%236f9a52' stroke-width='1.3' stroke-linecap='round' opacity='0.55'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 20% 78%;
+  background-size: 13px 11px;
+}
+
+.cg-wrap .cg-sq--dark:nth-child(3n) {
+  background-position: 68% 26%;
+}
+
+.cg-wrap .cg-sq--dark:nth-child(5n) {
+  background-position: 64% 76%;
+  background-size: 11px 9px;
+}
+
+.cg-wrap .cg-sq--dark:nth-child(7n) {
+  background-position: 24% 30%;
+}
+
+/* 状态高亮：上一手淡金底 / 选中金框 / 光标虚线框 / 将军红光呼吸，形状互不相同 */
+.cg-wrap .cg-sq--last {
+  box-shadow: inset 0 0 0 999px rgba(255, 211, 110, 0.34);
+}
+
+.cg-wrap .cg-sq--sel {
+  box-shadow:
+    inset 0 0 0 3px #e2a52e,
+    inset 0 0 0 999px rgba(255, 224, 150, 0.25);
+}
+
+.cg-wrap .cg-sq--check {
+  background-color: #f6c8a0;
+  box-shadow: inset 0 0 0 3px #d95f4c;
+  animation: cg-check-breath 1.3s ease-in-out infinite;
+}
+
+.cg-wrap .cg-sq--cursor {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.65);
+  outline: 3px dashed #4a71c4;
+  outline-offset: -4px;
+}
+
+@keyframes cg-check-breath {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 3px #d95f4c;
+  }
+
+  50% {
+    box-shadow: inset 0 0 0 6px rgba(217, 95, 76, 0.85);
+  }
+}
+
+/* 被将的王头顶的「!」气泡 */
+.cg-alert {
+  position: absolute;
+  top: -7px;
+  right: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #d95f4c;
+  color: #fff7ea;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 15px;
+  text-align: center;
+  z-index: 4;
+  box-shadow: 0 1px 3px rgba(90, 40, 20, 0.4);
+  animation: cg-alert-hop 0.9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes cg-alert-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* 可走点=小绿芽、可吃=四角红三角：形状+颜色双通道；旧的圆点圆圈退休 */
+.cg-wrap .cg-sq--hint::after,
+.cg-wrap .cg-sq--cap::after {
+  content: none;
+}
+
+.cg-sprout {
+  position: absolute;
+  inset: 30%;
+  pointer-events: none;
+}
+
+.cg-sprout svg,
+.cg-capmark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cg-capmark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 边框内侧的坐标小字（装饰性标注，读屏走格子的 aria-label） */
+.cg-coord {
+  position: absolute;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.cg-coord--file {
+  right: 3px;
+  bottom: 2px;
+}
+
+.cg-coord--rank {
+  left: 3px;
+  top: 2px;
+}
+
+.cg-sq--light .cg-coord {
+  color: #8a6e50;
+}
+
+.cg-sq--dark .cg-coord {
+  color: #43602f;
+}
+
+/* 棋子换成手绘 SVG：圆气泡底退休，立体感来自 SVG 里的底座与投影 */
+.cg-wrap .cg-piece {
+  width: 92%;
+  height: 92%;
+  border-radius: 0;
+}
+
+.cg-wrap .cg-piece--w,
+.cg-wrap .cg-piece--b {
+  background: none;
+  box-shadow: none;
+}
+
+.cg-piece-mark {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cg-piece-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cg-wrap .cg-piece-tag {
+  z-index: 3;
+  box-shadow: 0 0 0 1px rgba(140, 110, 80, 0.35);
+}
+
+/* 升变四选一按钮：左图右字（图是装饰，字与 aria-label 照旧） */
+.cg-wrap .cg-promo-b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cg-promo-icon {
+  width: 28px;
+  height: 32px;
+  order: -1;
+}
+
+.cg-promo-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 座位 chip 加王头像 */
+.cg-wrap .cg-seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cg-seat-ava {
+  width: 17px;
+  height: 19px;
+  order: -1;
+  display: inline-block;
+}
+
+.cg-seat-ava svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 记谱行：走子方小色点 + 最后一手淡金高亮 */
+.cg-wrap .cg-log-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 7px;
+}
+
+.cg-log-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.cg-log-dot--w {
+  order: -2;
+  background: #fbf2e2;
+  box-shadow: inset 0 0 0 1.5px #8a6e50;
+}
+
+.cg-log-dot--b {
+  order: -1;
+  background: #57412f;
+  box-shadow: inset 0 0 0 1.5px #2a1b10;
+}
+
+.cg-log-row--last {
+  background: #fbe9c3;
+  box-shadow: inset 0 0 0 1px #e2c07a;
+}
+
+/* 吃子花瓣与升变开花 */
+.cg-capture-fx,
+.cg-bloom {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.cg-capture-ghost {
+  position: absolute;
+  inset: 4%;
+  animation: cg-cap-shrink 0.3s ease-in forwards;
+}
+
+.cg-capture-ghost svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cg-petal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  animation: cg-petal-fly 0.55s ease-out forwards;
+}
+
+.cg-petal svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cg-petal--c1 {
+  --fx: -18px;
+  --fy: -14px;
+  --fr: -160deg;
+}
+
+.cg-petal--c2 {
+  --fx: 3px;
+  --fy: -22px;
+  --fr: 120deg;
+  animation-delay: 0.04s;
+}
+
+.cg-petal--c3 {
+  --fx: 17px;
+  --fy: -10px;
+  --fr: 200deg;
+  animation-delay: 0.08s;
+}
+
+.cg-petal--b1 {
+  --fx: -19px;
+  --fy: -13px;
+  --fr: -180deg;
+}
+
+.cg-petal--b2 {
+  --fx: -9px;
+  --fy: -21px;
+  --fr: 140deg;
+  animation-delay: 0.03s;
+}
+
+.cg-petal--b3 {
+  --fx: 4px;
+  --fy: -23px;
+  --fr: -140deg;
+  animation-delay: 0.06s;
+}
+
+.cg-petal--b4 {
+  --fx: 13px;
+  --fy: -19px;
+  --fr: 160deg;
+  animation-delay: 0.09s;
+}
+
+.cg-petal--b5 {
+  --fx: 20px;
+  --fy: -9px;
+  --fr: -200deg;
+  animation-delay: 0.12s;
+}
+
+@keyframes cg-petal-fly {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(var(--fx), var(--fy)) rotate(var(--fr));
+    opacity: 0;
+  }
+}
+
+@keyframes cg-cap-shrink {
+  0% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+
+  100% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+}
+
+.cg-piece--bloom {
+  animation: cg-bloom-pop 0.4s cubic-bezier(0.34, 1.4, 0.5, 1);
+  transform-origin: 50% 88%;
+}
+
+@keyframes cg-bloom-pop {
+  0% {
+    transform: scale(0.2, 0.35);
+    opacity: 0.4;
+  }
+
+  62% {
+    transform: scale(1.12, 1.06);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+/* 弱动效：呼吸、气泡、花瓣、开花全部停掉；特效层整层不显示（代码侧也不再生成） */
+@media (prefers-reduced-motion: reduce) {
+  .cg-wrap .cg-sq--check,
+  .cg-alert,
+  .cg-piece--bloom,
+  .cg-petal,
+  .cg-capture-ghost {
+    animation: none !important;
+  }
+
+  .cg-capture-fx,
+  .cg-bloom {
+    display: none;
+  }
+}
+
+/* ===== 1.3 第 27 步 C 档 · 第 1 轮视觉修复（chess-garden 前缀，末尾追加） ===== */
+
+/* A 档 5-3：边框坐标 9px、中文角标 11px 低于可读下限——辅助标注按 A 档口径提级 */
+.cg-wrap .cg-coord {
+  font-size: 10.5px;
+}
+
+.cg-wrap .cg-piece-tag {
+  font-size: 12px;
+}
+
+/* A 档 5-4：HUD 工具钮 / 座位签 / 提示行 13–13.5px 统一提到 14px */
+.cg-wrap .cg-tool,
+.cg-wrap .cg-seat,
+.cg-wrap .cg-tip {
+  font-size: 14px;
+}
+
+/* ===== 1.3 第 28 步 C 档 · 第 2 轮视觉修复（chess-garden 前缀，末尾追加） ===== */
+
+/* r2-2（阻断 · 1.2 存量）：320px 视口上 `.cg-sq{min-width:40px}` 让 8 列内容 320px
+   超出板箱 ≈292px，`.cg-board{overflow:hidden}` 把 h 列裁到只剩 ≈12px、格中心不可点。
+   最小尺寸全部解除，`repeat(8,1fr)` 真收缩：320px 一格 ≈36.5px、八列全部可见可点；
+   min-height 同步归零，防 Chrome 经 aspect-ratio 把它传导回宽度（dark-chess r2-1 同款病灶）。
+   360px 上一格 ≈41.4px、更宽视口更大，均不受影响；触控面积为整格（aspect-ratio 正方形）。 */
+.cg-wrap .cg-sq {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* r2-7（建议 · 1.2 存量）：记谱行与记谱折叠钮 13px 低于正文下限——与 cg-tip 同口径提级，
+   特异性压得住 420px 断点里的 13px 回降 */
+.cg-wrap .cg-log-sum,
+.cg-wrap .cg-log-row {
+  font-size: 14px;
+}
+
+/* B 档 r2 一致性③：cg-wrap 无壳卡，闯关模式下石板棋盘裸坐白底（对战/无尽另有 .cg-mode 卡）。
+   草绿壳卡与盘面石板草地同族，按 B 档要求排在 r2-2 修复之后落地。
+   ≤420px 侧内衬收敛为 0：窄屏棋盘靠负外边距全幅出血（R2-PA-3 热区例外），
+   任何侧内衬都会缩小格宽、动摇 r2-2 登记的 ≈36.5px@320 / ≈41.4px@360 实测值——
+   上下留卡即可，棋盘允许比卡幅宽一线（盘框自带 8px 木边，压卡不露白）。 */
+.cg-wrap {
+  background: linear-gradient(180deg, #f2f7ea, #eaf3e4);
+  border-radius: 16px;
+  padding: 10px 6px;
+}
+
+@media (max-width: 420px) {
+  .cg-wrap {
+    padding: 10px 0;
+    border-radius: 12px;
+  }
+}

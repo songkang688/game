@@ -264,3 +264,112 @@ describe("360px 上的排布", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约(只增不减):果子走贴图路径、读屏契约原样、reduced 降级可达
+// ---------------------------------------------------------------------------
+
+describe("1.3 视觉契约", () => {
+  it("一帧 render 绘制非空,果子走 drawImage 贴图路径,缓存键成形", async () => {
+    // 给这一条换一支「录音笔」上下文:domStub 的 ctx2d 是哑巴 Proxy,数不出调用
+    const calls: string[] = [];
+    const orig = El.prototype.getContext;
+    const rec = new Proxy(
+      {},
+      {
+        get(_t, prop) {
+          if (typeof prop !== "string") return undefined;
+          return (...args: unknown[]) => {
+            calls.push(prop);
+            if (prop === "createRadialGradient" || prop === "createLinearGradient") {
+              return { addColorStop: () => undefined };
+            }
+            return undefined;
+          };
+        },
+        set: () => true,
+      }
+    );
+    El.prototype.getContext = () => rec;
+    try {
+      const { mount } = await import("./index");
+      const { clearSpriteCache, spriteCacheKeys } = await import("./art");
+      clearSpriteCache();
+      const handle = mount(fakeApi(dom.root).api);
+      byText("无尽果盆")!.dispatch("click");
+      flushFrames(dom, 4);
+      expect(calls.length, "一帧下来什么都没画").toBeGreaterThan(0);
+      expect(calls, "果子没走 drawImage 贴图路径").toContain("drawImage");
+      expect(calls.filter((c) => c === "arc").length, "盆和贴图里连一个圆都没有").toBeGreaterThan(0);
+      const keys = spriteCacheKeys();
+      expect(keys.length, "贴图缓存是空的:纹理还在逐帧画").toBeGreaterThan(0);
+      for (const key of keys) expect(key).toMatch(/^\d+\|(smile|worry)\|[\d.]+$/);
+      handle.destroy();
+      clearSpriteCache();
+    } finally {
+      El.prototype.getContext = orig;
+    }
+  });
+
+  it("describe 的读屏契约原样保留:aria 一句话 + data-aim + data-drops", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi(dom.root).api);
+    byText("无尽果盆")!.dispatch("click");
+    flushFrames(dom, 3);
+    const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+    expect(canvas.getAttribute("aria-label")).toMatch(/^朵朵的果盆，\d+分，最大「.+」，盆里\d+颗，不限$/);
+    expect(canvas.getAttribute("data-aim")).toMatch(/^\d+\.\d$/);
+    fireWindow(dom, "keydown", { code: "KeyF" });
+    flushFrames(dom, 4);
+    expect(canvas.getAttribute("data-drops")).toBe("1");
+    expect(canvas.getAttribute("aria-label")).toContain("盆里1颗");
+    handle.destroy();
+  });
+
+  it("prefers-reduced-motion 下挂载照样跑,警戒线闪烁恒定", async () => {
+    const { blinkAlpha } = await import("./art");
+    for (const t of [0, 130, 999]) expect(blinkAlpha(t, true)).toBe(1);
+    restoreDom();
+    dom = installDom(420, true);
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi(dom.root).api);
+    byText("无尽果盆")!.dispatch("click");
+    expect(() => {
+      fireWindow(dom, "keydown", { code: "KeyF" });
+      flushFrames(dom, 6);
+    }).not.toThrow();
+    handle.destroy();
+  });
+
+  it("下一颗预览是果篮窗口:两格、次格半透明,canvas 仍只有盆一个", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi(dom.root).api);
+    byText("无尽果盆")!.dispatch("click");
+    flushFrames(dom, 3);
+    expect(dom.root.find((e) => e.className === "fs-basket"), "木篮框没挂上").not.toBeNull();
+    const cells = dom.root.findAll((e) => e.className.includes("fs-basket-cell"));
+    expect(cells).toHaveLength(2);
+    expect(cells[1].className).toContain("fs-basket-cell--next");
+    // 篮里的果子图章 ≥ 12px,360px 上认得出
+    for (const cell of cells) {
+      const stamp = cell.children[0];
+      expect(stamp, "篮格里没有果子图章").toBeTruthy();
+      expect(Number.parseFloat(stamp.style.width)).toBeGreaterThanOrEqual(12);
+    }
+    // 盆的画布靠 tagName 被冒烟脚本点名,预览不许混进去
+    expect(dom.root.findAll((e) => e.tagName === "canvas")).toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("结算插画:双人最大果对比 + 合成树点亮到最高级", async () => {
+    const { resultArt } = await import("./index");
+    const art = resultArt([4, 7], ["朵朵", "星星"]) as unknown as El;
+    const slots = art.findAll((e) => e.className === "fs-result-slot");
+    expect(slots).toHaveLength(2);
+    expect(art.textContent).toContain("朵朵最大「梨」");
+    expect(art.textContent).toContain("星星最大「柚」");
+    const dots = art.findAll((e) => e.className.includes("fs-tree-dot"));
+    expect(dots).toHaveLength(CHAIN.length);
+    expect(art.findAll((e) => e.className.includes("fs-tree-dot--on"))).toHaveLength(8);
+  });
+});

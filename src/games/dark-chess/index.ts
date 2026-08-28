@@ -32,7 +32,7 @@ const SHELL_CSS = `
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .dc-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
 .dc-title{font-size:19px;font-weight:900;color:#8a5a2b;text-align:center;}
-.dc-sub{font-size:13px;font-weight:700;color:#8a6a48;text-align:center;line-height:1.6;max-width:330px;}
+.dc-sub{font-size:14px;font-weight:700;color:#8a6a48;text-align:center;line-height:1.6;max-width:330px;}
 .dc-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .dc-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#d99a4e,#bd7f37);box-shadow:0 4px 0 #9c6729;}
@@ -40,9 +40,9 @@ const SHELL_CSS = `
 .dc-mode.dc-b{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
 .dc-mode.dc-c{background:linear-gradient(180deg,#4fa77c,#3d8c66);box-shadow:0 4px 0 #2e6d4f;}
 .dc-mode.dc-d{background:linear-gradient(180deg,#a765c0,#8d51a5);box-shadow:0 4px 0 #6f3f83;}
-.dc-tip{font-size:12px;font-weight:700;color:#987a58;text-align:center;line-height:1.6;max-width:330px;}
+.dc-tip{font-size:14px;font-weight:700;color:#987a58;text-align:center;line-height:1.6;max-width:330px;}
 .dc-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
-.dc-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
+.dc-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#7a5a34;box-shadow:0 3px 0 rgba(160,130,90,.3);}
 .dc-pick[aria-pressed="true"]{background:linear-gradient(180deg,#d99a4e,#bd7f37);color:#fff;}
 `;
@@ -170,6 +170,9 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     if (aiTimer) clearTimeout(aiTimer);
     aiTimer = null;
     if (st.kind === "win") {
+      // 谢幕只有画面：输方鞠躬、赢方列队、金花瓣雨。onEnd 的时序一毫秒都不挪
+      const winColor = state.colors[st.side];
+      if (winColor) board?.flourish({ kind: "win", winner: winColor });
       opts.onEnd({
         won: st.side === "duo",
         draw: false,
@@ -179,9 +182,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       return;
     }
     if (st.kind === "draw") {
+      board?.flourish({ kind: "draw" });
       opts.onEnd({ won: false, draw: true, plies: state.plies, why: "连着二十手不吃不翻，这一盘算平局。" });
       return;
     }
+    board?.flourish({ kind: "draw" });
     opts.onEnd({ won: false, draw: true, plies: state.plies, why: "手数用完啦，这一盘算平局收场。" });
   }
 
@@ -196,13 +201,19 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     }
     const spot = a.type === "flip" ? a.at : a.to;
     setNote(res.message);
-    board?.animate(a.type === "flip" ? "flip" : wasCapture ? "capture" : "flip", spot, () => {
-      if (destroyed) return;
-      board?.refresh();
-      renderHud();
-      finish();
-      if (!finished) scheduleAi();
-    });
+    // 走子 / 吃子把出发格也交给动画层：棋子从哪来就从哪滑过去
+    board?.animate(
+      a.type === "flip" ? "flip" : wasCapture ? "capture" : "flip",
+      spot,
+      () => {
+        if (destroyed) return;
+        board?.refresh();
+        renderHud();
+        finish();
+        if (!finished) scheduleAi();
+      },
+      a.type === "move" ? a.from : undefined
+    );
   }
 
   function scheduleAi(): void {

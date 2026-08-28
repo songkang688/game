@@ -13,6 +13,7 @@ export { meta };
 // 走法、判胜负、AI 全部自己写,没有走法库、没有 wasm、没有外部引擎,断网照样下。
 import { save } from "../../engine/save";
 import { mulberry32, mountLevelGame, type GameApi, type PlayCtx } from "../level99";
+import { overSceneSVG } from "./art";
 import { BLACK, WHITE, type Color } from "./board";
 import GUIDE from "./guide";
 import {
@@ -57,16 +58,18 @@ const SHELL_CSS = `
 .cg-open--duo{background:linear-gradient(180deg,#e7a0c0,#c9749c);box-shadow:0 4px 0 #a75b7f;}
 .cg-open--en{background:linear-gradient(180deg,#9aa8e0,#6f7fc4);box-shadow:0 4px 0 #56659f;}
 .cg-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
-.cg-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
+.cg-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#6e553a;box-shadow:0 3px 0 rgba(160,130,90,.35);}
 .cg-pick[aria-pressed="true"]{background:linear-gradient(180deg,#d9a86a,#b8843f);color:#fff;box-shadow:0 3px 0 #97682c;}
 .cg-over{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:18px 12px;}
 .cg-over-t{font-size:20px;font-weight:900;color:#8a6a3f;}
-.cg-over-s{font-size:13.5px;font-weight:700;color:#5d4a35;line-height:1.6;max-width:340px;}
+.cg-over-s{font-size:14px;font-weight:700;color:#5d4a35;line-height:1.6;max-width:340px;}
 .cg-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .cg-btn{border:none;border-radius:16px;min-height:44px;padding:10px 20px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#d9a86a,#b8843f);box-shadow:0 4px 0 #97682c;}
 .cg-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #97682c;}
+.cg-over-art{width:min(230px,72vw);margin:0 auto;}
+.cg-over-art svg{width:100%;height:auto;display:block;}
 `;
 
 const SHELL_STYLE_ID = "cg-shell-style";
@@ -110,10 +113,18 @@ function overBox(
   host: HTMLElement,
   title: string,
   sub: string,
-  buttons: Array<{ label: string; onClick: () => void }>
+  buttons: Array<{ label: string; onClick: () => void }>,
+  artHTML?: string
 ): void {
   host.innerHTML = "";
   const box = el("div", "cg-over");
+  if (artHTML) {
+    // 结算插画：赢家的王戴花环，和棋是双王并立加一只白鸽
+    const art = el("div", "cg-over-art");
+    art.setAttribute("aria-hidden", "true");
+    art.innerHTML = artHTML;
+    box.appendChild(art);
+  }
   box.append(el("div", "cg-over-t", title), el("div", "cg-over-s", sub));
   const row = el("div", "cg-row");
   for (const b of buttons) {
@@ -327,23 +338,29 @@ function mountVersus(
         const title =
           st.winner === 0 ? "🤝 这一局和棋" : st.winner === WHITE ? "🌸 白方赢了这一局" : "⭐ 黑方赢了这一局";
         const sub = `${st.text} 总比分 白 ${score[0]} : 黑 ${score[1]}。`;
-        overBox(shell.stage, title, sub, [
-          {
-            label: "▶ 再来一局",
-            onClick: () => {
-              api.play("tap");
-              round++;
-              start();
+        overBox(
+          shell.stage,
+          title,
+          sub,
+          [
+            {
+              label: "▶ 再来一局",
+              onClick: () => {
+                api.play("tap");
+                round++;
+                start();
+              },
             },
-          },
-          {
-            label: "◀ 回选关",
-            onClick: () => {
-              api.play("tap");
-              onBack();
+            {
+              label: "◀ 回选关",
+              onClick: () => {
+                api.play("tap");
+                onBack();
+              },
             },
-          },
-        ]);
+          ],
+          overSceneSVG(st.winner === 0 ? "draw" : st.winner === WHITE ? "white" : "black")
+        );
       },
     });
   }

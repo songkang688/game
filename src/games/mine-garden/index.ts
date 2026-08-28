@@ -18,6 +18,7 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type Sound
 import {
   FLAG,
   GUESS,
+  HIDDEN,
   OPEN,
   canChord,
   fogVisible,
@@ -27,6 +28,7 @@ import {
   yOf,
   type Dir
 } from "./board";
+import { buildIcon, cloverSVG, flagSVG, flowerSVG, signSVG, wateringCanSVG, wreathSVG } from "./art";
 import guide from "./guide";
 import { CHAPTERS, levelAt, levelSeed, loseLine, starsByTime, winLine, type MineLevel } from "./levels";
 import {
@@ -189,6 +191,44 @@ export function bloomStepMs(reduced: boolean): number {
   return reduced ? 8 : 90;
 }
 
+/** 波纹开垦：大片连开时，视觉上每远一圈（曼哈顿距离）晚这么多毫秒翻起 */
+export const RIPPLE_STEP_MS = 30;
+
+/** 破土绽放的两帧间隔：先土裂再开花（弱动效直接一帧到位） */
+export const BLOOM_FRAME_MS = 150;
+
+/** HUD 进度小花的三档：花苞 → 半开 → 盛放 */
+export function flowerStage(p: number): 0 | 1 | 2 {
+  const v = Math.max(0, Math.min(1, p));
+  return v < 1 / 3 ? 0 : v < 2 / 3 ? 1 : 2;
+}
+
+/**
+ * 数字 n 底下的种子点：数量（1–3）× 形状（圆/菱/方）双通道，
+ * 1–8 每一档的组合都不重样——色弱的小朋友不靠颜色也分得开。
+ */
+export function seedSpec(n: number): { shape: number; count: number } {
+  const k = Math.max(1, Math.min(8, Math.round(n))) - 1;
+  return { shape: Math.floor(k / 3), count: (k % 3) + 1 };
+}
+
+/** 格子索引的小哈希：草叶朝向、石子位置全由它定，刷新不跳变也不整齐划一 */
+export function cellHash(i: number): number {
+  let h = ((i + 1) * 2654435761) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = (h * 0x5bd1e995) >>> 0;
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+/** 小地图（花园鸟瞰）的四色：深草绿 / 浅土色 / 旗红 / 光标描边 */
+export const MINI_COLORS = {
+  turf: "#7DB262",
+  soil: "#F1E8D2",
+  flag: "#DA5A4A",
+  pole: "#7C5A36",
+  cursor: "#E2705A"
+} as const;
+
 // ---------------------------------------------------------------------------
 // 配色与文案
 // ---------------------------------------------------------------------------
@@ -283,32 +323,69 @@ export const MN_CSS = `
 .mn-field{position:relative;}
 .mn-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
 .mn-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:16px;font-weight:800;color:#3F6033;
-  box-shadow:0 2px 6px rgba(110,150,90,.24);overflow-wrap:anywhere;}
+  box-shadow:0 2px 6px rgba(110,150,90,.24);overflow-wrap:anywhere;display:inline-flex;align-items:center;gap:4px;}
 .mn-chip b{color:#B0563E;}
+.mn-chip svg{width:15px;height:15px;flex:0 0 auto;}
+.mn-mbar{width:30px;height:7px;border-radius:999px;background:#E7F0DA;overflow:hidden;flex:0 0 auto;
+  box-shadow:inset 0 1px 1px rgba(110,150,90,.25);}
+.mn-mbar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#F6C6D8,#E58BA8);}
 .mn-chip.mn-warn{background:#FFF0E4;color:#A85A28;}
 .mn-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-radius:12px;max-width:100%;
   padding:3px;background:#DCEBCF;}
 .mn-grid{display:grid;gap:2px;margin:0 auto;width:max-content;}
-.mn-cell{border:none;padding:0;margin:0;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:900;
-  background:linear-gradient(180deg,#BEE0A8,#A8D08C);box-shadow:inset 0 -2px 0 rgba(90,130,70,.35);
-  display:flex;align-items:center;justify-content:center;line-height:1;touch-action:none;position:relative;}
+.mn-cell{border:none;padding:0;margin:0;border-radius:6px;font-family:inherit;font-weight:900;
+  --mn-b:none;--mn-g:linear-gradient(180deg,#BDE0A6,#A8D08C);
+  background-color:#A8D08C;background-image:var(--mn-b),var(--mn-g);
+  background-size:100% 100%;background-repeat:no-repeat;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 0 rgba(90,130,70,.4);
+  display:flex;align-items:center;justify-content:center;line-height:1;touch-action:none;position:relative;
+  cursor:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><path d='M13.2 2.6l6.2 6.2-2.5 2.5-6.2-6.2z' fill='%238A5B33'/><path d='M9.4 6.6l6 6-6.6 6.8q-3.2 1.6-5.4 1.2-.4-2.2 1.2-5.4z' fill='%23AEB6C2'/><path d='M10 8.4l3.6 3.6' stroke='%23DDE3EC' stroke-width='1.2'/></svg>") 4 18,pointer;}
 .mn-cell:active{transform:scale(.94);}
-.mn-cell.mn-lit{background:#F3F7EA;box-shadow:inset 0 0 0 1px rgba(150,175,130,.5);cursor:default;
+.mn-cell svg{width:74%;height:74%;display:block;pointer-events:none;}
+.mn-cell.mn-g1{--mn-g:linear-gradient(180deg,#B5D99C,#A0C983);}
+.mn-cell.mn-t0{--mn-b:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><path d='M7 22q1.8-4.6.4-8' stroke='%23709E51' stroke-width='1.5' fill='none' stroke-linecap='round'/><path d='M19 13q1.6-3.6.2-6.4' stroke='%2380B160' stroke-width='1.3' fill='none' stroke-linecap='round'/></svg>");}
+.mn-cell.mn-t1{--mn-b:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><path d='M21 22q-1.8-4.6-.4-8' stroke='%23709E51' stroke-width='1.5' fill='none' stroke-linecap='round'/><path d='M8 12q-1.5-3.4-.2-6' stroke='%2380B160' stroke-width='1.3' fill='none' stroke-linecap='round'/></svg>");}
+.mn-cell.mn-t2{--mn-b:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><path d='M6 10q.8-2.6 0-4.6' stroke='%23709E51' stroke-width='1.4' fill='none' stroke-linecap='round'/><path d='M14 24q1-2.8 0-5' stroke='%2380B160' stroke-width='1.4' fill='none' stroke-linecap='round'/><path d='M22 11q-1-2.6 0-4.8' stroke='%23709E51' stroke-width='1.3' fill='none' stroke-linecap='round'/></svg>");}
+.mn-cell.mn-lit{background:#F5EFDF;cursor:default;text-shadow:0 1px 0 rgba(255,255,255,.9);
+  box-shadow:inset 0 2px 3px rgba(125,105,70,.25),inset 0 0 0 1px rgba(160,140,105,.35);
   animation:mnflip 110ms ease-out;}
-.mn-cell.mn-chordable{box-shadow:inset 0 0 0 2px #E0A94A;cursor:pointer;}
+.mn-cell.mn-lit.mn-s1{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><ellipse cx='20.5' cy='21.5' rx='2.6' ry='1.8' fill='%23DCD2B9'/><ellipse cx='19.8' cy='21' rx='1.1' ry='.6' fill='%23EFE8D6'/></svg>");}
+.mn-cell.mn-lit.mn-s2{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><ellipse cx='7' cy='6.5' rx='2.2' ry='1.6' fill='%23DCD2B9'/><circle cx='21' cy='8' r='1.2' fill='%23E4DBC4'/></svg>");}
+.mn-cell.mn-lit.mn-s3{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><ellipse cx='6.5' cy='21' rx='2.4' ry='1.7' fill='%23DCD2B9'/><ellipse cx='21' cy='6.8' rx='1.8' ry='1.3' fill='%23E4DBC4'/></svg>");}
+.mn-cell.mn-turn{animation:mnturn 150ms ease-out;}
+.mn-cell.mn-crumb::after{content:"";position:absolute;left:30%;top:-2px;width:4px;height:4px;border-radius:50%;
+  background:#8FBF74;animation:mncrumb .4s ease-out forwards;pointer-events:none;}
+.mn-cell.mn-chordable{box-shadow:inset 0 0 0 2px #E0A94A,inset 0 2px 3px rgba(125,105,70,.18);cursor:pointer;}
 .mn-cell.mn-flag{background:linear-gradient(180deg,#F6D9A8,#EFC684);}
+.mn-cell.mn-flag svg{transform-origin:50% 88%;animation:mnplant 200ms cubic-bezier(.34,1.56,.64,1);}
 .mn-cell.mn-guess{background:linear-gradient(180deg,#DCD8EE,#C7C1E2);}
 .mn-cell.mn-bloom{background:#FDEFF5;animation:mnbloom 260ms cubic-bezier(.34,1.56,.64,1);}
 .mn-cell.mn-wrong{background:#EFE7DA;}
 .mn-cell.mn-cursor{outline:3px solid #E2705A;outline-offset:-2px;z-index:2;}
-.mn-cell.mn-dark{background:linear-gradient(180deg,#9FB3A0,#8CA18E);color:transparent;}
+.mn-cell.mn-dark{background:linear-gradient(180deg,#9FB3A0,#8CA18E);color:transparent;
+  box-shadow:inset 0 -2px 0 rgba(70,90,75,.4);}
 .mn-cell.mn-dark.mn-lit{background:#C6CFC1;}
 .mn-cell.mn-pressing::after{content:"";position:absolute;inset:2px;border-radius:5px;
   border:2px solid #E0A94A;opacity:var(--mn-press,0);}
+.mn-seeds{position:absolute;left:0;right:0;bottom:2px;display:flex;gap:2px;justify-content:center;
+  pointer-events:none;}
+.mn-seeds .mn-seed{width:3px;height:3px;background:currentColor;opacity:.55;display:block;}
+.mn-sh0 .mn-seed{border-radius:50%;}
+.mn-sh1 .mn-seed{transform:rotate(45deg);border-radius:1px;}
+.mn-sh2 .mn-seed{border-radius:1px;}
+.mn-cell .mn-pop{position:absolute;left:16%;top:12%;width:68%;height:68%;pointer-events:none;z-index:3;
+  animation:mnpop .72s ease-out forwards;}
+@media (hover:hover){.mn-cell:not(.mn-lit):not(.mn-dark):hover{filter:brightness(1.06);}}
 @keyframes mnflip{from{transform:rotateX(70deg);opacity:.3}to{transform:none;opacity:1}}
 @keyframes mnbloom{from{transform:scale(.4)}to{transform:scale(1)}}
-.mn-mini{display:block;margin:6px auto 0;border-radius:8px;background:#DCEBCF;
-  box-shadow:0 2px 6px rgba(110,150,90,.3);}
+@keyframes mnturn{0%{transform:scaleY(1)}45%{transform:scaleY(.12)}100%{transform:scaleY(1)}}
+@keyframes mnplant{from{transform:translateY(-45%);opacity:.4}to{transform:none;opacity:1}}
+@keyframes mncrumb{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translate(4px,-10px)}}
+@keyframes mnpop{0%{transform:scale(.2) translateY(4px);opacity:0}30%{opacity:1}100%{transform:scale(1.05) translateY(-7px);opacity:0}}
+.mn-mini{display:block;margin:6px auto 0;border-radius:8px;background:#DCEBCF;border:1px solid #B9D3A4;
+  box-shadow:0 2px 6px rgba(110,150,90,.3);box-sizing:border-box;max-width:100%;}
+/* display:block 会盖掉 UA 的 [hidden]{display:none}——这行补回来，收起时不再留一块空底板 */
+.mn-mini[hidden]{display:none;}
 .mn-minitip{text-align:center;font-size:var(--mt-body,16px);font-weight:700;color:#5B7A4C;margin-top:2px;}
 .mn-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
 .mn-btn{border:none;border-radius:12px;padding:9px 13px;min-height:40px;font-size:14px;font-weight:900;cursor:pointer;
@@ -333,6 +410,8 @@ export const MN_CSS = `
 .mn-over{position:absolute;inset:0;background:rgba(244,251,236,.96);border-radius:16px;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;z-index:6;}
 .mn-over-t{font-size:21px;font-weight:900;color:#3F7D3A;}
+.mn-over-art{line-height:0;}
+.mn-over-art svg{width:92px;height:92px;}
 .mn-over-s{font-size:16px;font-weight:700;color:#4B6B3E;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
 @media (max-width:420px){
   .mn-wrap{padding:8px;}
@@ -342,6 +421,10 @@ export const MN_CSS = `
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}
   .mn-cell.mn-bloom{animation:none;}
+  .mn-cell.mn-turn{animation:none;}
+  .mn-cell.mn-flag svg{animation:none;}
+  .mn-cell.mn-crumb::after{animation:none;content:none;}
+  .mn-cell .mn-pop{animation:none;opacity:0;}
 }
 `;
 
@@ -482,12 +565,30 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   let finished = false;
   let dead = false;
   let bloomed: number[] = [];
+  /** 波纹开垦：逻辑上已翻开、视觉上还排着队没掀草皮的格子 */
+  const pendingReveal = new Set<number>();
+  /** 这一拍刚被波纹翻起的格子：paintCell 给它加一次「掀草皮」动画 */
+  const justTurned = new Set<number>();
+  /** 破土绽放第一帧（土裂）里的刺种格 */
+  const sprouting = new Set<number>();
 
   const wrap = el("div", "mn-field");
   const hud = el("div", "mn-hud");
-  const flagChip = chip("🚩 0");
+  const flagChip = chip("");
+  flagChip.appendChild(buildIcon(flagSVG(), "mn-ci"));
+  const flagText = el("span", "", "0");
+  flagChip.appendChild(flagText);
   const clockChip = chip("⏱ 00:00");
-  const doneChip = chip("🌼 0%");
+  const doneChip = chip("");
+  const doneIcon = el("span", "mn-cicon");
+  doneIcon.setAttribute("aria-hidden", "true");
+  let doneStage = -1;
+  const doneBar = el("span", "mn-mbar");
+  doneBar.setAttribute("aria-hidden", "true");
+  const doneFill = el("i");
+  doneBar.appendChild(doneFill);
+  const doneText = el("span", "", "0%");
+  doneChip.append(doneIcon, doneBar, doneText);
   hud.append(flagChip, clockChip, doneChip);
   if (opts.title) hud.appendChild(chip(opts.title));
   wrap.appendChild(hud);
@@ -499,7 +600,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
 
   const mini = document.createElement("canvas");
   mini.className = "mn-mini";
-  const miniTip = el("div", "mn-minitip", "地图放不下，可以横着拖；下面这张小地图是全景。");
+  const miniTip = el("div", "mn-minitip", "🗺 花园鸟瞰 · 地图放不下可以横着拖，这张小图就是全景。");
   wrap.append(mini, miniTip);
 
   const msg = el("div", "mn-msg", opts.fog ? "雾里只照亮光标周围，数字要记住。" : "第一下一定安全，放心点。");
@@ -557,7 +658,10 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   }
 
   function drawMini(): void {
-    const scale = Math.max(2, Math.floor(300 / run.opts.w));
+    // 鸟瞰图按容器实际宽收敛：320px 视口下容器不足 300px，画布跟着缩，不越界
+    const measured = (wrap as { clientWidth?: number }).clientWidth || 0;
+    const avail = measured > 0 ? Math.min(300, Math.max(96, measured - 8)) : 300;
+    const scale = Math.max(2, Math.floor(avail / run.opts.w));
     mini.width = run.opts.w * scale;
     mini.height = run.opts.h * scale;
     const ctx = (mini as HTMLCanvasElement).getContext?.("2d");
@@ -565,45 +669,125 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     ctx.clearRect(0, 0, mini.width, mini.height);
     for (let i = 0; i < total; i++) {
       const st = run.board.state[i];
-      ctx.fillStyle = st === OPEN ? "#F3F7EA" : st === FLAG ? "#EFC684" : "#A8D08C";
-      ctx.fillRect(xOf(run.opts.w, i) * scale, yOf(run.opts.w, i) * scale, scale, scale);
+      const px = xOf(run.opts.w, i) * scale;
+      const py = yOf(run.opts.w, i) * scale;
+      ctx.fillStyle = st === OPEN ? MINI_COLORS.soil : MINI_COLORS.turf;
+      ctx.fillRect(px, py, scale, scale);
+      if (st === FLAG) {
+        // 像素小旗：一格旗杆 + 两格旗面，鸟瞰图上一眼认出自己插过哪
+        const u = Math.max(1, Math.floor(scale / 3));
+        ctx.fillStyle = MINI_COLORS.pole;
+        ctx.fillRect(px + u, py + u, 1, u * 2);
+        ctx.fillStyle = MINI_COLORS.flag;
+        ctx.fillRect(px + u + 1, py + u, u, u);
+      }
     }
-    ctx.strokeStyle = "#E2705A";
+    ctx.strokeStyle = MINI_COLORS.cursor;
     ctx.lineWidth = 1;
     ctx.strokeRect(xOf(run.opts.w, run.cursor) * scale, yOf(run.opts.w, run.cursor) * scale, scale, scale);
   }
 
+  /** 内容签名：同一格重画时内容没变就不重建节点，插旗动画才不会被重复触发 */
+  const cellSig: string[] = new Array(total).fill("\u0000");
+
+  function seedDotsEl(n: number): HTMLElement {
+    const spec = seedSpec(n);
+    const box = el("span", `mn-seeds mn-sh${spec.shape}`);
+    box.setAttribute("aria-hidden", "true");
+    for (let k = 0; k < spec.count; k++) box.appendChild(el("i", "mn-seed"));
+    return box;
+  }
+
+  /** 只在签名变了的时候被叫到：把格子里的东西（数字/花/旗/木牌）重建一遍 */
+  function paintCellContent(c: HTMLElement, i: number, st: number, dark: boolean): void {
+    if (dark && st !== FLAG) {
+      c.textContent = "";
+      return;
+    }
+    if (st === OPEN) {
+      if (run.board.mine[i]) {
+        c.textContent = "";
+        c.appendChild(buildIcon(flowerSVG(sprouting.has(i) ? 0 : 2), "mn-i-flower"));
+        return;
+      }
+      const n = run.board.hint[i];
+      if (n > 0) {
+        c.textContent = String(n);
+        c.appendChild(seedDotsEl(n));
+      } else {
+        c.textContent = "";
+      }
+      return;
+    }
+    if (st === FLAG) {
+      const wrong = finished && !run.board.mine[i];
+      c.textContent = "";
+      c.appendChild(buildIcon(wrong ? cloverSVG() : flagSVG(), wrong ? "mn-i-clover" : "mn-i-flag"));
+      return;
+    }
+    if (st === GUESS) {
+      c.textContent = "";
+      c.appendChild(buildIcon(signSVG(), "mn-i-guess"));
+      return;
+    }
+    c.textContent = "";
+  }
+
   function paintCell(i: number): void {
     const c = cells[i];
-    const st = run.board.state[i];
+    const logical = run.board.state[i];
+    // 波纹开垦：逻辑上已翻开、还排在视觉队列里的格子，先照草皮画（aria 口径始终跟逻辑走）
+    const st = logical === OPEN && pendingReveal.has(i) ? HIDDEN : logical;
     const dark = Boolean(opts.fog) && !fogVisible(run.opts.w, run.opts.h, run.cursor, i);
+    const h = cellHash(i);
     let cls = "mn-cell";
-    let text = "";
+    let sig = `${st}|${dark ? 1 : 0}`;
     let color = "";
     if (st === OPEN) {
       if (run.board.mine[i]) {
         cls += " mn-bloom";
-        text = "🌼";
+        if (sprouting.has(i)) {
+          cls += " mn-sprout";
+          sig += "|crack";
+        } else {
+          sig += "|flower";
+        }
       } else {
         cls += " mn-lit";
-        const n = run.board.hint[i];
-        if (n > 0) {
-          text = String(n);
-          color = hintColor(n);
+        if (!dark) {
+          const pebble = h % 4;
+          if (pebble > 0) cls += ` mn-s${pebble}`;
+          const n = run.board.hint[i];
+          if (n > 0) {
+            color = hintColor(n);
+            sig += `|n${n}`;
+          }
+        }
+        if (justTurned.has(i)) {
+          cls += " mn-turn";
+          if (h % 5 === 0) cls += " mn-crumb";
+          justTurned.delete(i);
         }
         if (!finished && canChord(run.board, i)) cls += " mn-chordable";
       }
     } else if (st === FLAG) {
-      cls += finished && !run.board.mine[i] ? " mn-flag mn-wrong" : " mn-flag";
-      text = finished && !run.board.mine[i] ? "🍀" : "🚩";
+      const wrong = finished && !run.board.mine[i];
+      cls += wrong ? " mn-flag mn-wrong" : " mn-flag";
+      sig += wrong ? "|clover" : "|flag";
     } else if (st === GUESS) {
       cls += " mn-guess";
-      text = "❓";
+      sig += "|guess";
+    } else if (!dark) {
+      // 草皮双档棋盘格 + 草叶朝向三选一，全由格子哈希定，不泄露任何内容
+      cls += ` mn-g${(xOf(run.opts.w, i) + yOf(run.opts.w, i)) & 1} mn-t${h % 3}`;
     }
     if (dark) cls += " mn-dark";
     if (i === run.cursor && scheme !== "none") cls += " mn-cursor";
     c.className = cls;
-    c.textContent = dark && st !== FLAG ? "" : text;
+    if (cellSig[i] !== sig) {
+      cellSig[i] = sig;
+      paintCellContent(c, i, st, dark);
+    }
     c.style.color = color;
     c.setAttribute("aria-label", cellLabel(i));
   }
@@ -621,9 +805,9 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
 
   function paintHud(): void {
     const budget = flagBudgetLeft(run);
-    flagChip.textContent = Number.isFinite(budget)
-      ? `🚩 ${budget} / ${run.opts.flagLimit}`
-      : `🚩 ${flagsLeft(run.board)}`;
+    flagText.textContent = Number.isFinite(budget)
+      ? `${budget} / ${run.opts.flagLimit}`
+      : `${flagsLeft(run.board)}`;
     flagChip.className = Number.isFinite(budget) && budget <= 0 ? "mn-chip mn-warn" : "mn-chip";
     const limit = run.opts.timeLimitMs;
     if (typeof limit === "number") {
@@ -633,27 +817,65 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     } else {
       clockChip.textContent = `⏱ ${clockText(elapsedMs(run, clock()))}`;
     }
-    doneChip.textContent = `🌼 ${percentText(runProgress(run))}`;
+    // 小花进度条：花苞 → 半开 → 盛放，跟着翻开进度换脸
+    const p = runProgress(run);
+    const stage = flowerStage(p);
+    if (stage !== doneStage) {
+      doneStage = stage;
+      doneIcon.textContent = "";
+      doneIcon.appendChild(buildIcon(flowerSVG(stage), "mn-ci"));
+    }
+    doneFill.style.width = `${Math.round(Math.max(0, Math.min(1, p)) * 100)}%`;
+    doneText.textContent = percentText(p);
+  }
+
+  /** 胜利花开波：一列一列冒小花，一共不超过 20 朵，0.8 秒内收场 */
+  function bloomWave(): void {
+    const cols = Math.min(run.opts.w, 20);
+    for (let k = 0; k < cols; k++) {
+      const x = Math.floor((k * run.opts.w) / cols);
+      const y = cellHash(x * 7 + k) % run.opts.h;
+      const idx = y * run.opts.w + x;
+      timers.after(() => {
+        if (dead) return;
+        const pop = buildIcon(flowerSVG(2), "mn-pop");
+        cells[idx].appendChild(pop);
+        timers.after(() => pop.remove(), 720);
+      }, 40 * k);
+    }
   }
 
   function finish(win: boolean, reason: FieldEndInfo["reason"]): void {
     if (finished) return;
     finished = true;
+    pendingReveal.clear();
     const ms = elapsedMs(run, clock());
     if (win) {
       opts.sfx("win");
       msg.textContent = "整片花园都翻开啦！";
+      if (!reduced) bloomWave();
     } else {
       opts.sfx("oops");
       msg.textContent = loseLine(reason === "time" ? "time" : "hit");
-      // 温柔揭开剩下的刺种：一颗一颗慢慢开花，绝不一下子全开
+      // 温柔揭开剩下的刺种：一颗一颗慢慢开花，绝不一下子全开；
+      // 每颗两帧——先土裂再绽放，弱动效时一帧到位
       bloomed = revealRest(run);
       const step = bloomStepMs(reduced);
       bloomed.forEach((idx, k) => {
         timers.after(() => {
           if (dead) return;
           run.board.state[idx] = OPEN;
+          if (reduced) {
+            paintCell(idx);
+            return;
+          }
+          sprouting.add(idx);
           paintCell(idx);
+          timers.after(() => {
+            if (dead) return;
+            sprouting.delete(idx);
+            paintCell(idx);
+          }, BLOOM_FRAME_MS);
         }, step * (k + 1));
       });
       for (const idx of runWrongFlags(run)) paintCell(idx);
@@ -666,6 +888,11 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
 
   function showOver(win: boolean, ms: number): void {
     const ov = el("div", "mn-over");
+    // 赢了配大花环，没扫完配一把浇水壶——回头浇一浇再来
+    const art = el("div", "mn-over-art");
+    art.setAttribute("aria-hidden", "true");
+    art.appendChild(buildIcon(win ? wreathSVG() : wateringCanSVG(), "mn-i-settle"));
+    ov.appendChild(art);
     ov.appendChild(el("div", "mn-over-t", win ? "🌼 扫种完成！" : "🌱 这一片没扫完"));
     ov.appendChild(
       el("div", "mn-over-s", win ? `用时 ${clockText(ms)}，${run.board.mines} 颗刺种都绕开了。` : loseLine("hit"))
@@ -685,7 +912,28 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     wrap.appendChild(ov);
   }
 
-  function afterAction(res: ReturnType<typeof openAt>): void {
+  /**
+   * 波纹开垦：大片连开只是「看起来」一圈一圈翻——离起点每远一圈晚 30ms 掀草皮。
+   * 逻辑上 `board.ts` 早就一次性全翻开了，这里只排视觉队列；
+   * 定时器都挂在 `timers` 篮子里，destroy 一口气倒掉；弱动效时压根不排队。
+   */
+  function queueRipple(origin: number, opened: number[]): void {
+    const ox = xOf(run.opts.w, origin);
+    const oy = yOf(run.opts.w, origin);
+    for (const idx of opened) {
+      const d = Math.abs(xOf(run.opts.w, idx) - ox) + Math.abs(yOf(run.opts.w, idx) - oy);
+      if (d === 0) continue;
+      pendingReveal.add(idx);
+      timers.after(() => {
+        if (dead) return;
+        pendingReveal.delete(idx);
+        justTurned.add(idx);
+        paintCell(idx);
+      }, RIPPLE_STEP_MS * d);
+    }
+  }
+
+  function afterAction(res: ReturnType<typeof openAt>, origin: number): void {
     if (res.first) {
       opts.onPlant?.(Uint8Array.from(run.board.mine), run.firstIndex);
       msg.textContent = run.noGuess
@@ -705,6 +953,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     } else if (res.opened.length > 0) {
       opts.sfx("tap");
     }
+    if (!reduced && !res.win && !res.lose && res.opened.length > 1) queueRipple(origin, res.opened);
     paintAll();
     paintHud();
     if (res.win) finish(true, "clear");
@@ -714,15 +963,15 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   function doOpen(i: number): void {
     if (finished || paused) return;
     if (run.board.state[i] === OPEN) {
-      afterAction(chordAt(run, i, clock()));
+      afterAction(chordAt(run, i, clock()), i);
       return;
     }
-    afterAction(openAt(run, i, clock()));
+    afterAction(openAt(run, i, clock()), i);
   }
 
   function doFlag(i: number): void {
     if (finished || paused) return;
-    afterAction(flagAt(run, i, clock()));
+    afterAction(flagAt(run, i, clock()), i);
   }
 
   function bindCell(c: HTMLElement, i: number): void {
@@ -1394,6 +1643,8 @@ export const MG_CONSTS = {
   longPress: LONG_PRESS_MS,
   flip: flipMs(false),
   bloom: bloomStepMs(false),
+  ripple: RIPPLE_STEP_MS,
+  bloomFrame: BLOOM_FRAME_MS,
   presets: PRESETS,
   hintColors: HINT_COLORS
 };

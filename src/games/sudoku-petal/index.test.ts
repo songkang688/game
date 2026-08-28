@@ -1,19 +1,47 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY, cellsFromString, regionMapFor } from "./solver";
-import { PUZZLE_BANK, bankAt, boardFromBank, solutionOfBank } from "./puzzles";
+import { PUZZLE_BANK, bankAt, boardFromBank, solutionOfBank, variantOfBank } from "./puzzles";
 import { endlessConfig, endlessPick, levelSpec } from "./levels";
 import { AI_PROFILES, AI_TIERS, AI_TIER_LABELS, estimateMs, nextMove, profileOf, tierStrength } from "./ai";
 import guide from "./guide";
 import {
+  FLOWER_CORE,
+  LEAF_GREEN,
+  PETAL_BLUE,
+  PETAL_PINK,
+  WITHER_BROWN,
+  WOOD_DARK,
+  WOOD_LIGHT,
+  budSVG,
+  bulbSVG,
+  clusterSVG,
+  flowerSVG,
+  leafSVG,
+  mix,
+  pencilSVG,
+  petalSVG,
+  shade,
+  spongeSVG,
+  witherSVG
+} from "./art";
+import {
   BLOOM_MS,
   BLOOM_STEP_MS,
   BLOOM_STEP_REDUCED_MS,
+  BUD_MS,
   CELL_MIN_PX,
+  CHEER_MS,
+  CHEER_STEP_MS,
   FONT_MIN_PX,
   KEY_MIN_PX,
+  SHOWER_MS,
+  SHOWER_PETALS,
   SP_CONSTS,
   SP_CSS,
+  WAVE_MS,
+  WAVE_STEP_MS,
   bloomDelayMs,
+  bloomWaveDelayMs,
   cellPxFor,
   cellSay,
   clearSay,
@@ -22,6 +50,7 @@ import {
   digitFontPx,
   doneSay,
   fillSay,
+  harvestFlowers,
   isFilledComplete,
   isOutOfTries,
   keyAction,
@@ -985,5 +1014,419 @@ describe("读屏听得见落子", () => {
     const { host, s } = seat({ who: undefined, ai: "normal" });
     for (let i = 0; i < 12; i++) s.stepAi(0.5);
     expect(host.byClass("sp-say")[0].textContent).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约:花田绘制资产、七态语义、开花仪式与结算
+// ---------------------------------------------------------------------------
+
+describe("视觉契约 · 花田绘制资产(art.ts)", () => {
+  it("全部资产是纯函数:同输入同输出,合法 SVG 外壳,不带位图 / 脚本 / id / emoji", () => {
+    const draw = (): string[] => [
+      petalSVG("#F5A8C6"),
+      budSVG(),
+      leafSVG("#7FBF6E"),
+      flowerSVG(),
+      witherSVG(),
+      bulbSVG(),
+      pencilSVG(),
+      spongeSVG(),
+      clusterSVG()
+    ];
+    const outs = draw();
+    expect(outs).toEqual(draw());
+    for (const svg of outs) {
+      expect(svg.startsWith("<svg")).toBe(true);
+      expect(svg.endsWith("</svg>")).toBe(true);
+      expect(svg).toContain('aria-hidden="true"');
+      expect(svg).toContain("viewBox=");
+      expect(svg).not.toContain("<image");
+      expect(svg).not.toContain("<script");
+      // 同一页会插很多份,一旦带 id 就会撞车
+      expect(svg).not.toContain(" id=");
+      expect(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(svg)).toBe(false);
+    }
+  });
+
+  it("花瓣三阶光影:暗部、主色、高光都在,而且颜色随传入色走", () => {
+    const c = "#F5A8C6";
+    const svg = petalSVG(c);
+    expect(svg).toContain(`fill="${c}"`);
+    expect(svg).toContain(`fill="${shade(c, -0.18)}"`);
+    expect(svg).toContain(`fill="${shade(c, 0.5)}"`);
+    expect((svg.match(/<path/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(petalSVG("#9BBDE8")).toContain('fill="#9BBDE8"');
+    expect(petalSVG(c)).not.toBe(petalSVG("#9BBDE8"));
+  });
+
+  it("花苞有茎有萼叶,小花五瓣双层加花芯,枯叶和灯泡都不止一层", () => {
+    expect((budSVG().match(/<path/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expect((flowerSVG().match(/<ellipse/g) ?? []).length).toBe(10);
+    expect((flowerSVG().match(/<circle/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((witherSVG().match(/<path/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((bulbSVG().match(/<circle/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((clusterSVG().match(/<ellipse/g) ?? []).length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("配色契约:主题色全是合法 #rrggbb,你和对手的庆祝色一眼分得开", () => {
+    for (const c of [PETAL_PINK, PETAL_BLUE, FLOWER_CORE, LEAF_GREEN, WOOD_DARK, WOOD_LIGHT, WITHER_BROWN]) {
+      expect(c).toMatch(/^#[0-9A-F]{6}$/i);
+    }
+    expect(PETAL_PINK).not.toBe(PETAL_BLUE);
+  });
+
+  it("shade / mix 的小算术:端点正确、越界夹住、认不出的输入原样退回", () => {
+    expect(shade("#808080", 0)).toBe("#808080");
+    expect(shade("#808080", 1)).toBe("#FFFFFF");
+    expect(shade("#808080", -1)).toBe("#000000");
+    expect(shade("不是颜色", 0.5)).toBe("不是颜色");
+    expect(mix("#000000", "#FFFFFF", 0)).toBe("#000000");
+    expect(mix("#000000", "#FFFFFF", 1)).toBe("#FFFFFF");
+    expect(mix("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+    expect(mix("不是颜色", "#FFFFFF", 0.5)).toBe("不是颜色");
+  });
+});
+
+describe("视觉契约 · 盘面与七态", () => {
+  beforeEach(installDom);
+  afterEach(removeDom);
+
+  it("题面格与玩家格看得出区别:sp-given 类 + 脚下一片叶子,玩家填的没有", () => {
+    const entry = bankAt(60);
+    const puzzle = cellsFromString(entry.p);
+    const solution = solutionOfBank(entry);
+    const { s, host } = seat({ entry });
+    const cells = host.byClass("sp-cell");
+    const givenIdx = puzzle.findIndex((v) => v > EMPTY);
+    const hole = puzzle.findIndex((v) => v === EMPTY);
+    expect(cells[givenIdx].classList.contains("sp-given")).toBe(true);
+    expect(cells[givenIdx].byClass("sp-leaf")).toHaveLength(1);
+    expect(cells[hole].classList.contains("sp-given")).toBe(false);
+    expect(cells[hole].byClass("sp-leaf")).toHaveLength(0);
+    // 玩家填上以后仍然不是题面样式
+    cells[hole].fire("click");
+    s.act({ type: "digit", digit: solution[hole] });
+    expect(cells[hole].classList.contains("sp-given")).toBe(false);
+    expect(cells[hole].byClass("sp-leaf")).toHaveLength(0);
+    // 每一个题面格都有叶子,一个不多一个不少
+    expect(host.byClass("sp-leaf")).toHaveLength(puzzle.filter((v) => v > EMPTY).length);
+    s.destroy();
+  });
+
+  it("种对一朵会先展开花苞、散两片花瓣,动画放完自己收干净", () => {
+    vi.useFakeTimers();
+    try {
+      const entry = bankAt(60);
+      const solution = solutionOfBank(entry);
+      const hole = cellsFromString(entry.p).findIndex((v) => v === EMPTY);
+      const { s, host } = seat({ entry, errorLimit: 0 });
+      const cells = host.byClass("sp-cell");
+      cells[hole].fire("click");
+      s.act({ type: "digit", digit: solution[hole] });
+      expect(cells[hole].byClass("sp-budfx")).toHaveLength(1);
+      expect(cells[hole].byClass("sp-bud")).toHaveLength(1);
+      expect(cells[hole].byClass("sp-fly")).toHaveLength(2);
+      expect(cells[hole].classList.contains("sp-pop")).toBe(true);
+      vi.advanceTimersByTime(BUD_MS + 20);
+      expect(cells[hole].byClass("sp-budfx")).toHaveLength(0);
+      // 种错不开花苞
+      const hole2 = cellsFromString(entry.p).findIndex((v, i) => v === EMPTY && i !== hole);
+      cells[hole2].fire("click");
+      s.act({ type: "digit", digit: solution[hole2] === 9 ? 1 : solution[hole2] + 1 });
+      expect(cells[hole2].byClass("sp-budfx")).toHaveLength(0);
+      s.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("减少动态效果时:填数不加动画类、不挂动画节点、不排计时器", () => {
+    const g = globalThis as Record<string, unknown>;
+    g.matchMedia = () => ({ matches: true });
+    vi.useFakeTimers();
+    try {
+      const entry = bankAt(60);
+      const solution = solutionOfBank(entry);
+      const hole = cellsFromString(entry.p).findIndex((v) => v === EMPTY);
+      const { s, host } = seat({ entry, errorLimit: 0 });
+      const cells = host.byClass("sp-cell");
+      cells[hole].fire("click");
+      s.act({ type: "digit", digit: solution[hole] });
+      expect(cells[hole].byClass("sp-budfx")).toHaveLength(0);
+      expect(cells[hole].classList.contains("sp-pop")).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      s.destroy();
+    } finally {
+      delete g.matchMedia;
+      vi.useRealTimers();
+    }
+  });
+
+  it("七种状态 class 全部保留、语义不变,同一局面 render 前后 class 集合一字不差", () => {
+    for (const cls of ["sp-given", "sp-peer", "sp-same", "sp-bad", "sp-cur", "sp-hint", "sp-pop"]) {
+      expect(SP_CSS).toContain(`.sp-cell.${cls}`);
+    }
+    const entry = bankAt(60);
+    const puzzle = cellsFromString(entry.p);
+    const { s, host } = seat({ entry, hintTier: "pointingPair" });
+    const cells = host.byClass("sp-cell");
+    // 点一个出现不止一次的题面数字:光标、同伴、同数字三种态一起亮
+    const counts = new Map<number, number>();
+    for (const v of puzzle) if (v > EMPTY) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const dup = [...counts.entries()].find(([, c]) => c >= 2);
+    expect(dup).toBeDefined();
+    const at = puzzle.findIndex((v) => v === dup![0]);
+    cells[at].fire("click");
+    expect(cells[at].classList.contains("sp-cur")).toBe(true);
+    expect(host.byClass("sp-same").length).toBeGreaterThanOrEqual(2);
+    expect(host.byClass("sp-peer").length).toBeGreaterThan(0);
+    expect(host.byClass("sp-given").length).toBeGreaterThan(0);
+    // 同一局面再 render 一遍(再点同一格),class 一字不变
+    const before = cells.map((c) => c.className);
+    cells[at].fire("click");
+    expect(cells.map((c) => c.className)).toEqual(before);
+    // 技巧提示焦点
+    host.byClass("sp-tool")[2].fire("click");
+    expect(host.byClass("sp-hint").length).toBeGreaterThan(0);
+    // 冲突:同一行里放一个跟题面撞车的数字
+    const pick = ((): { hole: number; clash: number } => {
+      for (let i = 0; i < puzzle.length; i++) {
+        if (puzzle[i] !== EMPTY) continue;
+        const r0 = Math.floor(i / 9) * 9;
+        for (let c = r0; c < r0 + 9; c++) {
+          if (puzzle[c] > EMPTY) return { hole: i, clash: puzzle[c] };
+        }
+      }
+      return { hole: -1, clash: 0 };
+    })();
+    cells[pick.hole].fire("click");
+    s.act({ type: "digit", digit: pick.clash });
+    expect(cells[pick.hole].classList.contains("sp-bad")).toBe(true);
+    expect(cells[pick.hole].classList.contains("sp-pop")).toBe(true);
+    s.destroy();
+  });
+
+  it("每一格的 aria-label 逐格保留、文案不变", () => {
+    const entry = bankAt(60);
+    const puzzle = cellsFromString(entry.p);
+    const { s, host } = seat({ entry });
+    const cells = host.byClass("sp-cell");
+    for (let i = 0; i < puzzle.length; i++) {
+      const want = `第${Math.floor(i / 9) + 1}行第${(i % 9) + 1}列${puzzle[i] > EMPTY ? `,种着 ${puzzle[i]}` : ",还空着"}`;
+      expect(cells[i].getAttribute("aria-label")).toBe(want);
+    }
+    s.destroy();
+  });
+
+  it("冲突除了变红还有第二通道:枯叶角标 + 摇头动画,弱动效时不摇", () => {
+    const { s, host } = seat({ entry: bankAt(60) });
+    // 每一格都自带枯叶角标节点,平时藏着,sp-bad 时由 CSS 亮出来
+    for (const cell of host.byClass("sp-cell").slice(0, 9)) {
+      expect(cell.byClass("sp-badmark")).toHaveLength(1);
+    }
+    expect(SP_CSS).toContain(".sp-badmark{position:absolute");
+    expect(SP_CSS).toContain(".sp-cell.sp-bad .sp-badmark{display:block");
+    expect(SP_CSS).toContain("@keyframes spshake");
+    expect(SP_CSS).toMatch(/\.sp-cell\.sp-bad\{[^}]*animation:spshake 300ms/);
+    const reducedBlock = SP_CSS.slice(SP_CSS.indexOf("@media (prefers-reduced-motion:reduce)"));
+    expect(reducedBlock).toContain(".sp-cell.sp-bad{animation:none;}");
+    s.destroy();
+  });
+
+  it("光标是圆角粗框加四角小三角,技巧提示是金色呼吸描边(弱动效退静态金边)", () => {
+    expect(SP_CSS).toMatch(/\.sp-cell\.sp-cur\{[^}]*border-radius/);
+    expect(SP_CSS).toMatch(/\.sp-cell\.sp-cur\{[^}]*background-image/);
+    expect(SP_CSS).toContain("@keyframes sphintglow");
+    expect(SP_CSS).toMatch(/\.sp-cell\.sp-hint::before\{[^}]*#E8B33C/);
+    const reducedBlock = SP_CSS.slice(SP_CSS.indexOf("@media (prefers-reduced-motion:reduce)"));
+    expect(reducedBlock).toContain(".sp-cell.sp-hint::before{animation:none;opacity:1;}");
+  });
+});
+
+describe("视觉契约 · 开花仪式与结算", () => {
+  beforeEach(installDom);
+  afterEach(removeDom);
+
+  it("种齐一整朵九宫花:九格错峰冒花瓣,放完自己收干净", () => {
+    vi.useFakeTimers();
+    try {
+      const entry = bankAt(60);
+      const variant = variantOfBank(entry);
+      const puzzle = cellsFromString(entry.p);
+      const solution = solutionOfBank(entry);
+      const { s, host } = seat({ entry, errorLimit: 0 });
+      const cells = host.byClass("sp-cell");
+      // 挑一个有空格的宫,把它整宫种齐(别的宫都不动,整题不会因此完成)
+      const holesByRegion = new Map<number, number[]>();
+      puzzle.forEach((v, i) => {
+        if (v === EMPTY) holesByRegion.set(variant.regions[i], [...(holesByRegion.get(variant.regions[i]) ?? []), i]);
+      });
+      const [region, holes] = [...holesByRegion.entries()][0];
+      for (const idx of holes) {
+        cells[idx].fire("click");
+        s.act({ type: "digit", digit: solution[idx] });
+      }
+      expect(s.state().solved).toBe(false);
+      const regionSize = variant.regions.filter((r) => r === region).length;
+      vi.advanceTimersByTime(CHEER_STEP_MS * regionSize);
+      expect(host.byClass("sp-petalfx")).toHaveLength(regionSize);
+      vi.advanceTimersByTime(CHEER_MS + CHEER_STEP_MS * regionSize + 50);
+      expect(host.byClass("sp-petalfx")).toHaveLength(0);
+      s.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("整题开满:波纹从中心一圈圈翻花再翻回数字,顶上飘出一池花瓣,全部自己收场", () => {
+    vi.useFakeTimers();
+    try {
+      const { s, host } = seat({ entry: bankAt(0), errorLimit: 0 });
+      fillSolved(s, host, 0);
+      // 花瓣雨一次建好一整池
+      expect(host.byClass("sp-shower")).toHaveLength(1);
+      expect(host.byClass("sp-driftpetal")).toHaveLength(SHOWER_PETALS);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      // 波纹经过的格子有 sp-wave,随后翻回数字
+      vi.advanceTimersByTime(WAVE_STEP_MS * 2);
+      expect(host.byClass("sp-wave").length).toBeGreaterThan(0);
+      vi.advanceTimersByTime(WAVE_STEP_MS * 4 + WAVE_MS + 100);
+      expect(host.byClass("sp-wave")).toHaveLength(0);
+      // 花瓣雨飘完整块收走
+      vi.advanceTimersByTime(SHOWER_MS);
+      expect(host.byClass("sp-shower")).toHaveLength(0);
+      s.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("开花放到一半就退场:destroy 把没到点的波纹计时器全部撤掉,复用同一个 timers 池", () => {
+    vi.useFakeTimers();
+    try {
+      const { s, host } = seat({ entry: bankAt(0), errorLimit: 0 });
+      fillSolved(s, host, 0);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      s.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(host.byClass("sp-shower")).toHaveLength(0);
+      expect(host.byClass("sp-cell")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("波纹的节奏:中心最先、角落最后,每圈错开 50ms;弱动效时不排波纹", () => {
+    expect(WAVE_STEP_MS).toBe(50);
+    expect(CHEER_STEP_MS).toBe(30);
+    expect(bloomWaveDelayMs(40, 9)).toBe(0);
+    expect(bloomWaveDelayMs(0, 9)).toBe(4 * WAVE_STEP_MS);
+    expect(bloomWaveDelayMs(80, 9)).toBe(4 * WAVE_STEP_MS);
+    expect(bloomWaveDelayMs(4, 9)).toBe(4 * WAVE_STEP_MS);
+    expect(bloomWaveDelayMs(0, 9, true)).toBe(0);
+  });
+
+  it("弱动效下开满只在盘中央放一朵大花,不翻格子、不下花瓣雨", () => {
+    const g = globalThis as Record<string, unknown>;
+    g.matchMedia = () => ({ matches: true });
+    vi.useFakeTimers();
+    try {
+      const { s, host } = seat({ entry: bankAt(0), errorLimit: 0 });
+      fillSolved(s, host, 0);
+      expect(host.byClass("sp-bigbloom")).toHaveLength(1);
+      expect(host.byClass("sp-shower")).toHaveLength(0);
+      expect(host.byClass("sp-driftpetal")).toHaveLength(0);
+      vi.advanceTimersByTime(BLOOM_STEP_REDUCED_MS * 4 + 100);
+      expect(host.byClass("sp-wave")).toHaveLength(0);
+      s.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      delete g.matchMedia;
+      vi.useRealTimers();
+    }
+  });
+
+  it("收桌小仪式:种满才摆收成面板,提示用得越少花开得越多", () => {
+    expect(harvestFlowers(0)).toBe(3);
+    expect(harvestFlowers(1)).toBe(2);
+    expect(harvestFlowers(2)).toBe(1);
+    expect(harvestFlowers(9)).toBe(1);
+    const host = new FakeEl("div");
+    const t = createTable(host as unknown as HTMLElement, {
+      goalText: "4×4 花田",
+      seats: [seatOpts({ entry: bankAt(0), errorLimit: 0 })],
+      onOver: () => undefined
+    });
+    // 先按两次提示,再照答案种满
+    host.byClass("sp-tool")[2].fire("click");
+    host.byClass("sp-tool")[2].fire("click");
+    const entry = bankAt(0);
+    const puzzle = cellsFromString(entry.p);
+    const solution = solutionOfBank(entry);
+    const cells = host.byClass("sp-cell");
+    const keys = host.byClass("sp-key");
+    for (let i = 0; i < puzzle.length; i++) {
+      if (puzzle[i] !== EMPTY) continue;
+      cells[i].fire("click");
+      keys[solution[i] - 1].fire("click");
+    }
+    expect(host.byClass("sp-harvest")).toHaveLength(1);
+    const line = host.byClass("sp-harvest-line")[0];
+    expect(line.textContent).toContain("用时");
+    expect(line.textContent).toContain("提示 2 次");
+    expect(host.byClass("sp-harvest-flower")).toHaveLength(harvestFlowers(2));
+    t.destroy();
+    expect(host.byClass("sp-harvest")).toHaveLength(0);
+  });
+
+  it("提示框带画出来的小灯泡,工具钮与数字键的 emoji 占位全换成绘制资产", () => {
+    const { s, host } = seat({ entry: bankAt(60), hintTier: "pointingPair" });
+    host.byClass("sp-tool")[2].fire("click");
+    const box = host.byClass("sp-hintbox")[0];
+    expect(box.hidden).toBe(false);
+    expect(box.textContent).not.toContain("💡");
+    expect(box.byClass("sp-bulb")).toHaveLength(1);
+    // 工具钮:文字都在,图标换成画的
+    expect(host.byClass("sp-tool").map((b) => b.textContent)).toEqual(["铅笔", "擦掉", "提示"]);
+    for (const btn of host.byClass("sp-tool")) expect(btn.byClass("sp-ico")).toHaveLength(1);
+    // 数字键是小木牌:正面数字、背面小花
+    for (const key of host.byClass("sp-key")) {
+      expect(key.byClass("sp-keylabel")).toHaveLength(1);
+      expect(key.byClass("sp-keyflower")).toHaveLength(1);
+    }
+    expect(SP_CSS).toContain(".sp-key.sp-key-done .sp-keyflower{display:block");
+    // 盘面每格的开花层不再是 emoji 文本
+    for (const petal of host.byClass("sp-petal").slice(0, 9)) expect(petal.textContent).toBe("");
+    s.destroy();
+  });
+
+  it("木篱笆棋盘、田埂描边与角落花丛都在:纯 CSS / SVG,不吃点击", () => {
+    // 篱笆:竖纹木边框 + 顶上一排圆头桩
+    expect(SP_CSS).toContain("border-image:repeating-linear-gradient");
+    expect(SP_CSS).toMatch(/\.sp-grid::before\{[^}]*radial-gradient/);
+    // 木牌数字键与同伴水纹、同数字花瓣圈
+    expect(SP_CSS).toMatch(/\.sp-key\{[^}]*linear-gradient\(180deg,#EACDA5/);
+    expect(SP_CSS).toMatch(/\.sp-cell\.sp-peer\{[^}]*repeating-linear-gradient/);
+    expect(SP_CSS).toMatch(/\.sp-cell\.sp-same::after\{[^}]*border-radius/);
+    // 田埂:深木色线 + 半像素高光伴线
+    const edge = regionEdgeShadow(regionMapFor("classic"), 0);
+    expect(edge).toContain("#8A6142");
+    expect(edge).toContain("inset 0 2.5px 0");
+    expect(edge).toContain("rgba(255,241,214");
+    // 角落花丛挂在桌子上,标了 aria-hidden
+    const host = new FakeEl("div");
+    const t = createTable(host as unknown as HTMLElement, {
+      goalText: "9×9 花田",
+      seats: [seatOpts()],
+      onOver: () => undefined
+    });
+    const corners = host.byClass("sp-corner");
+    expect(corners).toHaveLength(2);
+    for (const c of corners) expect(c.getAttribute("aria-hidden")).toBe("true");
+    t.destroy();
   });
 });
