@@ -28,3 +28,20 @@
 | 1024×768 | 同上 | none | 同上 | 本页贴合（654=654） |
 
 当前章页签实测投影：`0 4px 0` + `0 8px 16px`。未改 `.l99-node` 热区、未改 N-105。
+
+## 续拍：竖屏可滚 + 横屏 CTA
+
+远程仍无 r38 playbook。不回退 N-119/N-123。
+
+发现并修：915×412（及 360×640）进场 `scrollIntoView({block:center})` 把「继续 第N关」卷到 `.l99-view` 上方（修前 continue top=-27 / 12，elementFromPoint 落到顶栏）。保留 N-39 center 与 N-63 `stage.scrollTop=0`，随后 `scrollAdjustToRevealCta` 把 CTA 拉回盒顶。
+
+修后 Chrome：
+
+| 视口 | 首页文档可滚 | 地图 `.l99-view` | 「继续」top–bottom | 点中自己 | 关内「选关」/末选项 |
+| --- | --- | --- | --- | --- | --- |
+| 360×640 | 是（room 12123） | 是（678/544） | 84–128 | 是 | 时钟/拼音选项 hitSelf |
+| 390×844 | 是 | 贴合 | 148–192 | 是 | 是 |
+| 915×412 | 是 | 是（550/334） | **66–110**（修前 -27） | 是 | 是 |
+| 1024×768 | 是 | 贴合 | 110–154 | 是 | 是 |
+
+html 显式 `overflow-y:auto`；`.home-screen { touch-action: pan-y }`。N-105 无新版本。
