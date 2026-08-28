@@ -1,7 +1,7 @@
 /**
- * trio-r38…r44 A：N-176…188、N-191 overlay 复制体、N-194 *-lv。
+ * trio-r38…r45 A：N-176…194、N-196 `.l99-continue` 回归、N-197 `*-continue`。
  * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760 / --vv-h。
- * B 热区文件白名单（含 N-189/190 red-blue-tap、N-192/193 bubble-aim/candy-swing）。
+ * B 热区文件白名单（含 N-195 shoot-range `.shr-back` 不抢修）。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -280,6 +280,41 @@ describe("N-194 *-lv", () => {
       for (const r of rulesOf(src)) {
         if (/card-lv\b/.test(r.sel)) continue;
         if (!classSuffix(r.sel, "lv")) continue;
+        if (!clickable(r.sel, r.body)) continue;
+        if (tallEnough(r.body)) continue;
+        hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
+      }
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+});
+
+describe("N-196 .l99-continue 已 ≥44", () => {
+  it("壳层继续钮 min-height 44，不改 padding；不抢 N-138 其余钮", () => {
+    expect(L99).toMatch(/\.l99-continue\{[^}]*min-height:44px/);
+    expect(STYLES).toMatch(/\.l99-wrap \.l99-continue \{[^}]*min-height: 44px/);
+    expect(L99).toContain("scrollAdjustToRevealCta");
+    expect(L99).toMatch(/\.l99-back\{[^}]*min-height:44px/);
+    expect(L99).toMatch(/\.l99-tool\{[^}]*min-height:44px/);
+  });
+});
+
+describe("N-197 *-continue", () => {
+  it("族即 .l99-continue；不扫 .shr-back（N-195）", () => {
+    expect(L99).toContain(".l99-continue{");
+    expect(SHR).toContain(".shr-back{");
+  });
+
+  it("可点 *-continue 须 ≥44 或 TOUCH 插值", () => {
+    const hits: string[] = [];
+    for (const file of walkSrc(GAMES)) {
+      const rel = file.slice(GAMES.length).replace(/\\/g, "/");
+      if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (/\.test\.(ts|css)$/.test(rel)) continue;
+      const src = readFileSync(file, "utf8");
+      for (const r of rulesOf(src)) {
+        if (/\.shr-back\b/.test(r.sel)) continue;
+        if (!classSuffix(r.sel, "continue")) continue;
         if (!clickable(r.sel, r.body)) continue;
         if (tallEnough(r.body)) continue;
         hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
