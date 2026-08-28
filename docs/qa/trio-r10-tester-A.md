@@ -4,7 +4,7 @@
 分支:`cursor/trio-r10-tester-a-7779`，目标合入 `game-1.3`。
 执行依据:用户本轮派单优先于 `trio-r10-playbook.md`（那份把 N-40/41 写成 A，**本轮 A 不接**，交给 B）。r9 已合入项 **零重做**。休闲对战动手目录未提交。
 
-水位:进场主干约 1095+/19288+。本轮只增测试（`level99.n39` / `quiz99.s4` / `corridorFit` + faceLift 真机序列化 + boardArt 十章 + stickers 查不到改 🤷）。`npm test` / `npm run build` 交卷前全跑。
+水位:进场主干约 1095+/19288+。本轮只增测试（`level99.n39` / `quiz99.s4` / `corridorFit` + faceLift 真机序列化 + boardArt 十章 + stickers 查不到改 🤷）。交卷 `npm test` = **1112 文件 / 19339 用例全绿**；`npm run build` 全绿。代码提交 `928aa663` 已由 `406ca902` 合入 `game-1.3`；本分支 rebase 后只补本记录。
 
 ## 修了什么
 
