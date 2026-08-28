@@ -250,6 +250,17 @@ const CSS = `
   .snf-pads[data-duo]{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:none;flex-wrap:nowrap;}
   .snf-pads[data-duo] .snf-pad-duo{min-width:0;}
 }
+/* N-85/N-55 r17:915×412 闯关搓雪键 462/514、双人十二键 481/531 仍在舞台裁切线(322px)外。
+   矮横屏把每块操作牌收成一行、提示行让位,配合 layout() 的画布宽上限一屏放下 */
+@media (min-width:640px) and (max-height:500px){
+  .snf-wrap{gap:4px;}
+  .snf-tip{display:none;}
+  .snf-say{min-height:0;max-height:21px;overflow:hidden;}
+  .snf-pad:not(.snf-pad-duo){flex-direction:row;align-items:center;gap:6px;padding:4px 6px;}
+  .snf-pads[data-duo]{grid-template-columns:auto auto;justify-content:center;}
+  .snf-pad-duo{flex-direction:row;align-items:center;}
+  .snf-pad-duo .snf-pad-t{display:none;}
+}
 `;
 
 // ---------------------------------------------------------------------------
@@ -846,7 +857,10 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
    */
   function layout(): void {
     const availW = Math.max(240, (host.clientWidth || 340) - 8);
-    const maxW = Math.min(availW, 880);
+    // N-85/N-55:矮横屏画布 ys 有下限(flat 高度),竖排塞不下键排。压画布宽让 flat 变矮,
+    // 世界坐标与落点判定不动,只是画得窄一点
+    const shortLand = globalThis.matchMedia?.("(min-width:640px) and (max-height:500px)").matches ?? false;
+    const maxW = Math.min(availW, shortLand ? 480 : 880);
     const s = maxW / opts.viewW;
     const flat = VIEW_H * s;
     const room = boardRoom();
