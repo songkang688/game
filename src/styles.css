@@ -924,13 +924,15 @@ button {
 }
 
 .dialog {
+  /* 按钮列 sticky 时要贴在弹窗内边距上沿,这里把下内边距抽成变量给它对齐 */
+  --dialog-pad-b: 24px;
   width: min(92vw, 372px);
   max-height: 86dvh;
   overflow-y: auto;
   background: linear-gradient(180deg, #fff9fc 0%, #ffffff 40%);
   border: 4px solid #fff;
   border-radius: 36px;
-  padding: 28px 24px 24px;
+  padding: 28px 24px var(--dialog-pad-b);
   text-align: center;
   box-shadow: 0 24px 60px rgba(91, 74, 85, 0.3);
   animation: pop-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -964,11 +966,43 @@ button {
   font-size: 15px;
 }
 
+/* 弹窗按钮列常驻可点(N-33):`.dialog` 的 `overflow-y:auto` 只保「整体可滚」,
+   矮横屏结算弹窗内容 511px > 可视 354px 时「再玩一次 / 回首页」会整排落到内滚线下。
+   滚动边界切在「读的(星级/文案)」与「按的(按钮列)」之间:按钮列 sticky 贴住弹窗可视底,
+   读的部分照旧可滚。底色取弹窗渐变的收尾白,上缘是透明→白的渐隐带——内容不溢出时
+   整条与白底融为一体,不滚的视口(390×844 / 412×915 / 1024×768 / 1280×800)零回归。 */
 .dialog-buttons {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+.dialog-buttons::before,
+.dialog-buttons::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+/* 上缘渐隐:滚上去的内容从按钮列后面淡出,不会硬生生被切一刀 */
+.dialog-buttons::before {
+  bottom: 100%;
+  height: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 100%);
+}
+
+/* 下摆:把弹窗自己的下内边距一起铺白,内容滚到按钮列下面时不会从缝里露出来 */
+.dialog-buttons::after {
+  top: 100%;
+  height: var(--dialog-pad-b, 24px);
+  background: #ffffff;
 }
 
 /* 结算弹窗 */
@@ -1721,8 +1755,9 @@ html {
   }
 
   .dialog {
+    --dialog-pad-b: 18px;
     width: min(96vw, 320px);
-    padding: 22px 16px 18px;
+    padding: 22px 16px var(--dialog-pad-b);
   }
 }
 
@@ -1772,8 +1807,9 @@ html {
   }
 
   .dialog {
+    --dialog-pad-b: 16px;
     max-height: 92dvh;
-    padding: 18px 18px 16px;
+    padding: 18px 18px var(--dialog-pad-b);
   }
 
   .result-buddy {
@@ -1905,6 +1941,60 @@ html {
 }
 
 @media (max-height: 500px) {
+  /* N-33 配套(trio-r9):矮横屏可视 371px、结算内容 480px,庆祝件收一档,
+     让「+1 ⭐」与结果那句话也留在首屏——按钮列的 sticky 已经保住可点,这里补的是可读。
+     只挑 `.result-*` 与结算弹窗自己的量,暂停/家长面板这些矮内容弹窗不受影响。 */
+  .dialog {
+    padding-top: 12px;
+  }
+
+  .result-buddy {
+    width: 40px;
+    height: 40px;
+  }
+
+  .result-buddy--round {
+    width: 38px;
+    height: 38px;
+  }
+
+  .result-face {
+    font-size: 20px;
+    margin-top: -2px;
+  }
+
+  .result-title {
+    margin: 2px 0 0;
+    font-size: 21px;
+  }
+
+  .result-confetti {
+    margin-top: 0;
+    font-size: 15px;
+    letter-spacing: 6px;
+  }
+
+  .result-stars {
+    margin: 4px 0 0;
+    font-size: 26px;
+  }
+
+  .result-score {
+    margin-top: 2px;
+    padding: 2px 16px;
+    font-size: 18px;
+  }
+
+  .result-message {
+    margin-top: 4px;
+    font-size: 15px;
+  }
+
+  .dialog-buttons {
+    margin-top: 8px;
+    gap: 10px;
+  }
+
   .screen.home-screen {
     padding-top: max(8px, env(safe-area-inset-top, 0px));
   }
