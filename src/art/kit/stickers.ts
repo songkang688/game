@@ -2255,6 +2255,87 @@ reg("🍮", "焦糖布丁", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 5 章 夜空营地（W8R1-04 余量 · 第 3 轮终验按稿补齐） ----
+
+reg("🪐", "光环星球", () => {
+  const c = P.lav;
+  const out = o(c);
+  const ring = P.teal;
+  return (
+    // 光环后半（从星球背后穿过）
+    `<g transform="rotate(-16 24 24)">` +
+    `<path d="M5 24 A19 6.4 0 0 1 43 24" fill="none" stroke="${o(ring)}" stroke-width="5.6" opacity=".5"/>` +
+    `<path d="M5 24 A19 6.4 0 0 1 43 24" fill="none" stroke="${ring}" stroke-width="4"/>` +
+    `</g>` +
+    `<circle cx="24" cy="24" r="11.5" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 35.5 a11.5 11.5 0 0 0 10.6 -16 a14 14 0 0 1 -10.6 16" fill="${shade(c, -15)}" opacity=".8"/>` +
+    `<path d="M13.5 20.5 Q24 17.5 34.5 20.5 M14.5 29 Q24 31.5 33.5 29" fill="none" stroke="${shade(c, 16)}" stroke-width="2" stroke-linecap="round" opacity=".75"/>` +
+    // 光环前半（盖在星球前）
+    `<g transform="rotate(-16 24 24)">` +
+    `<path d="M5 24 A19 6.4 0 0 0 43 24" fill="none" stroke="${o(ring)}" stroke-width="5.6" opacity=".5"/>` +
+    `<path d="M5 24 A19 6.4 0 0 0 43 24" fill="none" stroke="${ring}" stroke-width="4"/>` +
+    `</g>` +
+    hi(18.5, 17.5)
+  );
+});
+
+reg("🌈", "彩虹", () => {
+  const bands: Array<[string, number]> = [
+    [P.red, 17.5],
+    [P.gold, 13.6],
+    [P.green, 9.7],
+    [P.blue, 5.8],
+  ];
+  return (
+    bands
+      .map(
+        ([c, r]) =>
+          `<path d="M${24 - r} 33.5 A${r} ${r} 0 0 1 ${24 + r} 33.5" fill="none" stroke="${o(String(c))}" stroke-width="5.4" stroke-linecap="round" opacity=".35"/>` +
+          `<path d="M${24 - r} 33.5 A${r} ${r} 0 0 1 ${24 + r} 33.5" fill="none" stroke="${c}" stroke-width="3.9" stroke-linecap="round"/>`
+      )
+      .join("") +
+    cloudBody(9, 33.5, 0.62, "#ffffff") +
+    cloudBody(39, 33.5, 0.62, "#ffffff") +
+    hi(15, 22, 2.2, 1.4)
+  );
+});
+
+reg("🌠", "流星", () => {
+  // 双胞胎 🌠↔✨ 的区分位：单颗星 + 长拖尾（✨ 是三星簇无拖尾）
+  const c = P.gold;
+  const out = o(c);
+  const tail = "#ffe9a8";
+  return (
+    `<path d="M22 24.5 L43 5 L27.5 28.5 Z" fill="${tail}" stroke="${o(tail)}" stroke-width="1.6" stroke-linejoin="round" opacity=".9"/>` +
+    `<path d="M26.5 30.5 L44 15.5 L31 33 Z" fill="${tail}" opacity=".6"/>` +
+    `<polygon points="${starPts(17, 31, 10)}" fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<polygon points="${starPts(17, 31, 5, 2.1)}" fill="#ffffff" opacity=".55"/>` +
+    `<circle cx="38" cy="9" r="1.3" fill="${tail}"/>` +
+    `<circle cx="33.5" cy="20" r="1.1" fill="${tail}" opacity=".8"/>` +
+    hi(14, 27, 1.8, 1.2)
+  );
+});
+
+reg("🔭", "望远镜", () => {
+  const tube = P.blueDeep;
+  const out = o(tube);
+  return (
+    gs(24, 43.5, 13) +
+    // 三脚架
+    `<path d="M22.5 30 L14 43 M25.5 30 L33 43 M24 30 L24 41" fill="none" stroke="${o(P.wood)}" stroke-width="2.6" stroke-linecap="round"/>` +
+    // 主镜筒（斜指右上）
+    `<g transform="rotate(-38 24 24)">` +
+    `<rect x="9" y="19.5" width="30" height="9" rx="3" fill="${tube}" stroke="${out}" stroke-width="2"/>` +
+    `<rect x="9" y="24.2" width="30" height="4" rx="2" fill="${shade(tube, -15)}" opacity=".7"/>` +
+    `<rect x="33.5" y="18" width="6" height="12" rx="2.2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.6"/>` +
+    `<rect x="6" y="21" width="4.5" height="6" rx="1.8" fill="${shade(tube, -20)}" stroke="${out}" stroke-width="1.4"/>` +
+    `</g>` +
+    `<circle cx="24" cy="27.5" r="2.6" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.4"/>` +
+    `<polygon points="${starPts(40, 8, 3.2)}" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1"/>` +
+    hi(15.5, 22, 2.2, 1.4)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
