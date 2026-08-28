@@ -45,6 +45,9 @@ export const DUO_SHORT_CSS = `
   .cg-wrap.cg-duoplay .cg-sq{min-width:0;min-height:0;}
   .cg-wrap.cg-duoplay .cg-log{display:none;}
 }
+@media (max-height:840px){
+  .cg-wrap.cg-duoplay .cg-frame{width:min(360px,62dvh);max-width:62dvh;margin:0 auto;}
+}
 `;
 
 export interface SeatPlan {

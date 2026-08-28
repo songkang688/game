@@ -86,6 +86,9 @@ const CSS = `
   .pk-title{font-size:17px;}
   .pk-go{position:sticky;bottom:0;z-index:2;}
 }
+@media (max-height:840px){
+  .pk-go{position:sticky;bottom:0;z-index:2;}
+}
 @media (max-height:500px) and (min-width:640px){
   .pk-wrap{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
     grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}

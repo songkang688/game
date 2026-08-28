@@ -455,6 +455,11 @@ export const SP_CSS = `
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}
 }
+@media (max-height:840px){
+  .sp-wrap{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
+    padding-top:4px;}
+}
 /* N-70 双人同屏:数字排在盘下会切 394 / 工具 452。N-49 竞速:两盘折行叠高。矮宽屏左右分座+键靠盘 */
 @media (min-width:640px) and (max-height:500px){
   .sp-seats{flex-wrap:nowrap;gap:8px;}

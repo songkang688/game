@@ -225,6 +225,9 @@ const CSS = `
   .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
   .pyt-go{position:sticky;bottom:0;z-index:2;}
 }
+@media (max-height:840px){
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
 @media (max-height:500px) and (min-width:640px){
   .pyt-spell{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
     grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
