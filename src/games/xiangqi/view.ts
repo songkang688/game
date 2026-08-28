@@ -172,6 +172,9 @@ export const CSS = `
 @media (min-width:700px) and (max-height:840px){
   .xq-wrap{max-width:380px;}
 }
+@media (min-width:700px) and (max-height:500px){
+  .xq-wrap{max-width:248px;}
+}
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}
 }

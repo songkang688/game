@@ -116,14 +116,14 @@ interface Capsule {
 }
 
 const CSS = `
-.brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
+.brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: pan-y; position: relative; }
 .brk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
 .brk-badge { background: #fff; border: 1px solid rgba(224,210,232,.9); border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(93,74,110,.16); font-size: 14px; white-space: nowrap; }
 .brk-power { min-height: 20px; text-align: center; font-size: 14px; font-weight: 700; color: #7A5AA8; letter-spacing: 1px; }
 /* 砖塔的节奏牌：压得快的时候换个底色，色觉之外还有「快」字兜着 */
 .brk-badge.brk-pace-hot { color: #B4432B; background: #FFEDE6; }
-.brk-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDEFF5, #F3E4F0); touch-action: none; }
-.brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
+.brk-canvas { width: 100%; height: auto; max-height: calc(100dvh - 168px); object-fit: contain; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDEFF5, #F3E4F0); touch-action: none; }
+.brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; position: sticky; bottom: 0; z-index: 3; padding: 6px 0 2px; background: linear-gradient(180deg, rgba(255,239,228,.2), #FFEFE4); }
 .brk-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9AE; color: #8A4A20; cursor: pointer; box-shadow: 0 4px 0 #EBA987; touch-action: none; }
 .brk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBA987; }
 .brk-msg { text-align: center; min-height: 20px; color: #C97B5A; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.4; }

@@ -222,16 +222,16 @@ describe("窄屏与动效红线", () => {
     return at < 0 ? "" : MJ_CSS.slice(at, MJ_CSS.indexOf("\n}", at));
   })();
 
-  it("牌宽任何屏下都 ≥ 28px", () => {
-    expect(pxOf(ruleOf(MJ_CSS, ".mj-tile"), "width")).toBeGreaterThanOrEqual(28);
-    expect(pxOf(ruleOf(narrow, ".mj-tile"), "width")).toBeGreaterThanOrEqual(28);
+  it("手牌热区 ≥ 44px，窄屏也不把牌收进红线以下", () => {
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-tile"), "width")).toBeGreaterThanOrEqual(44);
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-tile"), "min-width")).toBeGreaterThanOrEqual(44);
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-tile"), "min-height")).toBeGreaterThanOrEqual(44);
+    expect(narrow).not.toMatch(/\.mj-tile\{[^}]*width:\s*3\dpx/);
   });
 
-  it("360px 那段确实存在,而且把牌收窄了", () => {
+  it("360px 那段确实存在,只收内边距不收手牌宽", () => {
     expect(narrow.length).toBeGreaterThan(40);
-    expect(pxOf(ruleOf(narrow, ".mj-tile"), "width")).toBeLessThan(
-      pxOf(ruleOf(MJ_CSS, ".mj-tile"), "width")
-    );
+    expect(narrow).toContain(".mj-wrap{padding:8px;}");
   });
 
   it("自家手牌能横滑,不会在窄屏挤爆", () => {

@@ -387,6 +387,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-keys .k2 { color: #3A6BB0; }
       .dr-btns { display: flex; gap: 8px; margin-top: 8px; }
       .dr-btns button { flex: 1; min-height: 46px; border: none; border-radius: 14px; padding: 11px 4px; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); font-family: inherit; }
+      /* N-40: 矮横屏赛道态暂停/再来/换玩法钉在舞台底，不重钳已在屏的画布与半屏圆钮 */
+      @media (max-height: 500px) {
+        .dr-keys { display: none; }
+        .dr-btns {
+          position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
+          background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
+          box-shadow: 0 -8px 14px rgba(90,140,190,.16);
+        }
+      }
       .dr-pause { background: #E3E8FF; color: #4A55A8; }
       .dr-again { background: #D9F2C4; color: #4A7A2A; }
       .dr-back { background: #FFE0C2; color: #9A5A20; }
