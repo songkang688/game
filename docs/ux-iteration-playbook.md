@@ -411,6 +411,24 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 
 军规落地：全库遗留 `@media (max-height:840px)` 补 `min-height:501px`，避免盖掉 915×412 的 500 档；飞行棋补平板 sticky；星地产 900 档同样加 min-height:501。冰火/噗噗/外星/炸弹/简谱/调色/小屋相册/雪仗双垫/擂台半场把 500 档横屏分栏扩到平板（min-height:501）。下一轮优先：U-5 画布封顶守门、云端 A/B 四视口实测。
 
+## 十八、本机监督续修（PR #107 · 云端 A/B/C 额度仍尽）
+
+父进程继续本机修，不改 500 档原文、不改 `SHORT_LANDSCAPE_PX` / `MIN_FACE_PX` / 世界常量。
+
+| 项 | 改法 | 视口 |
+| --- | --- | --- |
+| l99 舞台条 740 漏 768 高 | **加** `840 && min-height:741`（740 原文不动） | 1024×768 |
+| word-garden 第二处 500 | 840 档花园钳 `12vh`，**不盲拷** `10vh` | 768 竖屏平板 |
+| clock-house | 840 横屏钟面 `min(42vh,220px)`，守 `MIN_FACE_PX` | 平板横屏 |
+| bubble-aim / candy-swing | 独立 840：键 44、提示 sticky | 四视口 |
+| red-blue-tap | 独立 840 sticky 提示行；**常量 420 不动** | 平板横屏 |
+| red-blue-tug | 840 sticky `.rbg-ctrl` | 平板横屏 |
+| landlord-cards | 840 sticky 出牌/副钮排 | 横屏手牌 |
+
+**禁止盲拷 500 清单**：`math-farm/runner.ts`、`pinyin-train/scene.ts`、`pinyin-train/timed.ts`、`tap-tiles` 隐藏键盘、`word-garden/tracing.ts` 第二处花园 `10vh`、`red-blue-tap` `SHORT_LANDSCAPE_PX=420`。
+
+学习员 C 红线仍是零改 `src/**`；本机因额度耗尽代写本节，不替代云端 C 对账。
+
 ## 附：第 3 轮环境水位
 
 - 环境再次重置后 `npm ci` + `npm run build` 全绿；零改 src，未重跑全量 vitest（水位沿用：19484 绿 + N-105 的 5 红）。

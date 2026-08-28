@@ -646,6 +646,15 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
 }
+/* 平板横屏 1024×768 高 768，不命中 740。500 原文与 740 原文一字不改。 */
+@media (max-height:840px) and (min-height:741px){
+  .l99-stagebar{padding:6px 8px;gap:6px;}
+  .l99-stagetitle{font-size:14px;}
+  .l99-stage{padding:6px;}
+  .l99-jump-note{font-size:16px;margin:0;}
+  .l99-map{padding:10px;}
+  .l99-head{margin-bottom:6px;}
+}
 /* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){

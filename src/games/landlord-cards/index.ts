@@ -254,6 +254,12 @@ const CSS = `
   flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
 .ld-over-t{font-size:20px;font-weight:900;color:#6a4fa8;}
 .ld-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;}
+@media (max-height:840px) and (min-height:501px){
+  /* 平板横屏：出牌/操作排钉在可滚底；hand fan 仍 touch-action:none。 */
+  .ld-btns,.ldc-mainbar,.ldc-subbar{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(246,242,255,0),#f6f2ff 40%);}
+  .ldc-subbar{bottom:52px;z-index:5;}
+}
 @media (max-width:420px){
   /* 手机竖屏寸土寸金:对手面板改成横排,省下来的高度全留给手牌和按钮 */
   .ld-wrap{padding:8px;gap:6px;}

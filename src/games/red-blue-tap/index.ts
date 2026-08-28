@@ -136,6 +136,11 @@ const CSS = `
   .rbt-chip { padding: 2px 8px; font-size: ${CHIP_TIGHT_FONT_PX}px; }
   .rbt-msg { margin-top: ${MSG_TIGHT_GAP_PX}px; min-height: ${MSG_TIGHT_MIN_PX}px; font-size: 14px; }
 }
+/* 独立平板档：不改 SHORT_LANDSCAPE_PX（守门钉死 <568）。点热区不动。 */
+@media (max-height:840px) and (min-height:501px) {
+  .rbt-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 8px;
+    background: linear-gradient(180deg, rgba(255,255,255,0), #ffffffee 40%); padding-top: 4px; }
+}
 `;
 
 export const ENDLESS_CSS = `

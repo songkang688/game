@@ -475,6 +475,14 @@ export function mount(api: GameApi): CandySwingHandle {
         .cs-wrap.cs-view-map .cs-grid { grid-template-columns: repeat(8, 1fr); }
         .cs-wrap.cs-view-map .cds-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
       }
+      .cs-btn { min-height: 44px; box-sizing: border-box; }
+      @media (max-height:840px) and (min-height:501px) {
+        .cs-wrap { padding: 8px; }
+        .cs-top { position: sticky; top: 0; z-index: 3; margin-bottom: 6px; padding-bottom: 4px;
+          background: linear-gradient(180deg, #FFF0F6, rgba(255,240,246,0.85)); }
+        .cs-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 6px;
+          background: linear-gradient(180deg, rgba(234,244,255,0), #EAF4FF 45%); padding-top: 4px; }
+      }
     </style>
     <div class="cs-map">
       <div class="cs-map-title">🍬 糖果秋千</div>

@@ -72,6 +72,10 @@ export const CLK_CSS = `
   .clk-face-mini { width: 68px; height: 68px; }
   .clk-dial-title { font-size: 16px; }
 }
+/* 平板横屏：钟面按视口高反推，给选项行让位；MIN_FACE_PX 守门不动。 */
+@media (max-height:840px) and (min-height:501px) and (orientation:landscape) {
+  .clk-face { width: min(42vh, 220px); min-width: ${MIN_FACE_PX}px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .clk-hint { animation: none; }
   .clk-face-svg .clk-hand { transition: none; }

@@ -306,6 +306,14 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       @media (min-width: 1000px) {
         .ba-wrap.ba-wrap--map { max-width: 820px; }
       }
+      .ba-btn { min-height: 44px; box-sizing: border-box; }
+      .ba-lv { min-height: 44px; box-sizing: border-box; }
+      @media (max-height:840px) and (min-height:501px) {
+        .ba-wrap { padding: 8px; }
+        .ba-top { margin-bottom: 6px; }
+        .ba-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 6px;
+          background: linear-gradient(180deg, rgba(232,244,255,0), #E8F4FF 40%); padding-top: 4px; }
+      }
       .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
       .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
       .ba-theme { border-radius: 14px; padding: 10px; margin-bottom: 10px; }
