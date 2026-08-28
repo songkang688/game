@@ -548,11 +548,11 @@ const L99_CSS = `
   line-height:1.4;color:#7a5da8;box-shadow:0 2px 6px rgba(150,130,200,.2);}
 .l99-chip-skip{color:#6d6580;background:#efedf5;}
 .l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
+  min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
 .l99-continue:active{transform:translateY(2px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin:0 0 8px;}
 .l99-tool{border:none;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
+  min-height:44px;font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
 .l99-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .l99-tool-skip{background:#efe9fb;color:#665390;}
 .l99-tabs{display:flex;gap:3px;flex-wrap:wrap;padding:2px 0 6px;max-width:100%;align-items:center;}
@@ -605,7 +605,7 @@ const L99_CSS = `
   flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;}
 .l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;flex:0 0 auto;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
-  background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
+  min-height:44px;background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
@@ -623,7 +623,7 @@ const L99_CSS = `
 .l99-ov-sub{font-size:16px;font-weight:700;color:#77619b;line-height:1.6;max-width:320px;}
 .l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .l99-ov-btn{border:none;border-radius:18px;padding:12px 26px;font-size:17px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
+  min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
 .l99-ov-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-ov-btn.l99-ov-ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 5px 0 #34498a;}
 .l99-ov-btn.l99-ov-ghost:active{box-shadow:0 2px 0 #34498a;}
@@ -654,7 +654,7 @@ const L99_CSS = `
     overflow-x:auto;gap:6px;margin:0;}
   .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
-  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;}
+  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;min-height:44px;}
   /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
   .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
   .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
