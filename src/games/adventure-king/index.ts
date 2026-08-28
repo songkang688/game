@@ -148,7 +148,8 @@ const CSS = `
   background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;min-height:0;}
 .ak-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ak-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
+  font-family:inherit;background:#ffffffdd;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.28);
+  min-height:44px;}/* N-47 残留(trio-r8):回选关实测 33px,孩子面 44px 红线 */
 .ak-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
 .ak-chip{background:rgba(255,255,255,.72);border:1.5px solid rgba(122,82,48,.28);border-radius:12px;
   padding:5px 12px;font-size:14px;font-weight:800;color:#7a5230;box-shadow:0 2px 6px rgba(170,140,110,.18);}
@@ -189,7 +190,8 @@ const CSS = `
   padding:4px 10px;box-shadow:0 2px 5px rgba(170,140,110,.18);}
 .advk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .advk-tool{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);}
+  font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);
+  min-height:44px;}/* N-47 残留(trio-r8):复位/小地图/结束/陈列实测 35px,抬到 44 红线 */
 .advk-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,110,.3);}
 .advk-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .advk-mini{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.15;
