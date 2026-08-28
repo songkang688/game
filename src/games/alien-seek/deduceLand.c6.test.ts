@@ -22,6 +22,8 @@ describe("C-6 r15 · root×121 先灭舞台自滚", () => {
     const land = SRC.slice(SRC.indexOf(".as-wrap.as-land{"));
     expect(land).toContain("overflow:hidden");
     expect(land).toContain("max-height:100%");
+    expect(SRC).not.toMatch(/\.as-wrap>style\{display:none/);
+    expect(SRC).toContain(".as-wrap.as-land>style{grid-column:1/-1;height:0");
   });
 
   it("画布钳高给 root 抬头让位（148 > 旧 72）", () => {
