@@ -114,6 +114,22 @@ const CSS = `
 .frc-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
 .frc-legend { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 8px; font-size: 13px; color: #8A6A44; }
 .frc-legend span { background: #fff8ec; border-radius: 10px; padding: 3px 8px; white-space: nowrap; }
+/* N-1 续:先合版给 .frc-ctrl 上了 sticky,但闯关这一路的画布外面套着
+   .l99-stage{overflow:hidden} —— 那层才是 sticky 的滚动口,左右钮被钉在它的下沿,
+   一样落在裁切线以下(915×412 实测仍裁 159、⬅️➡️ top 457)。
+   矮横屏横向还空着 200px,所以这里改走配方 G:画布独占左栏,
+   计分条 / 进度条 / 左右钮 / 提示 / 图例全部让到右栏。三个模式共用一套壳,规则挂在 .frc-wrap 上。 */
+@media (max-height: 520px) and (orientation: landscape) {
+  .frc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 240px); column-gap: 10px; align-items: start; }
+  .frc-wrap > * { grid-column: 2; }
+  .frc-wrap > .frc-canvas { grid-column: 1; grid-row: 1 / span 20; }
+  /* 双栏之后画布下面已经没有家当了,sticky 反而把钮钉在 overflow:hidden 的下沿 */
+  .frc-wrap > .frc-ctrl { position: static; background: none; padding-top: 0; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+  .frc-wrap > .frc-top { margin-bottom: 6px; flex-wrap: wrap; }
+  .frc-wrap > .frc-modebar { margin-bottom: 6px; }
+  .frc-wrap > .frc-msg { margin-top: 6px; }
+  .frc-wrap > .frc-legend { margin-top: 6px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .frc-fill { transition: none; }
 }
@@ -135,9 +151,20 @@ export function canvasDisplayCapPx(
   return Math.max(min, cap);
 }
 
-function stageClipBottom(from: HTMLElement): number {
+/**
+ * 平台舞台(`.game-stage`,定高会裁内容)的下沿,外加一路上滚掉的高度。
+ *
+ * 中间那几层(`.game-stage` 自己、level99 的 `.l99-view`)都能自滚。舞台一旦滚下去,
+ * `getBoundingClientRect().top` 就跟着往上跑,按它算余量会越算越大——
+ * 实测闯关这一路量出 387px 余量、一次都不钳,画布直接漏出裁切线 137px。
+ * 把沿途 scrollTop 加回去,余量就跟滚没滚无关了。
+ */
+function stageBox(from: HTMLElement): { clip: number; scrolled: number } {
+  const miss = { clip: Number.NaN, scrolled: 0 };
   let node: HTMLElement | null = from.parentElement;
-  for (let i = 0; node && i < 10; i++) {
+  let scrolled = 0;
+  for (let i = 0; node && i < 12; i++) {
+    scrolled += typeof node.scrollTop === "number" ? node.scrollTop : 0;
     if (typeof node.className === "string" && node.className.includes("game-stage")) {
       if (typeof node.getBoundingClientRect !== "function") break;
       const r = node.getBoundingClientRect();
@@ -145,31 +172,50 @@ function stageClipBottom(from: HTMLElement): number {
         typeof node.clientHeight === "number" && node.clientHeight > 0
           ? (node.clientTop || 0) + node.clientHeight
           : r.height;
-      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) {
+        return { clip: r.top + inner, scrolled };
+      }
       break;
     }
     node = node.parentElement;
   }
-  return Number.NaN;
+  return miss;
 }
 
-function bindCanvasFit(canvas: HTMLCanvasElement, wrap: HTMLElement, jan: Janitor): void {
+/** 量布局是回流读,不必每帧;draw 每 15 帧(~250ms)量一次 */
+const FIT_EVERY = 15;
+
+/**
+ * 返回一个「每 15 帧量一次」的复量函数,交给 draw 循环去调。
+ *
+ * 只在挂载那一下量是不够的:闯关这一路画布外面套着 level99 的三层壳,
+ * 挂载时右栏的字还没排完、l99 舞台也还没定高,量到的余量偏大就一次都不钳。
+ * 让它跟着画面循环回头再量,布局落定后自然收敛。
+ */
+function bindCanvasFit(canvas: HTMLCanvasElement, wrap: HTMLElement, jan: Janitor): () => void {
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
   const fit = (): void => {
     if (!canvas.style || typeof canvas.getBoundingClientRect !== "function") return;
     if (typeof wrap.getBoundingClientRect !== "function") return;
-    const clip = stageClipBottom(wrap);
-    if (!Number.isFinite(clip)) return;
+    // 先松开钳位再量:一放开画布就变高、外面跟着回流,
+    // 浏览器的滚动锚定还会顺手改一次 scrollTop。写在前面、读全在后面,
+    // 这一轮拿到的舞台下沿 / 滚动量 / 画布位置才是同一份布局。
     canvas.style.maxHeight = "";
+    const { clip, scrolled } = stageBox(wrap);
+    if (!Number.isFinite(clip)) return;
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    const px = canvasDisplayCapPx(canvasRect.height, clip - (canvasRect.top + scrolled) - below - 4);
     canvas.style.maxHeight = px === null ? "" : `${px}px`;
   };
   jan.on(window, "resize", fit);
   fit();
+  let tick = 0;
+  return () => {
+    if (tick++ % FIT_EVERY === 0) fit();
+  };
 }
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text?: string): T {
@@ -380,7 +426,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const canvas = wrap.querySelector(".frc-canvas") as HTMLCanvasElement;
   canvas.style.background = theme.bg;
-  bindCanvasFit(canvas, wrap, jan);
+  const fitTick = bindCanvasFit(canvas, wrap, jan);
   const c2d = canvas.getContext("2d");
   const scoreEl = wrap.querySelector(".frc-score") as HTMLElement;
   const comboEl = wrap.querySelector(".frc-combo") as HTMLElement | null;
@@ -424,6 +470,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function draw(): void {
     if (!c2d) return;
+    fitTick();
     c2d.clearRect(0, 0, W, H);
     // 图层序（FC_LAYERS）：① 天空日月 ② 程序云 ③ 果树枝草地
     drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
@@ -767,7 +814,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
 
   const canvas = wrap.querySelector(".frc-canvas") as HTMLCanvasElement;
   canvas.style.background = "linear-gradient(180deg, #E6F4FF 0%, #FFF3E4 100%)";
-  bindCanvasFit(canvas, wrap, jan);
+  const fitTick = bindCanvasFit(canvas, wrap, jan);
   const c2d = canvas.getContext("2d");
   const aEl = wrap.querySelector(".frc-a") as HTMLElement;
   const bEl = wrap.querySelector(".frc-b") as HTMLElement;
@@ -786,6 +833,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
 
   function draw(): void {
     if (!c2d) return;
+    fitTick();
     c2d.clearRect(0, 0, W, H);
     drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     c2d.strokeStyle = "rgba(140,140,170,.35)";
@@ -1041,7 +1089,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
 
   const canvas = wrap.querySelector(".frc-canvas") as HTMLCanvasElement;
   canvas.style.background = "linear-gradient(180deg, #FFE9C9 0%, #FFF6E4 100%)";
-  bindCanvasFit(canvas, wrap, jan);
+  const fitTick = bindCanvasFit(canvas, wrap, jan);
   const c2d = canvas.getContext("2d");
   const scoreEl = wrap.querySelector(".frc-score") as HTMLElement;
   const chainEl = wrap.querySelector(".frc-chain") as HTMLElement;
@@ -1089,6 +1137,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
 
   function draw(): void {
     if (!c2d) return;
+    fitTick();
     c2d.clearRect(0, 0, W, H);
     drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     if (magnetLeft > 0) {
