@@ -167,18 +167,33 @@ const CSS = `
 .als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
 /* C-6(trio-r11):915×412 推理关线索+工具+D-pad 整排掉进舞台线下(crop~608)。
-   矮宽横屏双栏——画布左、线索/清单/工具/方向盘右 sticky；画布按列宽与视口余高钳。
+   矮宽横屏双栏——画布左、线索/清单/工具/方向盘右；画布按列宽与视口余高钳。
+   r15:root×121 时 sticky 钉在自滚 .game-stage 里仍 675/724。先锁舞台、
+   再给 .as-land（JS 按视口挂，不单靠媒体查询）把 D-pad 收进 412。
    找物关同一套壳,竖屏与高屏零变化。判定/seed 不动。 */
 @media (max-height:500px) and (min-width:640px){
+  .game-stage:has(.as-wrap){overflow-y:hidden;}
   .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
-    gap:4px 10px;align-items:start;}
-  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:calc(100dvh - 64px);}
-  .as-wrap>.as-clues{grid-column:2;max-height:28dvh;overflow:auto;padding:6px 8px;gap:3px;}
-  .as-wrap>.als-list{grid-column:2;max-height:56px;}
-  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
-  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:2;margin:0;}
-  .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
+    gap:4px 10px;align-items:stretch;height:100%;max-height:100%;min-height:0;
+    overflow:hidden;box-sizing:border-box;}
+  .as-wrap>style{display:none;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+  .as-wrap>.as-clues{grid-column:2;max-height:22dvh;overflow:auto;padding:4px 8px;gap:2px;}
+  .as-wrap>.als-list{grid-column:2;max-height:44px;}
+  .as-wrap>.als-tools{grid-column:2;}
+  .as-wrap>.as-pads{grid-column:2;margin:0;align-self:end;}
+  .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.25;max-height:2.4em;overflow:hidden;}
 }
+.as-wrap.as-land{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+  gap:4px 10px;align-items:stretch;height:100%;max-height:100%;min-height:0;
+  overflow:hidden;box-sizing:border-box;}
+.as-wrap.as-land>style{display:none;}
+.as-wrap.as-land>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+.as-wrap.as-land>.as-clues{grid-column:2;max-height:22dvh;overflow:auto;padding:4px 8px;gap:2px;}
+.as-wrap.as-land>.als-list{grid-column:2;max-height:44px;}
+.as-wrap.as-land>.als-tools{grid-column:2;}
+.as-wrap.as-land>.as-pads{grid-column:2;margin:0;align-self:end;}
+.as-wrap.as-land>.as-tip{grid-column:2;font-size:12px;line-height:1.25;max-height:2.4em;overflow:hidden;}
 ${touchUpliftCss([".as-open", ".as-back"])}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
 `;
@@ -1133,8 +1148,12 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const vw = (globalThis as { innerWidth?: number }).innerWidth || 0;
     // 矮宽横屏:画布跟左栏走,高度再钳一档,右边工具+D-pad 留在 412 里
     if (vh > 0 && vh <= 500 && vw >= 640) {
-      const cap = Math.max(120, Math.round(vh - 72));
+      wrap.classList.add("as-land");
+      const hostH = host.clientHeight || 0;
+      const cap = Math.max(120, Math.round(Math.min(vh - 148, hostH > 80 ? hostH : vh - 148)));
       if (nextH > cap) nextH = cap;
+    } else {
+      wrap.classList.remove("as-land");
     }
     cssH = nextH;
     view = clampView(view, viewport());
