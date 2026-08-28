@@ -156,7 +156,7 @@ const CSS = `
   padding:5px 12px;font-size:14px;font-weight:800;color:#7a5230;box-shadow:0 2px 6px rgba(170,140,110,.18);}
 .ak-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
 .ak-card{border:none;border-radius:16px;padding:10px;text-align:left;cursor:pointer;font-family:inherit;
-  background:#ffffffe8;box-shadow:0 3px 8px rgba(160,140,120,.25);}
+  background:#ffffffe8;box-shadow:0 3px 8px rgba(160,140,120,.25);min-height:44px;}
 .ak-card:active{transform:scale(.97);}
 .ak-card:focus-visible{outline:3px solid #3c2a6b;outline-offset:2px;}
 .ak-card-t{font-size:15px;font-weight:900;color:#6b4a2a;}

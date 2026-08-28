@@ -106,7 +106,7 @@ export const CSS = `
 
 /* 结算跳数:${TALLY_MS}ms 走完,点一下立刻停在终值;上面那块小画布是矿石飞进钱袋的清点台 */
 .gdh-tally{font-size:26px;font-weight:900;color:#B37514;cursor:pointer;line-height:1.2;
-  display:flex;align-items:center;justify-content:center;gap:6px;}
+  display:flex;align-items:center;justify-content:center;gap:6px;min-height:${TOUCH_MIN}px;box-sizing:border-box;}
 .gdh-tally-hint{font-size:11px;font-weight:700;color:#A08A66;}
 .gdh-tally-fly{display:block;margin:0 auto;width:140px;height:44px;}
 

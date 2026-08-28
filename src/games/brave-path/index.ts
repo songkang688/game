@@ -237,7 +237,8 @@ ${BVP_LOBBY_CSS}
 .bvp-opts{display:grid;grid-template-columns:1fr;gap:9px;}
 @media(min-width:520px){.bvp-opts.bvp-opts-2{grid-template-columns:1fr 1fr;}}
 .bvp-opt{border:none;border-radius:16px;padding:13px;cursor:pointer;font-family:inherit;text-align:left;
-  background:#fff;box-shadow:0 3px 10px rgba(140,120,190,.18);color:var(--bvp-ink);display:flex;gap:10px;align-items:center;}
+  background:#fff;box-shadow:0 3px 10px rgba(140,120,190,.18);color:var(--bvp-ink);display:flex;gap:10px;align-items:center;
+  min-height:44px;}
 .bvp-opt:active{transform:translateY(2px);}
 .bvp-opt-em{font-size:27px;line-height:1;display:block;width:34px;height:34px;flex:0 0 auto;}
 .bvp-opt-em svg{width:100%;height:100%;display:block;}

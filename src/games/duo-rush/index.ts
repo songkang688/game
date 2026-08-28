@@ -414,7 +414,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-pausepanel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(244,250,255,.94); border-radius: 20px; z-index: 5; }
       .dr-pausepanel h3 { color: #C2497E; font-size: 22px; margin: 0; }
       .dr-pausepanel p { color: #4A6A8A; font-size: 14.5px; margin: 0; text-align: center; padding: 0 18px; line-height: 1.6; }
-      .dr-resume { border: none; border-radius: 16px; padding: 13px 28px; font-size: 17px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 4px 0 #64AEE0; font-family: inherit; }
+      .dr-resume { border: none; border-radius: 16px; padding: 13px 28px; font-size: 17px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 4px 0 #64AEE0; font-family: inherit; min-height: 44px; }
       .dr-rules { position: absolute; inset: 0; background: #F4FAFF; border-radius: 20px; padding: 14px; overflow-y: auto; z-index: 6; }
       .dr-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
       .dr-rules p { color: #4A6A8A; font-size: 14.5px; line-height: 1.75; margin: 6px 0; }

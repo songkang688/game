@@ -249,7 +249,7 @@ const CSS = `
 .pfb-picker-title{font-size:17px;font-weight:900;color:#2F5A8C;}
 .pfb-picks{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .pfb-pick{border:none;border-radius:18px;padding:12px 16px;min-width:132px;cursor:pointer;font-family:inherit;
-  background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;}
+  background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;min-height:${TOUCH_MIN}px;}
 .pfb-pick:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(110,140,175,.3);}
 .pfb-pick-name{font-size:16px;font-weight:900;color:#2F5A8C;}
 .pfb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
