@@ -1134,7 +1134,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     let nextH = Math.round(cssW * (SCENE_H / SCENE_W));
     const vh = (globalThis as { innerHeight?: number }).innerHeight || 0;
     const vw = (globalThis as { innerWidth?: number }).innerWidth || 0;
-    const clip = (host.closest(".l99-stage") || host.closest(".game-stage") || host) as {
+    const clip = (host.closest?.(".l99-stage") || host.closest?.(".game-stage") || host) as {
       clientHeight?: number;
     };
     const room = Math.round(clip.clientHeight || vh);

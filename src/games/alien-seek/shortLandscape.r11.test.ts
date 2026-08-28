@@ -33,8 +33,8 @@ describe("C-6 推理关 121 · 915×412 双栏壳", () => {
   });
 
   it("C-6 r13：钳高认 .l99-stage / .game-stage 余量，pads sticky 钉底", () => {
-    expect(SRC).toContain('host.closest(".l99-stage")');
-    expect(SRC).toContain('host.closest(".game-stage")');
+    expect(SRC).toContain('host.closest?.(".l99-stage")');
+    expect(SRC).toContain('host.closest?.(".game-stage")');
     expect(SRC).toContain(".as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0");
     expect(SRC).toContain("max-height:100%");
   });

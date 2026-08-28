@@ -688,20 +688,22 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   pinL99Host();
 
   function pinL99Host(): void {
-    const stage = wrap.closest(".game-stage") as HTMLElement | null;
-    stage?.classList.add("game-stage--l99");
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    const stage = closest?.(".game-stage") ?? null;
+    stage?.classList?.add("game-stage--l99");
     let n: HTMLElement | null = wrap.parentElement;
     while (n && n !== stage) {
-      n.classList.add("l99-host");
+      n.classList?.add("l99-host");
       n = n.parentElement;
     }
   }
 
   function unpinL99Host(): void {
-    wrap.closest(".game-stage")?.classList.remove("game-stage--l99");
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    closest?.(".game-stage")?.classList?.remove("game-stage--l99");
     let n: HTMLElement | null = wrap.parentElement;
-    while (n && !n.classList.contains("game-stage")) {
-      n.classList.remove("l99-host");
+    while (n && !n.classList?.contains("game-stage")) {
+      n.classList?.remove("l99-host");
       n = n.parentElement;
     }
   }
@@ -992,7 +994,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         cur.focus?.();
       }
       // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
-      const stageEl = wrap.closest(".game-stage") as HTMLElement | null;
+      const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;
       if (stageEl) stageEl.scrollTop = 0;
     }
   }
