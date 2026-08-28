@@ -447,6 +447,10 @@ export const SP_CSS = `
   .sp-corner{display:none;}
 }
 @media (max-height:500px){
+  /* N-99:矮横屏盘身(9×9 连键排 570+)比舞台可视段(178/134)高,overflow:hidden
+     让盘底两排既看不见也滚不到。滚动交还给用户;数字排/工具排本就 sticky 钉底,
+     滚盘时一直在手边。390×844(高>500px)走不进这档,fold 0 不回退。 */
+  .sp-wrap{overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}

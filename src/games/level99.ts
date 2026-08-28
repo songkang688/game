@@ -491,6 +491,18 @@ export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewp
 }
 
 /**
+ * N-100：矮横屏进场锚定的目标滚距。
+ * scrollIntoView({block:"center"}) 把「开始冒险 ▶」头行与工具行卷出 915×412 视口
+ * （17 款 tab 折行款同病）；头行/工具行由 CSS sticky 钉在 .l99-view 顶之后，
+ * 这里算出「当前关贴着钉住两行的下沿」需要的滚距——调用方取 min(居中滚距, 本值)，
+ * 只减不增：竖屏 / 平板本来滚得少，一个像素都不会动。
+ */
+export function entryAnchorTop(nodeContentTop: number, pinnedH: number, gap = 8): number {
+  if (!Number.isFinite(nodeContentTop) || !Number.isFinite(pinnedH)) return 0;
+  return Math.max(0, Math.round(nodeContentTop - Math.max(0, pinnedH) - gap));
+}
+
+/**
  * 没有专属攻略数据时，按章节自动拼一份「只讲方法、不给答案」的攻略。
  * 纯函数便于测试；具体游戏的细则由后续步骤补 `guide` 字段覆盖。
  */
@@ -661,6 +673,13 @@ const L99_CSS = `
   /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
   .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
   .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
+  /* N-100:tab 折行款进场,当前关 scrollIntoView 居中会把「开始冒险 ▶」头行与
+     🎯/📖/⏭️ 工具行卷出视口(17 款同病)。两行钉在 .l99-view 顶,滚多远都初见在屏;
+     进场滚距另由 entryAnchorTop 钳到工具行下沿。margin 换成 padding,流内高度不变。 */
+  .l99-map>.l99-head{position:sticky;top:0;z-index:5;margin-bottom:0;padding-bottom:6px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.2);}
+  .l99-map>.l99-tools{position:sticky;top:50px;z-index:4;margin-bottom:0;padding-bottom:8px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.16);}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
@@ -1022,6 +1041,21 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
       const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;
       if (stageEl) stageEl.scrollTop = 0;
+      // N-100:矮横屏头行/工具行已 sticky 钉顶,这里再把居中滚距钳到
+      // 「当前关贴工具行下沿」,免得当前关躲进钉住的两行背后。只减不增;
+      // 高 >500px 或没滚动(jsdom/单测桩 scrollTop=0)直接跳过,零变化。
+      const vh = (globalThis as { innerHeight?: number }).innerHeight;
+      const curEl = cur as { getBoundingClientRect?: () => { top: number } } | null;
+      if (
+        typeof vh === "number" && vh > 0 && vh <= 500 && curEl &&
+        typeof view.scrollTop === "number" && view.scrollTop > 0 &&
+        typeof curEl.getBoundingClientRect === "function" &&
+        typeof view.getBoundingClientRect === "function"
+      ) {
+        const nodeContentTop = curEl.getBoundingClientRect().top - view.getBoundingClientRect().top + view.scrollTop;
+        const pinnedH = (head.offsetHeight || 0) + (tools.offsetHeight || 0);
+        view.scrollTop = Math.min(view.scrollTop, entryAnchorTop(nodeContentTop, pinnedH));
+      }
     }
   }
 

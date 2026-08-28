@@ -83,6 +83,9 @@ export const MTF_CSS = `
 @media (max-height: 500px) {
   .mtf-vert-row { font-size: ${MIN_VERT_PX}px; letter-spacing: 2px; }
   .mtf-vert-rule { margin: 2px 0 1px; }
+  /* N-97:应用题题面收到正文红线 16px,两行从 77px 回到 ~58px,少挡一截。
+     答案行钉底与 root 态重排属于换肤规则,按规矩放 FARM_CSS。 */
+  .mtf-word { font-size: 16px; line-height: 1.45; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mtf-hint { animation: none; }

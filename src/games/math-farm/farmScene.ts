@@ -351,6 +351,17 @@ export const FARM_CSS = `
   .mtf-illus:not(.mtf-illus-count) .mtf-illus-unit { width: ${MIN_CROP_PX}px; height: ${MIN_CROP_PX}px; }
   .mtf-quizhost .qz-prompt { margin-top: 4px; }
   .mtf-quizhost .qz-choice { min-height: 46px; }
+  /* N-97:root×深关(应用题两行题面 + 直达行)把宿主可视段(~164px)吃光,三块答案
+     木牌初见掉到 412 线下。答案行 sticky 钉在宿主可视段底,题面在上头滚;
+     L1 装得下时 sticky 不产生位移,零变化。判分、题库、seed 零触碰。 */
+  .mtf-quizhost .qz-choices { position: sticky; bottom: 0; z-index: 4;
+    background: linear-gradient(180deg, rgba(255, 252, 255, .35), #fff 45%); }
+  /* root 开着才有直达行:把进度徽章/进度条/朗读/直达排到答案后面去滚,
+     题面+问句+三块木牌整组进第一屏;root 关着(含 L1)一行不动。 */
+  .mtf-quizhost:has(.qz-jump) .qz-wrap > .qz-bar { display: none; }
+  .mtf-quizhost:has(.qz-jump) .qz-say-row { order: 7; }
+  .mtf-quizhost:has(.qz-jump) .qz-top { order: 8; }
+  .mtf-quizhost:has(.qz-jump) .qz-jump { order: 9; }
 }
 
 /* ---- reduced：风车 / 云 / 蜜蜂 / 成长 / 收获动画全停，静态阶段图与反馈色保留 ---- */
