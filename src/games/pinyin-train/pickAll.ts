@@ -80,6 +80,16 @@ const CSS = `
   .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
   .pk-title{font-size:18px;}
 }
+@media (max-height:500px){
+  .pk-wrap{display:grid;grid-template-columns:minmax(150px,34%) minmax(0,1fr);
+    min-height:0;height:100%;padding:8px;gap:6px;align-items:stretch;}
+  .pk-top{grid-column:1/-1;}
+  .pk-title,.pk-hint,.pk-say-row,.pk-chips,.pk-bottom{grid-column:2;}
+  .pyt-scene{grid-column:1;grid-row:2/-1;height:auto !important;min-height:0;align-self:stretch;}
+  .pk-title{font-size:16px;}
+  .pk-chips{overflow-y:auto;min-height:0;align-content:flex-start;}
+  .pk-go{position:sticky;bottom:0;z-index:2;}
+}
 `;
 
 export function runPickAll(opts: PickAllOptions): PlayHandle {

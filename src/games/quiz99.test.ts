@@ -205,3 +205,12 @@ describe("quiz99 横屏矮屏紧凑档(三办 R5-A L-1)", () => {
     expect(src).toContain(".qz-ask { text-align: center; font-size: 17px;");
   });
 });
+
+describe("S-4 扩容:quiz 直达输入框热区 ≥44px", () => {
+  it(".qz-jump-input min-height 提到 44", () => {
+    const src = readFileSync(new URL("./quiz99.ts", import.meta.url), "utf8");
+    const m = /\.qz-jump-input \{[^}]*min-height: (\d+)px/.exec(src);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThanOrEqual(44);
+  });
+});

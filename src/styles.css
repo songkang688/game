@@ -969,6 +969,13 @@ button {
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
+  /* N-33:矮横屏结算内容高于可视段时,按钮列贴住弹窗底边,不滚也能点 */
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #ffffff;
+  padding: 10px 0 2px;
+  box-shadow: 0 -10px 16px rgba(255, 255, 255, 0.92);
 }
 
 /* 结算弹窗 */

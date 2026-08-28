@@ -348,7 +348,7 @@ const COLLECTION_CSS = `
 .collection-head{display:flex;align-items:center;gap:10px;padding:14px 18px;background:rgba(255,255,255,.75)}
 .collection-title{flex:1 1 auto;margin:0;font-size:20px;color:#6b4d72}
 .collection-stars{flex:0 0 auto;padding:4px 12px;border-radius:999px;background:#fff3c4;color:#8a6a1f;font-weight:700}
-.collection-close{flex:0 0 auto;width:40px;height:40px;border:none;border-radius:50%;
+.collection-close{flex:0 0 auto;width:44px;height:44px;border:none;border-radius:50%;
   background:#ffe0ec;color:#a4557a;font-size:18px;cursor:pointer}
 .collection-note{margin:0;padding:6px 18px 0;font-size:13px;color:#8a7a93}
 .collection-body{display:flex;flex:1 1 auto;gap:14px;padding:12px 18px;overflow:hidden}
@@ -378,7 +378,7 @@ const COLLECTION_CSS = `
 .card-stats{margin:0;font-size:12px;color:#3f6d99}
 .card-badge{margin:0;font-size:12px;color:#a4557a}
 .card-actions{display:flex;gap:6px;margin-top:auto;flex-wrap:wrap}
-.card-btn{flex:1 1 auto;min-height:36px;padding:0 10px;border:none;border-radius:999px;
+.card-btn{flex:1 1 auto;min-height:44px;padding:0 10px;border:none;border-radius:999px;
   background:#ffd6e7;color:#a4557a;font-size:13px;cursor:pointer}
 .card-btn--try{background:#d8ecff;color:#3f6d99}
 .card-btn[disabled]{opacity:.5;cursor:not-allowed}

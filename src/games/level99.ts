@@ -19,7 +19,8 @@ import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
 import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
 // 契约文件只有常量与纯逻辑,没有弹窗 UI,静态 import 不会把 dialog 代码拖进游戏 chunk
-import { clampJumpTarget, isRootOpen, rootRemainMinutes, rootRemainMs } from "../ui/root12Contract";
+import { clampJumpTarget, isRootOpen, isRootPermanent, rootRemainMinutes, rootRemainMs } from "../ui/root12Contract";
+import { ROOT_PERMANENT_NOTE } from "../ui/rootUnlock";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -466,7 +467,8 @@ export function jumpTargetLevel(raw: string, total: number = TOTAL_LEVELS): numb
 }
 
 /** 直达控件旁边那行小字 */
-export function rootJumpNote(remainMs: number): string {
+export function rootJumpNote(remainMs: number, nowMs: number = Date.now()): string {
+  if (isRootPermanent(nowMs)) return ROOT_PERMANENT_NOTE;
   return `管理员权限还剩 ${rootRemainMinutes(remainMs)} 分钟`;
 }
 
@@ -575,6 +577,7 @@ const L99_CSS = `
 .l99-node-flag{font-size:15px;line-height:1;filter:grayscale(1);opacity:.75;}
 .l99-node:focus-visible,.l99-tab:focus-visible,.l99-tool:focus-visible,.l99-continue:focus-visible,
 .l99-back:focus-visible,.l99-ov-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.l99-admin-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;width:100%;}
 .l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
 .l99-jump-input{width:76px;min-height:44px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
   font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
@@ -621,6 +624,15 @@ const L99_CSS = `
   .l99-jump-note{font-size:16px;margin:0;}
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
+}
+@media (max-height:500px){
+  .l99-stagebar .l99-admin-row{flex-wrap:nowrap;width:100%;}
+  .l99-stagebar .l99-admin-row .l99-jump{flex:1 1 auto;min-width:0;flex-wrap:nowrap;}
+  .l99-stagebar .l99-admin-row .l99-jump-note{
+    position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+    clip-path:inset(50%);white-space:nowrap;border:0;padding:0;margin:-1px;
+  }
+  .l99-stagebar .l99-admin-row .l99-tool-skip{padding:6px 10px;flex:0 0 auto;}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
@@ -717,6 +729,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     const note = document.createElement("span");
     note.className = "l99-jump-note";
     note.textContent = rootJumpNote(rootRemainMs());
+    input.title = note.textContent;
     const jump = (): void => {
       const target = jumpTargetLevel(input.value, total);
       if (target === null) return;
@@ -736,14 +749,21 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     host.appendChild(box);
   }
 
-  function attachSkip(host: HTMLElement, level: number, after: (level: number) => void): void {
+  function attachSkip(
+    host: HTMLElement,
+    level: number,
+    after: (level: number) => void,
+    compact = false
+  ): void {
     const request = getLevelExtras().requestSkip;
     const rootOn = !skipNeedsParentAuth();
     if ((!request && !rootOn) || level >= total) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "l99-tool l99-tool-skip";
-    btn.textContent = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    const full = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    btn.textContent = compact && rootOn ? "⏭️ 跳过" : full;
+    btn.setAttribute("aria-label", full);
     btn.title = rootOn ? "管理员权限开着,可以直接跳过这一关" : "需要家长确认才能跳过这一关";
     btn.addEventListener("click", () => {
       api.play("tap");
@@ -975,7 +995,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       buttons.push({ label: "下一关 ▶", onClick: () => startLevel(level + 1) });
     }
     buttons.push({ label: "🔁 再玩一次", ghost: true, onClick: () => startLevel(level) });
-    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap() });
+    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) });
 
     const buddy = level % 2 === 0 ? AVATAR_URLS.duoduoCheer : AVATAR_URLS.xingxingRun;
     const buddyAlt = level % 2 === 0 ? "朵朵在为你庆祝" : "星星在为你欢呼";
@@ -1006,7 +1026,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
        <div class="l99-ov-sub">${word}</div>`,
       [
         { label: "🔁 再试本关", onClick: () => startLevel(level) },
-        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap() }
+        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) }
       ]
     );
     speak(settleSpeechLine("lose", level, word));
@@ -1035,7 +1055,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     back.textContent = "🗺️ 选关";
     back.addEventListener("click", () => {
       api.play("tap");
-      showMap();
+      showMap(true);
     });
     const title = document.createElement("div");
     title.className = "l99-stagetitle";
@@ -1049,11 +1069,19 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     barTools.className = "l99-tools";
     barTools.style.margin = "0";
     attachGuide(barTools, () => currentLevel + 1);
-    attachSkip(barTools, level, (skipped) => {
+    const afterSkip = (skipped: number): void => {
       if (skipped + 1 < total) startLevel(skipped + 1);
       else showMap(true);
-    });
-    attachRootJump(barTools, () => level);
+    };
+    if (rootJumpVisible()) {
+      const admin = document.createElement("div");
+      admin.className = "l99-admin-row";
+      attachSkip(admin, level, afterSkip, true);
+      attachRootJump(admin, () => level);
+      if (admin.childElementCount > 0) barTools.appendChild(admin);
+    } else {
+      attachSkip(barTools, level, afterSkip, false);
+    }
     if (barTools.childElementCount > 0) bar.appendChild(barTools);
     stageWrap.appendChild(bar);
 
@@ -1082,7 +1110,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     }
   }
 
-  showMap();
+  showMap(true);
 
   return {
     destroy() {
