@@ -122,14 +122,14 @@ export const CSS = `
 .xq-draw{background:#E2F0F5;color:#255E70;}
 .xq-record{display:flex;gap:6px;overflow-x:auto;padding:6px 2px;margin-top:8px;scrollbar-width:none;}
 .xq-record::-webkit-scrollbar{display:none;}
-.xq-step{flex:0 0 auto;background:#fff;border-radius:12px;padding:5px 10px;font-size:13px;font-weight:700;
+.xq-step{flex:0 0 auto;background:#fff;border-radius:12px;padding:5px 10px;font-size:14px;font-weight:700;
   color:#6B5A45;box-shadow:0 2px 5px rgba(150,120,80,.18);white-space:nowrap;}
 .xq-step-red{color:${RED_INK};}
 .xq-step-black{color:${BLACK_INK};}
 .xq-step-last{background:#FFF0BF;box-shadow:0 2px 5px rgba(200,150,60,.4);}
 .xq-capsbar{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
 .xq-capline{display:flex;align-items:center;gap:3px;flex-wrap:wrap;background:#FFF9EE;border-radius:12px;
-  padding:4px 10px;font-size:12px;font-weight:800;color:#8A5A2C;box-shadow:0 2px 5px rgba(150,120,80,.14);}
+  padding:4px 10px;font-size:14px;font-weight:800;color:#8A5A2C;box-shadow:0 2px 5px rgba(150,120,80,.14);}
 .xq-capline .xq-picon{display:block;}
 .xq-capwho{margin-right:2px;}
 .xq-player .xq-picon{vertical-align:middle;}
@@ -139,7 +139,7 @@ export const CSS = `
 .xq-seg button{flex:1 1 110px;border:3px solid #EED9B8;background:#FFFDF8;border-radius:16px;padding:11px 8px;
   font-size:14px;font-weight:800;color:#7A5A34;cursor:pointer;font-family:inherit;}
 .xq-seg button.xq-on{border-color:#F2A0C0;background:#FFE4EF;color:#A82F63;}
-.xq-tierblurb{font-size:13px;font-weight:700;color:#7A5A86;text-align:center;min-height:20px;}
+.xq-tierblurb{font-size:14px;font-weight:700;color:#7A5A86;text-align:center;min-height:21px;}
 .xq-start{border:none;border-radius:18px;padding:14px;font-size:19px;font-weight:900;background:#FFB3CD;
   color:#7A234F;cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .xq-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
@@ -163,7 +163,7 @@ export const CSS = `
   font-family:inherit;}
 .xq-hidden{display:none;}
 @media (max-width:380px){
-  .xq-btns button{flex:1 1 74px;min-height:${MIN_HIT_PX}px;font-size:13px;padding:10px 2px;}
+  .xq-btns button{flex:1 1 74px;min-height:${MIN_HIT_PX}px;padding:10px 2px;}
   .xq-badge{font-size:28px;}
 }
 @media (prefers-reduced-motion:reduce){
