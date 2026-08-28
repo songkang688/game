@@ -73,3 +73,9 @@
 | 下一拍 | 谁先把修复或 r10 笔记推进 `game-1.3` 就立刻派该角色 R2 | A/B 下一轮必须读 `docs/qa/trio-r9-playbook.md`（已在树上） |
 
 R2–R10 仍排队。红线不变。本文件只在监督 worktree 更新，不碰 A/B 修复分支上的未提交 diff。
+
+### 学习员 R1 交卷（本监督）
+
+- 学习员 `bc-9b1ceaeb-0d25-53c0-af51-581f533ce4af` 交卷 SHA `81b5a66d` 已在 `game-1.3`：补测 N-40/41/42 + 配方 L。
+- 立刻派 R2=trio-r10 学习员（续同一角色，只学只记，编号 N-43 起）。
+- A `bc-12e9c82b…` / B `bc-8f16f806…` 仍在 R1 修复，不重复加派测试员。R3 的 A/B 等他们空闲后改读 `trio-r10-playbook.md`；当前执行仍以最新 `trio-r9-playbook.md` 为准。
