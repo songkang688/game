@@ -31,6 +31,7 @@ describe("r38 B · N-174/175 + 抽验裁切中间档", () => {
     const as = read("alien-seek/index.ts");
     expect(as).toContain("@media (max-height:500px) and (min-width:640px)");
     expect(as).toContain("@media (max-height:820px) and (min-width:640px)");
+    expect(as).toContain("as-side");
     expect(as).toContain("vh <= 500 && vw >= 640");
 
     const iff = read("ice-fire-forest/index.ts");

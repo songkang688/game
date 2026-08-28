@@ -111,6 +111,7 @@ const P_NAME = ["朵朵", "星星"];
 const CSS = `
 .as-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
+.as-side{display:flex;flex-direction:column;gap:6px;min-width:0;min-height:0;}
 .as-canvas{width:100%;display:block;border-radius:16px;background:#28234d;touch-action:none;cursor:pointer;}
 .as-clues{background:#fffdf6;border-radius:14px;padding:9px 12px;display:flex;flex-direction:column;gap:5px;
   box-shadow:0 2px 8px rgba(160,150,190,.22);}
@@ -184,20 +185,21 @@ const CSS = `
 /* 内联 <style> 占掉第一格,D-pad 会掉出 412;仅矮宽横屏藏掉,500 双栏原文不动 */
 @media (max-height:500px) and (min-width:640px){
   .as-wrap>style{display:none;}
-  .as-wrap{max-height:calc(100dvh - 76px);}
+  .as-wrap{max-height:calc(100dvh - 76px);grid-template-rows:minmax(0,1fr);}
+  .as-wrap>.as-canvas{grid-row:1;}
+  .as-wrap>.as-side{grid-column:2;grid-row:1;min-height:0;overflow:auto;justify-content:flex-end;}
+  .as-side .as-pads{position:sticky;bottom:0;flex:none;}
 }
 /* N-124 模式:1024×768 不命中 500 档;中间档复用双栏,500 原文不动 */
 @media (max-height:820px) and (min-width:640px){
   .as-wrap>style{display:none;}
   .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    grid-template-rows:minmax(0,1fr);
     gap:4px 10px;align-items:stretch;height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;}
-  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
-  .as-wrap>.as-clues{grid-column:2;max-height:28%;overflow:auto;padding:6px 8px;gap:3px;}
-  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1;width:100%;max-height:100%;}
+  .as-wrap>.as-side{grid-column:2;grid-row:1;min-height:0;overflow:auto;justify-content:flex-end;}
+  .as-side .as-pads{position:sticky;bottom:0;flex:none;margin:0;
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
-  .as-wrap>.als-list{grid-column:2;max-height:56px;}
-  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
-  .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
 .as-open,.as-back{min-height:44px;}
@@ -1005,6 +1007,9 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   );
   wrap.appendChild(canvas);
   if (deduce) wrap.classList.add("as-deduce");
+  const side = document.createElement("div");
+  side.className = "as-side";
+  wrap.appendChild(side);
 
   if (deduce) {
     const box = document.createElement("div");
@@ -1020,22 +1025,22 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       row.append(n, txt);
       box.appendChild(row);
     });
-    wrap.appendChild(box);
+    side.appendChild(box);
   }
 
   // 找物关的清单栏:缩略图 + 名字,横着滑,找到一个打一个勾
   const list = document.createElement("div");
   list.className = "als-list";
-  if (!deduce && targets.length > 0) wrap.appendChild(list);
+  if (!deduce && targets.length > 0) side.appendChild(list);
 
   // 单人才给缩放与望远镜:双人抢答两个人共用一块屏,镜头必须固定
   const tools = document.createElement("div");
   tools.className = "als-tools";
-  if (opts.players === 1) wrap.appendChild(tools);
+  if (opts.players === 1) side.appendChild(tools);
 
   const pads = document.createElement("div");
   pads.className = "as-pads";
-  wrap.appendChild(pads);
+  side.appendChild(pads);
 
   const tip = document.createElement("div");
   tip.className = "as-tip";
@@ -1043,7 +1048,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     opts.players === 2
       ? `${lv.hint} Esc 暂停。`
       : `${lv.hint} 直接点画面,或用 W A S D + F(方向键 + L 也行)挪光标,Esc 暂停。`;
-  wrap.appendChild(tip);
+  side.appendChild(tip);
   host.appendChild(wrap);
   if (deduce) {
     for (let p: HTMLElement | null = wrap; p; p = p.parentElement) {
