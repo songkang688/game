@@ -185,7 +185,8 @@ const CSS = `
 .dvs-keys b{color:#b0538c;}
 .dvs-pickrow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0 2px;}
 .dvs-pick{border:none;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 2px 5px rgba(140,120,190,.2);}
+  font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 2px 5px rgba(140,120,190,.2);
+  min-height:44px;}
 .dvs-pick.on{outline:3px solid #ff9ec4;color:#b0538c;}
 .dvs-picklabel{text-align:center;font-size:12.5px;font-weight:800;color:#8a7aa6;margin-top:8px;}
 .dvs-tierrow{display:flex;gap:6px;justify-content:center;margin:4px 0;flex-wrap:wrap;}

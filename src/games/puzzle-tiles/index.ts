@@ -107,7 +107,7 @@ const CSS = `
 .pz-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #544BA4; }
 .pz-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .pz-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.pz-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); }
+.pz-back { border: none; border-radius: 999px; padding: 7px 13px; min-height: 44px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); }
 .pz-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,100,200,.3); }
 .pz-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(130,130,210,.25); }
@@ -116,7 +116,7 @@ const CSS = `
 
 /* ---- 1.2 新增（全部 pzt- 前缀，不改上面 1.0/1.1 的规则） ---- */
 .pzt-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
+.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; min-height: 44px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pzt-eye:active, .pzt-undo:active { transform: translateY(1px); }
 .pzt-undo:disabled { opacity: .45; cursor: default; }
 /* 整图半透明底图：铺在画板上当参照，不吃点击 */

@@ -115,7 +115,7 @@ const CSS = `
 .sn-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #487A38; }
 .sn-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .sn-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.sn-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #5E9E4A; box-shadow: 0 3px 0 rgba(100,150,70,.3); }
+.sn-back { border: none; border-radius: 999px; padding: 7px 13px; min-height: 44px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #5E9E4A; box-shadow: 0 3px 0 rgba(100,150,70,.3); }
 .sn-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(100,150,70,.3); }
 .sn-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #5E9E4A; box-shadow: 0 2px 6px rgba(120,180,110,.25); }
 .sn-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(120,180,110,.25); }

@@ -181,7 +181,8 @@ const CSS = `
 .hh-bubble-in{animation:hhbounce .45s cubic-bezier(.34,1.56,.64,1);}
 @keyframes hhbounce{0%{transform:scale(.2) translateY(8px)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
 .hh-catch{border:none;border-radius:999px;padding:4px 9px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#ffd36e,#f0ad33);color:#7a4d0b;box-shadow:0 3px 0 #c9922f;}
+  font-family:inherit;background:linear-gradient(180deg,#ffd36e,#f0ad33);color:#7a4d0b;box-shadow:0 3px 0 #c9922f;
+  min-height:44px;}
 .hh-catch:active{transform:translateY(2px);box-shadow:0 1px 0 #c9922f;}
 .hh-table{display:flex;align-items:center;justify-content:center;gap:14px;min-height:104px;position:relative;}
 .hh-pile{position:relative;width:66px;height:96px;}

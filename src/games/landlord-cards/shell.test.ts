@@ -116,7 +116,7 @@ describe("手机 360px", () => {
     // 只看按钮那几条规则:牌面小图标的高度不算热区
     const mins = [...shell.matchAll(/\.ld-btn[^{]*\{[^}]*min-height:(\d+)px/g)].map((m) => Number(m[1]));
     expect(mins.length).toBeGreaterThanOrEqual(3);
-    for (const v of mins) expect(v).toBeGreaterThanOrEqual(42);
+    for (const v of mins) expect(v).toBeGreaterThanOrEqual(44);
     expect(shell).toContain(".ldc-mainbar .ld-btn{flex:1 1 0;min-width:0;min-height:48px");
     expect(shell).toContain(".ldc-subbar .ld-btn{min-height:44px");
   });

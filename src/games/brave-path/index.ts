@@ -327,6 +327,8 @@ ${BVP_LOBBY_CSS}
   .bvp-row:hover,.bvp-act:hover:not([disabled]){transform:none;}
 }
 ${touchUpliftCss([".bvp-btn"])}
+/* N-150:顶栏/技能叠 44;window6 守门仍消费 touchUpliftCss(=40),本条叠在后面 */
+.bvp-btn,.bvp-btn-sm,.bvp-act{min-height:44px;}
 ${bodyFontUpliftCss([".bvp-chip", ".bvp-btn-sm"])}
 `;
 

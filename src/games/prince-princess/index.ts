@@ -254,7 +254,8 @@ export const CSS = `
 .pcp-over-s{font-size:14px;font-weight:700;color:#96658C;line-height:1.6;max-width:330px;}
 .pcp-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .pcp-act{border:none;border-radius:16px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;}
+  font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;
+  min-height:44px;}
 .pcp-direct{position:relative;min-height:120px;}
 @media (max-width:420px){
   .pcp-cv{height:180px;}
