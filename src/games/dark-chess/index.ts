@@ -35,7 +35,8 @@ const SHELL_CSS = `
 .dc-sub{font-size:14px;font-weight:700;color:#8a6a48;text-align:center;line-height:1.6;max-width:330px;}
 .dc-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .dc-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#d99a4e,#bd7f37);box-shadow:0 4px 0 #9c6729;}
+  font-family:inherit;background:linear-gradient(180deg,#d99a4e,#bd7f37);box-shadow:0 4px 0 #9c6729;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .dc-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #9c6729;}
 .dc-mode.dc-b{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
 .dc-mode.dc-c{background:linear-gradient(180deg,#4fa77c,#3d8c66);box-shadow:0 4px 0 #2e6d4f;}

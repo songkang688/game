@@ -160,6 +160,7 @@ export const CSS = `
 .shr-veil-sub{font-size:15px;font-weight:700;color:#8A6A7E;line-height:1.6;max-width:330px;}
 .shr-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .shr-veil-btn{border:none;border-radius:16px;padding:11px 20px;font-size:15px;font-weight:900;color:#fff;
+  min-height:44px;display:inline-flex;align-items:center;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
 .shr-veil-btn.shr-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .shr-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #C25A80;}

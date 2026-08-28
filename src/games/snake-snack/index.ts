@@ -111,7 +111,7 @@ const CSS = `
 .sn-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .sn-bar-modes[hidden] { display: none; }
-.sn-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FC468, #5E9E4A); box-shadow: 0 4px 0 #487A38; }
+.sn-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FC468, #5E9E4A); box-shadow: 0 4px 0 #487A38; min-height: 44px; display: inline-flex; align-items: center; }
 .sn-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #487A38; }
 .sn-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .sn-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
