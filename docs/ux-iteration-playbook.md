@@ -409,7 +409,7 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 
 再推：保龄/碰碰车/钓鱼 720 收档扩到 `840 && min-height:721`；点点迷宫/对数对决横屏分栏；选关 wrap 820→960。噗噗/王子 840 加 min-height:501；便便超人垫 sticky；格斗王训练垫+塔选人扩到 840&&min-height:641；金钩商店关内底栏 sticky、平板竖屏首页居中填空。
 
-军规落地：全库遗留 `@media (max-height:840px)` 补 `min-height:501px`，避免盖掉 915×412 的 500 档；飞行棋补平板 sticky；星地产 900 档同样加 min-height:501。冰火/噗噗/外星/炸弹/简谱把 500 档横屏分栏扩到平板（min-height:501）。下一轮优先：U-5 画布封顶守门、云端 A/B 四视口实测。
+军规落地：全库遗留 `@media (max-height:840px)` 补 `min-height:501px`，避免盖掉 915×412 的 500 档；飞行棋补平板 sticky；星地产 900 档同样加 min-height:501。冰火/噗噗/外星/炸弹/简谱/调色/小屋相册/雪仗双垫/擂台半场把 500 档横屏分栏扩到平板（min-height:501）。下一轮优先：U-5 画布封顶守门、云端 A/B 四视口实测。
 
 ## 附：第 3 轮环境水位
 
