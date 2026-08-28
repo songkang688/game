@@ -1047,6 +1047,16 @@ function viewportWidth(): number {
   return typeof w === "number" && w > 0 ? w : 420;
 }
 
+/**
+ * 舞台真实可用宽。innerWidth 没扣壳层(舞台边框、选关容器、桌面 padding,合计约 60px),
+ * 直接进公式的话 390px 手机上盘面右列会被裁掉。
+ * 额外 -12:mg-wrap 两侧 padding(20)加 mg-board 边框(16)比 cellPxFor 预留的 24 多出来的部分。
+ */
+function stageWidth(stage: HTMLElement): number {
+  const w = stage.clientWidth;
+  return w > 0 ? w - 12 : viewportWidth() - 60;
+}
+
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = levelConfig(ctx.level);
   let settled = false;
@@ -1060,7 +1070,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: cfg.stepLimit,
-      cell: cellPxFor(cfg.size, viewportWidth(), cfg.race ? 2 : 1),
+      cell: cellPxFor(cfg.size, stageWidth(stage), cfg.race ? 2 : 1),
       sfx: ctx.sfx,
       onDone: () => undefined
     }
@@ -1073,7 +1083,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: 0,
-      cell: Math.round(cellPxFor(cfg.size, viewportWidth(), 2) * 0.9),
+      cell: Math.round(cellPxFor(cfg.size, stageWidth(stage), 2) * 0.9),
       sfx: () => undefined,
       onDone: (s) => {
         if (s.reached) foeReached = true;
@@ -1281,7 +1291,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth()),
+          cell: cellPxFor(cfg.size, stageWidth(stage)),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
@@ -1318,7 +1328,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 2),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1329,7 +1339,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 2),
           sfx: () => undefined,
           onDone: (s) => {
             if (s.reached) foeReached = true;
@@ -1366,7 +1376,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2),
+          cell: cellPxFor(4, stageWidth(stage), 2),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1377,7 +1387,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed: seed + 1,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2),
+          cell: cellPxFor(4, stageWidth(stage), 2),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
