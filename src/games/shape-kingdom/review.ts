@@ -173,6 +173,18 @@ const REVIEW_CSS = `
    万一它就是正解，这一关直接卡死）。答题器的 .qz-wrap 是公共文件生的、本档不许动，
    但它挂在哪儿是本款说了算——给它一个本款自己的宿主，再由 fitIntoStage 钳住宿主。 */
 .shk-quizhost{min-width:0;}
+/* N-37 残余(trio-r15):root×深关提示条把三张 .qz-choice 顶到 453。
+   只收本款宿主与提示条,公共 quiz99 / clock / 成语零触碰。热区仍 ≥44。 */
+@media (max-height:500px){
+  .shk-round{margin:0 0 2px;gap:2px;}
+  .shk-banner{padding:4px 8px;font-size:13px;}
+  .shk-hintbar{gap:4px;}
+  .shk-hintbtn{padding:4px 12px;}
+  .shk-hinttext{padding:4px 8px;font-size:13px;}
+  .shk-quizhost .qz-wrap{min-height:0;padding:6px 8px;gap:4px;}
+  .shk-quizhost .qz-prompt{min-height:36px;padding:4px 8px;max-height:72px;overflow:hidden;}
+  .shk-quizhost .qz-prompt svg,.shk-quizhost .qz-prompt img{max-height:48px;width:auto;}
+}
 `;
 
 export interface ReviewOptions {

@@ -205,6 +205,20 @@ export const KTC_CSS = `
 .ktc-grid{display:grid;grid-template-columns:repeat(2,minmax(100px,1fr));gap:10px;
   overscroll-behavior:contain;touch-action:pan-y;}
 @media (min-width:520px){.ktc-grid{grid-template-columns:repeat(3,minmax(100px,1fr));}}
+/* N-77(trio-r15):915×412 小屋相册第一排「换回来」375 切底。只动 .ktc-album：
+   卡片改横条、首屏露出一排 CTA；诊所/马拉松不挂这个类。缩略图竖屏仍 ≥100。 */
+@media (max-height:500px) and (min-width:600px){
+  .ktc-album{padding:4px;}
+  .ktc-album .ktc-albumhead{margin-bottom:4px;}
+  .ktc-album .ktc-tools{margin:0 0 4px;gap:4px;}
+  .ktc-album .ktc-msg{margin-top:2px;min-height:0;font-size:13px;}
+  .ktc-album .ktc-grid{grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:6px;}
+  .ktc-album .ktc-card{min-height:0;flex-direction:row;flex-wrap:wrap;justify-content:center;
+    padding:4px;gap:4px;}
+  .ktc-album .ktc-card .ktc-thumb{min-height:44px;height:48px;font-size:28px;flex:1 1 100%;}
+  .ktc-album .ktc-cardname{font-size:12px;}
+  .ktc-album .ktc-cardnote{display:none;}
+}
 .ktc-card{background:#fff;border-radius:16px;padding:8px;box-shadow:0 3px 8px rgba(160,110,40,.18);
   display:flex;flex-direction:column;align-items:center;gap:4px;min-height:132px;text-align:center;}
 .ktc-card .ktc-thumb{width:100%;min-height:100px;border-radius:12px;display:flex;align-items:center;
