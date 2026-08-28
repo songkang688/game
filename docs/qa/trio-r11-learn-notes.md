@@ -147,3 +147,69 @@ r4 A–C、r5 D–F、r6 G/H、r8 I/J、r9 K/L 仍有效。**不新开字母**�
 8. **N-57** 训练场选人开打（B，勿重改已绿的关内垫）。
 9. S-4 `.qz-jump-input` 38→44 + N-37 直达钮高 32 顺手（A）。
 10. N-16 走廊；L-3 贴纸；C-6 补推理关 121；N-10/13/14/C-8 仍开。
+
+---
+
+## 八、R3 学习员换面补测（主档 915×412；`game-1.3` 已含 A/B 第 10 轮）
+
+> 基线 commit `63b7beae`。preview `:4182`（`npx vite build`，`tsc` 见 N-36 回归）+ puppeteer-core + `/usr/local/bin/google-chrome`。工装 `/tmp/trio-r11-measure.mjs` `/tmp/trio-r11-shots/` **不进库**。每档独立 context。
+> 进场水位：`npm test` **1122 文件 / 19354 用例**，其中 **3 红**（均为 5s 超时：`snake-royale/ai.test.ts`「隔一档打…」及同文件另一档次对局；未为变绿改测试）。相对 r10 的 1109/19330 = A/B r10 测试入账。
+> 派发写「N-48 起」：树上 r11 已用 **N-52…N-57**，r10 占用 **N-46/N-47**，本补测从 **N-58** 续编。不改 r9/r10 文件，不覆盖上文 N-52…N-57 表。
+> `git diff` 证明 **零改 `src/**`**。避开 color-fun 关型、竖式、金钩商店、sky-squad、模式芯片。
+
+### 8.1 对账更正（第二节写于 A/B 第 10 轮合入前，以主干+本轮浏览器为准）
+
+| # | 第二节曾写 | R3 判定 |
+| --- | --- | --- |
+| **N-39** | ❌ | **✅** `showMap(true)` 初次 `:1130` + 回地图三处；hop-pads `.l99-node-cur` **201–277 在屏** |
+| **S-4 `.qz-jump-input`** | ❌ 38 | **✅** `min-height:44px` |
+| **N-16** | ❌ | **✅** `.ak-pad{position:sticky;bottom:0}` + `corridorFit.test.ts` |
+| **L-3** | ❌ | **✅** `boardArt.ts` 头注「第 1–10 章图集已配齐」 |
+| **N-40** | ❌ | **✅** `.dr-btns` 矮屏 sticky；本轮赛道 crop 110、工具条折叠线下 **0** |
+| **N-41** | ❌ | **✅** `.mj-tile` `min-width/height:44` |
+| **N-42** | ❌ | **✅** `.pfb-btn` `min-height:${TOUCH_MIN}`；本轮双人 crop 35、折叠 0 |
+| **N-2/N-3/N-4** | ❌ 无配方 E | B `d8697ac3` **源码已合**，但本轮 915 **仍伤** → **仍开同一号**，勿当未做去写第二套，先复测再补 |
+| **N-36** | ✅ 描红布局 | **编译回归**：`tracing.ts` 调用 `applyPadRoom()` 但函数未定义，`tsc --noEmit` 红。布局验收仍绿，**不换号**，A 补回函数或改回 `padSidePx` 接线 |
+| **N-31 关内** | ✅ | 复证：`scrollIntoView` 后开打进场，折叠键 0、画布 `offBottom 0`。选人壳仍 **N-57**（开打 top 531、假人 38px） |
+| **L-2 / N-33 / N-38** | ✅ | 维持 |
+
+### 8.2 本抓手干净（下轮不要再量这些 id 的这一态）
+
+- **ocean-munch / fishing-star / dark-chess 关内**：crop ≤6，折叠 0。
+- **tap-tiles 关内**：crop 66、画布不出屏、折叠 0（与 r6 贴线观察同级，不立项）。
+- **snake-royale 双人同屏**：crop 0、两画布不出屏（回选关 30px 观察）。
+- **red-blue-tug 同屏**：crop 96、折叠 0。
+- **puff-bros 双人**：crop 35、折叠 0（N-42 热区源码已抬）。
+- **hop-pads 地图聚焦**：见 N-39 ✅。
+- **duo-rush 赛道工具条**：见 N-40 ✅。
+- fruit-slice 本轮未打出结算弹窗（局未结束）；quiz 族失败后再玩仍走 §三口径，不新开号。
+
+### 8.3 旧号复证（不换号）
+
+| # | 对象 | 本轮 915×412 |
+| --- | --- | --- |
+| N-2 | flight-chess | crop 585；掷骰子/暂停 top **525–527**；飞机选择 683 |
+| N-3 | star-estate | crop 435；地格 22×22 整排 top **448** |
+| N-4 | hero-cards | crop 366；手牌 420 切半；确定/取消/结束回合 top **511** |
+| N-12 | pool-stars | crop 340；蓄力击球 425、暂停 482（r5 原账） |
+| N-9 族 | sudoku-petal **双人** | crop 491；数字键 394 切半、铅笔/擦掉 452 线下（单人盘面账，不新开号） |
+| C-2 | brick-break | crop 172、折叠 0（裁切仍开） |
+| C-5 | mole-pop | crop 550；洞 top 438 |
+| C-7 | match-stars | crop 577；第 5 行格 378 切底 |
+| C-8 | puzzle-tiles / balloon-pop / orb-arena 闯关技能 | 拼图裁 628 下排 514；气球 256/458；技能钮 436 |
+| C-8 | ice-fire-forest | crop 182；仅 **▼** top 375 切底（18 控账减轻，仍开） |
+| N-57 | fk 选人壳 | 开打 531 / 假人 447 / 38px，与原文逐位 |
+| N-18 | box-hamster 关内 | crop 208；撤销/重来 **40px** |
+| N-1 | fruit-catch 双人 | crop **199**（r11 曾观察 73，加重，验收别只拿竖屏） |
+
+### 8.4 新发现（N-58）
+
+| # | 对象 | 实测 | 性质 |
+| --- | --- | --- | --- |
+| N-58 | **merge-2048 关内四向键切底**（r6 写「crop 84、无折叠线下」已过期） | 四键 `.mg-btn` top **392** h=46 → bottom 438 切出 26px，crop 仍 84 | 🔧 配方 G：键排 sticky 底或再让盘面；勿动合并规则 |
+
+**未单列**：candy-swing / sling-birds 本轮停在自建地图（continue 未进关），锁格 435 线下属长地图，N-23 聚焦合入后仍应用 `scrollIntoView` 复验，不新开号。orb-arena 双人 crop 335 归 C-4/竞技场钳高残余。
+
+### 8.5 skills
+
+`frontend-design`：回合必点（N-2 掷骰）B 已合配方 E 仍 525 线下——验收必须 915 真机，不能只靠源码断言。`canvas-design`：merge-2048 盘面贴线时四键是主操作不是装饰。
