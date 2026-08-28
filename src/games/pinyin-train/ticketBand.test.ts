@@ -47,3 +47,37 @@ describe("拼音小火车 R2 · TOP10 车票边条 8px", () => {
     expect(TICKET_CSS).not.toContain("font-size");
   });
 });
+
+const SUBDOT_RE = /radial-gradient\(circle 2px at 11px calc\(50% \+ 9px\)/g;
+
+describe("拼音小火车 R3 · 打孔圆点下同类色副记号（B 档修订清单第 6 条）", () => {
+  it("孔下 9px 处一枚 r=2px 同类色实心圆：六处票面与 quiz 皮肤全部同步", () => {
+    expect([...TICKET_CSS.matchAll(SUBDOT_RE)]).toHaveLength(6);
+    expect([...QUIZ_SKIN_CSS.matchAll(SUBDOT_RE)]).toHaveLength(5);
+    // 「同类色」：每张票的副记号圆点用的就是这张票的类别色
+    for (const band of [
+      TRAIN_COLORS.initialOrange,
+      TRAIN_COLORS.finalTeal,
+      TRAIN_COLORS.wholePurple,
+      TRAIN_COLORS.toneRed,
+      TRAIN_COLORS.railGray
+    ]) {
+      expect(TICKET_CSS).toContain(`calc(50% + 9px),${band} 1.9px`);
+    }
+  });
+
+  it("副记号不吃孔不吃字：夹在打孔暗点和边条之间，纯背景层零热区改动", () => {
+    // 孔底 50%+3.5px → 圆点顶 50%+7px：3.5px 空隙不粘连；圆点在 x=11px，17px 边条起点之内
+    const first = TICKET_CSS.indexOf("circle 3.5px at 11px 50%");
+    const sub = TICKET_CSS.indexOf("circle 2px at 11px calc(50% + 9px)");
+    const bandStart = TICKET_CSS.indexOf("17px 25px");
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(sub).toBeGreaterThan(first);
+    expect(bandStart).toBeGreaterThan(sub);
+    // 打孔暗点原样健在（数量与第 2 轮钉的一样，副记号没顶掉它）
+    expect([...TICKET_CSS.matchAll(/radial-gradient\(circle 3\.5px at 11px 50%/g)]).toHaveLength(6);
+    // 纪律照旧：这轮追加后皮肤仍不写 min-height / font-size
+    expect(QUIZ_SKIN_CSS.includes("min-height")).toBe(false);
+    expect(QUIZ_SKIN_CSS.includes("font-size")).toBe(false);
+  });
+});

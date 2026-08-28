@@ -84,12 +84,16 @@ export function prefersReduced(): boolean {
 const C = TRAIN_COLORS;
 const TICKET_CLIP = ticketZigzag(7, 4);
 
-/** 车票的两层背景：左侧圆孔（打孔的暗点）+ 类别色边条 */
+/** 车票的三层背景：左侧圆孔（打孔的暗点）+ 孔下同类色副记号圆点 + 类别色边条 */
 function ticketBg(band: string): string {
   // B 档 TOP10（第 1 轮移交）：类别色边条 5px→8px（17–25px），360px 下三色类别更好认；
-  // 25px 仍在 padding-left 28/30px 文字起点之内，圆孔（11px±3.5）也碰不到，热区零改动
+  // 25px 仍在 padding-left 28/30px 文字起点之内，圆孔（11px±3.5）也碰不到，热区零改动。
+  // B 档修订清单第 6 条（第 3 轮备档落地）：打孔圆点正下方 9px 处补一枚 r=2px 同类色
+  // 实心圆当第二记号——颜色之外再补一条「形状」通道，与库约定对齐；孔底 50%+3.5px 到
+  // 圆点顶 50%+7px 留 3.5px 空隙不粘连，最矮票（CHIP_MIN_PX=48）内也画得下，纯背景层零热区改动
   return (
     `background-image:radial-gradient(circle 3.5px at 11px 50%,rgba(74,68,96,.28) 3.4px,transparent 3.6px),` +
+    `radial-gradient(circle 2px at 11px calc(50% + 9px),${band} 1.9px,transparent 2.1px),` +
     `linear-gradient(90deg,transparent 0 17px,${band} 17px 25px,transparent 25px);`
   );
 }
