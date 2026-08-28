@@ -81,6 +81,46 @@ describe("W8R1-07 · 前 99 关全量扫", () => {
   });
 });
 
+describe("trio-r7 L-2 · DOM 序列化写法也换得动（真机补账）", () => {
+  /** 浏览器 innerHTML 重排:`<line …/>` → `<line …></line>`,`<circle …/>` → `<circle …></circle>` */
+  function domSerialized(svg: string): string {
+    return svg
+      .replace(/(<line [^>]*)\/>/g, "$1></line>")
+      .replace(/(<circle [^>]*)\/>/g, "$1></circle>");
+  }
+
+  it("序列化后的钟面:指针换箭头、轴心换铆钉、细线清零", () => {
+    const face = clockSVG(4, 1, 120);
+    const inner = face.slice(face.indexOf(">") + 1, face.lastIndexOf("</svg>"));
+    const lifted = liftFaceBody(domSerialized(inner));
+    expect(lifted).toContain("clk-lift-hour");
+    expect(lifted).toContain("clk-lift-minute");
+    expect(lifted).toContain('class="clk-hub"');
+    expect(lifted).not.toContain("<line");
+    expect(lifted).not.toContain('r="3.4" fill="#5c4a7d"');
+  });
+
+  it("序列化前后换装产物一致:两条路走出同一张钟面(归一化到序列化形态再比)", () => {
+    const face = clockSVG(9, 2, 82, "钟面");
+    const inner = face.slice(face.indexOf(">") + 1, face.lastIndexOf("</svg>"));
+    // 换装新插入的 hubSVG 本身是自闭合写法,两条路都过一遍序列化归一后必须逐字节相同
+    expect(domSerialized(liftFaceBody(domSerialized(inner)))).toBe(domSerialized(liftFaceBody(inner)));
+  });
+
+  it("前 99 关全量扫:序列化形态一样细线清零", () => {
+    for (let level = 0; level < 99; level += 7) {
+      for (const q of buildQuestions(level)) {
+        for (const html of [q.promptHTML, ...q.choices]) {
+          if (!html.includes("data-h=")) continue;
+          const lifted = liftFaceBody(domSerialized(html));
+          expect(lifted, `第 ${level + 1} 关`).not.toContain("<line");
+          expect(lifted, `第 ${level + 1} 关`).toContain("clk-lift-hour");
+        }
+      }
+    }
+  });
+});
+
 describe("W8R1-07 · 运行时接线", () => {
   /** 极简元素桩：liftFacesIn 只用 querySelectorAll / get/setAttribute / innerHTML */
   class FakeSvg {
