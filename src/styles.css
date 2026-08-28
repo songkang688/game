@@ -534,17 +534,16 @@ button {
   transform: scale(0.96);
 }
 
-.recent-emoji {
-  display: grid;
-  place-items: center;
+.recent-emoji,
+.recent-cover {
+  display: block;
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  object-fit: cover;
+  background: #7ac4ec;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9);
-  font-size: 26px;
-  line-height: 1;
 }
 
 .recent-info {
@@ -582,7 +581,7 @@ button {
   gap: 18px;
 }
 
-/* 1.3 第 1 步 B:卡片改三层 —— 封面区(渐变 + 分类图形)/ 标题行 / 元信息行 */
+/* 1.3 第 1 步 B:卡片改三层 —— 封面图 / 标题行 / 元信息行 */
 .game-card {
   --card-color: var(--pink-soft);
   display: flex;
@@ -602,71 +601,22 @@ button {
   animation-delay: calc(var(--card-i, 0) * 45ms);
 }
 
-/* 第一层:封面区。主题色渐变打底,右上一枚柔光斑,分类图形语言盖在 ::before 上 */
+/* 第一层:统一封面图 */
 .card-cover {
   position: relative;
   display: block;
-  height: 86px;
-  /* 表情贴纸骑在封面下沿,给它让出探出来的那一截 */
-  margin-bottom: 46px;
-  background:
-    radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.6) 0%, transparent 36%),
-    linear-gradient(165deg, var(--card-color) 0%, rgba(255, 255, 255, 0.55) 145%);
+  height: 168px;
+  margin-bottom: 0;
+  overflow: hidden;
+  background: #7ac4ec;
 }
 
-.card-cover::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0.55;
-  transition: opacity 0.16s ease;
-}
-
-/* 分类图形语言:同一分类的卡片共享一种底纹,孩子扫一眼就能认出「这排是什么」 */
-.card-cover--action::before {
-  /* 冲刺速度线 */
-  background: repeating-linear-gradient(
-    115deg,
-    rgba(255, 255, 255, 0.55) 0 8px,
-    transparent 8px 30px
-  );
-}
-
-.card-cover--casual::before {
-  /* 糖果波点 */
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.7) 5px, transparent 6px);
-  background-size: 30px 30px;
-  background-position: 5px 7px;
-}
-
-.card-cover--party::before {
-  /* 游园帐篷条纹 */
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.5) 0 14px,
-    transparent 14px 34px
-  );
-}
-
-.card-cover--edu::before {
-  /* 作业本横线 */
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(255, 255, 255, 0.6) 0 2px,
-    transparent 2px 14px
-  );
-}
-
-.card-cover--create::before {
-  /* 画布棋盘格 */
-  background: conic-gradient(
-    from 45deg,
-    rgba(255, 255, 255, 0.5) 25%,
-    transparent 0 50%,
-    rgba(255, 255, 255, 0.5) 0 75%,
-    transparent 0
-  );
-  background-size: 26px 26px;
+.card-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.16s ease;
 }
 
 /* 第二层 + 第三层的容器:标题行 / 元信息行 */
@@ -675,7 +625,7 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 0 14px 18px;
+  padding: 14px 14px 18px;
 }
 
 @keyframes card-in {
@@ -695,41 +645,12 @@ button {
   box-shadow: 0 16px 38px rgba(242, 105, 159, 0.26);
 }
 
-.game-card:hover .card-cover::before {
-  opacity: 0.8;
-}
-
-.game-card:hover .card-emoji {
-  animation: card-wiggle 0.5s ease;
-}
-
-@keyframes card-wiggle {
-  0%, 100% { transform: rotate(0); }
-  25% { transform: rotate(-8deg) scale(1.08); }
-  60% { transform: rotate(6deg) scale(1.05); }
+.game-card:hover .card-cover-img {
+  transform: scale(1.04);
 }
 
 .game-card:active {
   transform: scale(0.96);
-}
-
-/* 表情贴纸:绝对定位骑在封面下沿(左右 margin 居中,不占用 transform,
-   card-wiggle 的旋转动画才不会把它甩偏) */
-.card-emoji {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -40px;
-  margin: 0 auto;
-  display: grid;
-  place-items: center;
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 30%, #ffffff 0%, rgba(255, 255, 255, 0.72) 100%);
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9), 0 6px 14px rgba(0, 0, 0, 0.08);
-  font-size: 54px;
-  line-height: 1;
 }
 
 .card-title {
@@ -1149,10 +1070,8 @@ button {
     gap: 12px;
   }
 
-  .card-emoji {
-    width: 76px;
-    height: 76px;
-    font-size: 44px;
+  .card-cover {
+    height: 132px;
   }
 
   .card-title {
@@ -2444,15 +2363,10 @@ html {
   border-radius: 999px;
 }
 
-/* ---------- 小屏适配:封面区与表情贴纸跟着缩 ---------- */
+/* ---------- 小屏适配:封面跟着缩 ---------- */
 @media (max-width: 420px) {
   .card-cover {
-    height: 74px;
-    margin-bottom: 40px;
-  }
-
-  .card-emoji {
-    bottom: -34px;
+    height: 132px;
   }
 
   .icon-btn--pause {
@@ -2476,9 +2390,10 @@ html {
     scale: none;
   }
 
-  .card-cover::before,
-  .game-card:hover .card-cover::before {
+  .card-cover-img,
+  .game-card:hover .card-cover-img {
     transition: none;
+    transform: none;
   }
 }
 

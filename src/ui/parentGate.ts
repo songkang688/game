@@ -28,7 +28,7 @@ function showParentPanel(): void {
   const list = document.createElement("ul");
   list.className = "parent-list";
   const items = [
-    `🌸 「一朵一星」1.2 有 ${loadGames().length} 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。`,
+    `🌸 「一朵一星」1.3 有 ${loadGames().length} 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。`,
     "🎨 所有游戏均为原创同类型玩法,不使用任何商业 IP。",
     "🚫 无广告、无内购、无联网账号。",
     "💾 星星和进度只保存在本机(localStorage),不上传。",

@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - game-1.1
+      - game-1.2
+      - game-1.3
   pull_request:
 
 concurrency:

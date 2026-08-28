@@ -8,12 +8,12 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png"],
+      includeAssets: ["icons/cover-card.jpg", "icons/icon-192.png", "icons/apple-touch-icon.png"],
       manifest: {
         id: "/",
         name: "一朵一星",
         short_name: "一朵一星",
-        description: "一朵一星 1.2 —— 76 款原创小游戏合集,无广告、无内购。",
+        description: "一朵一星 1.3 —— 76 款原创小游戏合集,无广告、无内购。",
         lang: "zh-CN",
         display: "standalone",
         orientation: "any",

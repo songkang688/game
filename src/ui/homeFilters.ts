@@ -291,12 +291,12 @@ export function heroSubtitle(gameCount: number, maxLevels: number): string {
 
 /**
  * Electron / 浏览器窗口标题。首页气泡已经按真实收录数拼款数,
- * 标题栏如果还写死「1.1 · 55 款」,安装包打开就会和里面的 76 款对不上。
+ * 标题栏如果还写死旧版本号,安装包打开就会和里面的款数对不上。
  */
 export function windowTitle(gameCount: number): string {
   const n = Number.isFinite(gameCount) ? Math.max(0, Math.floor(gameCount)) : 0;
   const games = n > 0 ? `${n} 款原创小游戏合集` : "原创小游戏合集";
-  return `一朵一星 1.2 · ${games}`;
+  return `一朵一星 1.3 · ${games}`;
 }
 
 /** 这款游戏的闯关总数:meta 没填就按通用框架的 188 关算 */

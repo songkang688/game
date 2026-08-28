@@ -670,9 +670,9 @@ describe("首页气泡的数量跟着实际收录走", () => {
   });
 
   it("窗口标题也跟着款数走,不再写死 1.1 · 55 款", () => {
-    expect(windowTitle(76)).toBe("一朵一星 1.2 · 76 款原创小游戏合集");
-    expect(windowTitle(76)).not.toMatch(/1\.1/);
-    expect(windowTitle(0)).toBe("一朵一星 1.2 · 原创小游戏合集");
+    expect(windowTitle(76)).toBe("一朵一星 1.3 · 76 款原创小游戏合集");
+    expect(windowTitle(76)).not.toMatch(/1\.1|1\.2/);
+    expect(windowTitle(0)).toBe("一朵一星 1.3 · 原创小游戏合集");
   });
 
   it("闯关关数也跟着最长的那一款走", () => {
