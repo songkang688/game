@@ -193,7 +193,10 @@ const CSS = `
   font-weight:900;color:#fff;cursor:pointer;font-family:inherit;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
+/* r4 C-9 / 窗口4 W4R3-01：◀ 返回 / ⏸ 暂停 原来 padding:7px + 13.5px 字号 = 实测 32px 高，
+   低于 40px 触区底线。补 min-height 并改 inline-flex 居中，字号内边距一个不动。 */
 .dvs-back{border:none;border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
+  min-height:40px;display:inline-flex;align-items:center;justify-content:center;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
@@ -263,6 +266,38 @@ const CSS = `
   .dvs-pad button{min-width:40px;min-height:40px;font-size:15px;border-radius:12px;}
   .dvs-pick{padding:5px 9px;font-size:12px;}
 }
+/* 矮横屏（915×412 一族）· 单人局（闯关 / 人机 / 无尽）：
+   擂台竖着堆「标题条 → 画布 → 名牌 → 提示 → 七键排」，412px 高只装得下前两样，
+   ◀▲▼▶✋💥🤝 整排掉到裁切线以下——纯触屏一步都动不了。
+   画布是 16:9，矮屏上高受限、量出来才 260px 宽，左边一大片横向余量全空着：
+   改双栏，画布独占左栏，七键排 / 名牌 / 提示搬进右栏。右栏给足 372px，
+   七颗键（7×46 + 6×5 = 352）正好一排排完，不用折两行去啃画布的高。
+   双人同屏的模式（两块摇杆本就一人半边）是轻伤，这条分支不碰它们。 */
+@media (min-width:700px) and (max-height:560px){
+  /* 矮屏上所有一句话提示都收成一行小字：省下的每一像素都归画布 */
+  .dvs-hint{font-size:11.5px;padding:1px 8px 3px;min-height:0;line-height:1.35;}
+  .dvs-arena.dvs-solo{display:grid;column-gap:10px;align-items:start;
+    grid-template-columns:minmax(0,1fr) minmax(224px,372px);
+    grid-template-areas:"bar bar" "canvas pad" "canvas cards" "canvas hint";}
+  .dvs-arena.dvs-solo>.dvs-bar{grid-area:bar;padding:2px 8px;gap:6px;}
+  .dvs-arena.dvs-solo>.dvs-canvas{grid-area:canvas;align-self:start;}
+  .dvs-arena.dvs-solo>.dvs-cards{grid-area:cards;padding:0 8px;gap:5px;flex-wrap:nowrap;}
+  .dvs-arena.dvs-solo>.dvs-hint{grid-area:hint;padding:1px 8px 5px;}
+  .dvs-arena.dvs-solo>.dvs-pads{display:contents;}
+  .dvs-arena.dvs-solo>.dvs-pads>.dvs-pad{grid-area:pad;justify-content:center;gap:5px;padding:3px 4px 0;}
+  /* 名牌收成两条：头像行 + 元气条留着，尾行的数字挪不下就先让位 */
+  .dvs-arena.dvs-solo .dvs-card{flex:1 1 0;min-width:0;padding:4px 7px;}
+  .dvs-arena.dvs-solo .dvs-card-foot{display:none;}
+  .dvs-arena.dvs-solo .dvs-meter{margin:4px 0 0;}
+  /* 双人同屏（对战 / 团队赛 / 合作特训）：两块摇杆本来就一人半边，双栏挤不下。
+     矮屏上只做两件小事：一排七键差 4px 排不下就折行、折了行就掉到裁切线以下——
+     把键距 6→4、两块摇杆的间距收一收，7×46+6×4=346 正好一排；名牌尾行让位补高。 */
+  .dvs-arena:not(.dvs-solo)>.dvs-bar{padding:2px 8px;gap:6px;}
+  .dvs-arena:not(.dvs-solo)>.dvs-pads{gap:6px;padding:0 6px 6px;}
+  .dvs-arena:not(.dvs-solo)>.dvs-pads>.dvs-pad{justify-content:center;gap:4px;}
+  .dvs-arena:not(.dvs-solo) .dvs-card-foot{display:none;}
+  .dvs-arena:not(.dvs-solo) .dvs-meter{margin:4px 0 0;}
+}
 @media (prefers-reduced-motion:reduce){
   .dvs-meter i{transition:none;}
 }
@@ -312,6 +347,22 @@ const SQUASH_TIME = 0.15;
 
 /** 画布显示高的下限:比这更矮台子和四个人就看不清了,低于它宁可交给舞台滚动 */
 export const MIN_CANVAS_DISPLAY_PX = 150;
+
+/**
+ * 矮横屏（915×412 一族）单独的下限。
+ *
+ * 那一族竖着只有 412px,壳层顶栏 + l99 关卡条 + 擂台标题条吃掉一半后,
+ * 留给画布的净高只剩 130 上下:守着 150 的下限就等于「宁可让画布压着裁切线」,
+ * 而裁切线以下正是七颗触屏键——纯触屏一步都动不了。横屏时画布是高受限的
+ * (16:9 收窄后才 230px 宽,左边一大片横向余量空着),放低一点仍看得清,
+ * 所以这一族把下限让到 120,先保证整块场地和整排键都在首屏。
+ */
+export const MIN_CANVAS_DISPLAY_SHORT_PX = 120;
+
+/** 是不是「矮横屏」一族（和 CSS 里 min-width:700 + max-height:560 那条分支同一口径） */
+export function isShortLandscape(w: number, h: number): boolean {
+  return w >= 700 && h <= 560;
+}
 
 /**
  * 画布该「显示」多高(null = 原生高度就装得下,一个样式都不用写)。
@@ -381,7 +432,10 @@ function mountArena(opts: ArenaOptions): Arena {
     timers.add(id);
   }
 
-  const root = el("div", "dvs-arena");
+  // 单人局（闯关 / 人机 / 无尽 / 团队赛里只操一个）：矮横屏改双栏靠这个类挂钩，
+  // 双人同屏的两块摇杆各占半边，双栏反而挤，不加。
+  const solo = opts.human.p2 === undefined;
+  const root = el("div", solo ? "dvs-arena dvs-solo" : "dvs-arena");
   const bar = el("div", "dvs-bar");
   if (opts.onExit) bar.appendChild(button("dvs-back", "◀ 返回", () => opts.onExit?.()));
   const title = el("div", "dvs-bartitle", opts.title);
@@ -690,10 +744,19 @@ function mountArena(opts: ArenaOptions): Arena {
   const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
     Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
 
-  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
-  function stageClipBottom(): number {
+  /**
+   * 往上找平台舞台(.game-stage,定高会裁内容):返回它的可视下沿和它自己滚了多远。
+   * 量不到就 clip = NaN。
+   *
+   * 舞台被滚下去一截时画布的 rect.top 会跟着往上跑,直接拿 `clip - rect.top` 当余量
+   * 会凭空多出一个 scrollTop——那一刀就钳松了,滚回顶部画布又压在裁切线上。
+   * 把 scrollTop 一并交出去,余量按「滚回顶部」算,和当前滚到哪儿无关。
+   */
+  function stageBox(): { clip: number; scrolled: number } {
     let node: HTMLElement | null = root.parentElement ?? null;
+    let scrolled = 0;
     for (let i = 0; node && i < 10; i++) {
+      scrolled += typeof node.scrollTop === "number" ? node.scrollTop : 0;
       if (typeof node.className === "string" && node.className.includes("game-stage")) {
         if (typeof node.getBoundingClientRect !== "function") break;
         const r = node.getBoundingClientRect();
@@ -701,19 +764,21 @@ function mountArena(opts: ArenaOptions): Arena {
           typeof node.clientHeight === "number" && node.clientHeight > 0
             ? (node.clientTop || 0) + node.clientHeight
             : r.height;
-        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) {
+          return { clip: r.top + inner, scrolled };
+        }
         break;
       }
       node = node.parentElement ?? null;
     }
-    return Number.NaN;
+    return { clip: Number.NaN, scrolled };
   }
 
   /** 画布显示高按可视余量钳一刀(见 canvasDisplayCapPx 的注释) */
   function fitDisplay(): void {
     if (!canvas.style) return;
     if (typeof canvas.getBoundingClientRect !== "function" || typeof root.getBoundingClientRect !== "function") return;
-    const clip = stageClipBottom();
+    const { clip, scrolled } = stageBox();
     if (!Number.isFinite(clip)) return;
     // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
     canvas.style.maxHeight = "";
@@ -722,7 +787,12 @@ function mountArena(opts: ArenaOptions): Arena {
     if (!Number.isFinite(canvasRect.top)) return;
     // 画布下面的家当(名牌 / 提示 / 触屏按钮排):高度不随画布显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(root.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    const short = isShortLandscape(globalThis.innerWidth || 0, globalThis.innerHeight || 0);
+    const px = canvasDisplayCapPx(
+      canvasRect.height,
+      clip - (canvasRect.top + scrolled) - below - 4,
+      short ? MIN_CANVAS_DISPLAY_SHORT_PX : MIN_CANVAS_DISPLAY_PX
+    );
     if (px !== null) {
       // CSS 里画布是 width:100%,只钳高会压扁画面;宽也按 16:9 一起钳才是等比
       canvas.style.maxHeight = `${px}px`;
