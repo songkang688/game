@@ -1,14 +1,15 @@
 # 三人组第 16 轮 · 测试修复员 B
 
-基线：`origin/game-1.3` @ `7a832aa8`。
+基线：rebase 后 `7d2bc1a3` 之上。代码 **`7a2d560b`**。
 范围：**只做 N-86**（brave-path 大厅）。未改 r15 N-75…N-85 在途游戏，未重做 N-64…67 / N-69…74 / N-52…57 / N-60–62 第三套钳 / N-45 / N-40。A 独占未碰。
 
 ## 水位
 
-- 进场：`7a832aa8`
+- 进场：`7a832aa8` → rebase `7d2bc1a3`
 - `brave-path` 全套 388 绿（含 N-32 `endlessFight.r9`）
-- Chrome 915×412：`page.setViewport` + `getBoundingClientRect`，四张 `.bvp-mode` 底边 ≤ 412、高 ≥ 44
-- 全量 `npm test` / `npm run build` 见交卷 SHA
+- Chrome 915×412：`setViewport(915,412)` + `getBoundingClientRect`，四张 `.bvp-mode` 底边 ≤ 412、高 ≥ 44
+- `npm test`：**19464** 全绿（1177 files）
+- `npm run build`：tsc + vite 绿
 
 ## 本轮已关
 
