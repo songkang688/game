@@ -181,16 +181,22 @@ const CSS = `
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
-/* N-124 模式:1024×768 不命中 500 档;粗指针中间档复用双栏,500 原文不动 */
-@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+/* 内联 <style> 占掉第一格,D-pad 会掉出 412;仅矮宽横屏藏掉,500 双栏原文不动 */
+@media (max-height:500px) and (min-width:640px){
+  .as-wrap>style{display:none;}
+  .as-wrap{max-height:calc(100dvh - 76px);}
+}
+/* N-124 模式:1024×768 不命中 500 档;中间档复用双栏,500 原文不动 */
+@media (max-height:820px) and (min-width:640px){
+  .as-wrap>style{display:none;}
   .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
-    gap:4px 10px;align-items:stretch;height:100%;max-height:100%;min-height:0;overflow:hidden;}
+    gap:4px 10px;align-items:stretch;height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;}
   .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
   .as-wrap>.as-clues{grid-column:2;max-height:28%;overflow:auto;padding:6px 8px;gap:3px;}
-  .as-wrap>.als-list{grid-column:2;max-height:56px;}
-  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
   .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
+  .as-wrap>.als-list{grid-column:2;max-height:56px;}
+  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
@@ -1163,15 +1169,11 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (vh > 0 && vh <= 500 && vw >= 640) {
       const cap = Math.max(96, room - 8);
       if (nextH > cap) nextH = cap;
-    } else if (
-      vh > 0 &&
-      vh <= 820 &&
-      vw >= 640 &&
-      typeof globalThis.matchMedia === "function" &&
-      globalThis.matchMedia("(pointer:coarse)").matches
-    ) {
+      if (nextH > vh - 8) nextH = Math.max(96, vh - 8);
+    } else if (vh > 0 && vh <= 820 && vw >= 640) {
       const cap = Math.max(96, room - 8);
       if (nextH > cap) nextH = cap;
+      if (nextH > vh - 8) nextH = Math.max(96, vh - 8);
     }
     cssH = nextH;
     view = clampView(view, viewport());

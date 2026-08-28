@@ -288,6 +288,7 @@ const CSS = `
     background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
     box-shadow:0 -8px 14px rgba(200,170,120,.18);
   }
+  .se-wrap{max-height:calc(100dvh - 96px);min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
   .se-board-wrap{max-height:min(280px,48dvh);max-width:min(280px,48dvh,calc(100dvh - 140px));}
 }
 @media (max-height:820px) and (min-width:700px) and (pointer:coarse){

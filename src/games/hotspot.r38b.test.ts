@@ -23,13 +23,14 @@ describe("r38 B · N-174/175 + 抽验裁切中间档", () => {
 
   it("果盆 / 找物 / 冰火：820 粗指针中间档，500 原文仍在", () => {
     const fs = read("fruit-stack/index.ts");
+    expect(fs).toContain("@media (max-height:500px)");
     expect(fs).toContain("@media (max-height:820px) and (pointer:coarse)");
     expect(fs).toContain("@media (max-width:430px) and (min-height:700px)");
     expect(fs).toContain(".fs-pad{position:sticky;bottom:0");
 
     const as = read("alien-seek/index.ts");
     expect(as).toContain("@media (max-height:500px) and (min-width:640px)");
-    expect(as).toContain("@media (max-height:820px) and (min-width:640px) and (pointer:coarse)");
+    expect(as).toContain("@media (max-height:820px) and (min-width:640px)");
     expect(as).toContain("vh <= 500 && vw >= 640");
 
     const iff = read("ice-fire-forest/index.ts");

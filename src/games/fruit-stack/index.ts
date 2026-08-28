@@ -144,6 +144,10 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+@media (max-height:500px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,244,248,.35),#FFF4F8 40%);}
+}
 /* N-124 模式:768 不命中 500;粗指针中间档钉投放键。玩法/物理零改 */
 @media (max-height:820px) and (pointer:coarse){
   .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
@@ -884,7 +888,13 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     const gap = opts.seats > 1 ? 10 : 0;
     const per = (avail - gap) / opts.seats;
     const guessed = Math.max(220, (window.innerHeight || 720) - 300);
-    const stageH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const view = host.closest?.(".l99-view") as HTMLElement | null;
+    const viewH = view && view.clientHeight > 0 ? view.clientHeight : 0;
+    const vhCap = Math.max(180, (window.innerHeight || 720) - 96);
+    const stageH = Math.max(
+      180,
+      Math.min(stagePlayRoom(host, { w: avail, h: guessed }).h, viewH > 0 ? viewH : vhCap, vhCap),
+    );
     const chrome = Math.max(
       92,
       (hud.offsetHeight || 0) + (tip.offsetHeight || 0) + (pad.offsetHeight || 0) + 12,
