@@ -110,16 +110,77 @@ r4 A/B/C、r5 D/E/F、r6 G/H、r8 I/J、r9 K 仍有效。本轮 **不新开字�
 2. shape-kingdom 作图关、kitty-care 养成关、math-farm 第 1 关、music-stars 玩法键、双人竖屏五款、garden-guard 速度条、red-blue-tap 两态 915、gold-hook 模式选单。
 3. r8/r9 干净名单继续有效（过关失败覆盖层、攻略两形态、rootgate、组字/限时**基线**、结算弹窗竖屏）。
 4. 不要把 B/A 在途分支上的修复当成主干已合。
+5. **R2 补测追加收口**：N-33 结算 sticky 浏览器实锤（再玩一次 276–320 / 回首页 332–376 均 `inView`）；N-38 永久文案「管理员权限已永久开启」；fruit-slice / rainbow-run / poop-hero / garden-guard 关内 / kitty-care 关内 915×412 干净；失败文案无责骂词；`src/**` 面向孩子文案商标扫描干净（排除测试黑名单与 `.cursor/skills`）。
 
-## 七、下一轮 A/B 最该先做的 10 条（与 r10 playbook 一致）
+## 七、下一轮 A/B 最该先做的（与更新后的 r10 playbook 一致）
 
-1. **先 fetch**：A 收 `trio-r9-tester-a-7779`（N-33/34/35/36/37/38/30/收藏册）与 `tester-a-r7-fixes-def4`（N-27/N-32/L-2，N-30 撞车取先合）；B 收 `casual-duo-fit-r5-b-4683` 并二合一守门测试。
-2. **N-39** 蓝本地图 `showMap(true)` 四调用点（主干仍开，r9-A 没动）。
-3. **N-43** color-fun 全关型矮横屏（A 学习/创作）。
-4. **N-44** math-farm 竖式关答案钮（A，扩 L-1 紧凑选择器或钳插图高）。
-5. **N-45** gold-hook 商店 veil（B，配方 I）。
-6. 合入后复测 N-37 × 限时 135（r9 加重档）。
-7. N-25 fight-king 塔（主干仍开；B 若未覆盖）。
-8. N-15 bomb-buddies 915 双人六键（B 在途，合入后用 915 对战态验收）。
-9. N-31 训练场触屏键（B）。
-10. S-4 扩容 `.qz-jump-input` 38→44（r9-A 明确没动）+ L-3 贴纸（若 L-2 已由 r7-A 在途带走则只验真机序列化）。
+1. **先 fetch 最新 `game-1.3`**：A `39d61b50`、B `b2c07a6e` **已经合入**，N-33/34/35/36/37/38/30/收藏册/N-25/N-31 源码声称/N-1/N-32/N-26/N-27/N-29/N-23 **禁止再写第三份**。
+2. **N-39**（主干 `showMap()` 四处仍默认 false；hop-pads 地图当前关 426–502 整格线下）。
+3. **N-43 / N-44**（A 创作/竖式）+ **S-4 `.qz-jump-input` 38px** + **L-2/L-3**。
+4. **N-45** gold-hook 商店 + **N-10** 棋类 + **N-40** duo-rush 工具条 + **N-15** 泡泡双人六键。
+5. **N-46** sky-squad 六键切半（r5 曾标干净，本轮关内操作排抓手）。
+6. **N-47** 模式菜单芯片 <44px（bowling 34 / 王子公主 37 / 坦克模式 38）。
+7. 旧号复证仍开：N-11 bowling 关内、N-19 tank D-pad、N-22 combo 三钮、C-8 snow-fight/shoot-range/hue-hand、N-16 走廊、N-17 王子关内、N-31 训练场假人行仍线下。
+
+---
+
+## 八、R2 学习员换面补测（主档 915×412；`game-1.3` = A+B 第 9 轮已合）
+
+> 基线 commit `c61fb0a5`（本文件计划段）。preview `http://127.0.0.1:4174`（4173 已被占用）+ puppeteer-core + `/usr/local/bin/google-chrome`。脚本/截图 `/tmp/trio-r10-measure.mjs` `/tmp/trio-r10-shots/` **不进库**。每档独立 `createBrowserContext`。
+> 进场水位：`bddb8e50` 工作树 **`npm test` 1109 文件 / 19330 用例全绿**；`npm run build` 通过。相对 r9 的 1095/19288 = A/B r9 测试文件入账，只增不减。
+> `git diff` 证明本补测 **零改 `src/**`**。不重写上文 N-43…N-45，不重测 r9 已结案的 hop-pads/gold-hook 关内、红蓝同屏、麻将/puff 牌宽（仍开号留给 playbook，不换新号）。
+
+### 8.1 对账：A/B 第 9 轮已在 `origin/game-1.3`
+
+| 批次 | SHA | 本轮判定 |
+| --- | --- | --- |
+| A r9 `fix(r9-A)` | `39d61b50` | **N-33** 源码 `.dialog-buttons{position:sticky}` + 本轮 duo-rush 结算弹窗两钮在屏、暂停壳层五钮在屏 → **✅ 关账，勿再做 sticky**。**N-38** root 永久小字 ✅。收藏册 44 ✅。**N-34/35/36/30** 源码在，勿重做。**N-37** 源码 `:has(.l99-jump)` 在；root×clock-house L1 关内 crop 0 线下 0；root×math-farm 第 81 关三枚 `.qz-choice` top **381 切底**（见观察，不新开号）。 |
+| B r9 `fix(qa-r9)` | `b2c07a6e` | **N-25/N-1/N-32/N-26/N-27/N-29/N-23** 源码合入 → playbook **✅ 勿重写**。**N-31** 源码有 `.fk-train-shell` sticky 注释，但 915×412 训练场「站立/蹲防/随机反击」top **447**、「开打 ▶」top **531** 仍整排线下、钮高 38px → **仍开同一号**。 |
+| N-39 | 主干 | `showMap()` 初次 `:1100` 与三处回地图仍默认 false。hop-pads 地图 `.l99-node-cur` **426–502 整格线下**（与 r9 逐位一致）。并行 A 分支或有 HTMLElement 修补，**以 `game-1.3` 为准**。 |
+| `.qz-jump-input` | `quiz99.ts:153` | 仍 `min-height:38px`。 |
+
+### 8.2 干净（本抓手结案，下轮不要再量这些 id 的这一态）
+
+- **fruit-slice / rainbow-run / poop-hero / garden-guard 关内 / kitty-care 关内**：915×412 crop 0 或 6，折叠线下 0。
+- **N-33**：结算 `position:sticky`，「🔁 再玩一次」top 276、「🏠 回首页」top 332，均 `inView`；坦克关内打开壳层暂停，五钮 108–376 全在屏。
+- **失败只鼓励**：`quiz99.ts` `FAIL_LINE` =「这一关的题目有点调皮，我们休息一下再来一次！」；`level99` 失败池含「就快成功了…加油」；`rg` 面向孩子源码无「真笨/真蠢/你不行/废物/YOU LOSE」。clock-house 本轮未打出 lose 弹窗（乱点未触达失败阈值），以源码+扫描为准。
+- **商标**：排除 `.cursor/skills`、`*.test.ts`、QA 黑名单表之后，`src/games/**` 孩子可见文案/注释未命中计划黑名单；`candy-swing` 头注已是「划绳物理益智」。命中仅 `src/qa-window2/r3lib.ts` 与 `docs/plan*` / `docs/upgrade-prompts*` 的扫描词表。
+- **N-38** 文案：root 永久 × clock-house L1 小字「管理员权限已永久开启」，不再出现上亿分钟。
+
+### 8.3 旧号复证（不换号）
+
+| # | 对象 | 本轮 915×412 | 备注 |
+| --- | --- | --- | --- |
+| N-10 | xiangqi / gomoku / weiqi-garden | 裁 437 / 331 / 188；canvas 出屏 245 / 216 / 43；工具行 top 687 / 638 / 463 | 与 r9 同数量级 |
+| N-40 | duo-rush 赛道 | crop 175；暂停/再来/换玩法 top **462** 整排线下；画布 `offBottom 0` | 配方 L，勿钳已在屏画布 |
+| N-15 | bomb-buddies 双人合作 | 六键 top 498–600；canvas 出屏 69 | r10 前文已强调必须含 915 对战态 |
+| N-11 | bowling-lane 关内 | crop 237；◀🎳▶↩ top **587**；暂停 34×67 | r5 原数 237 |
+| N-19 | tank-battle 闯关 | stage crop 0（`.tkb-root` 自滚）；D-pad/开火 top **503–552**；暂停 **32px** | r5 口径 |
+| N-22 | combo-clash 关内 | crop 131；轻/重/必杀 top **451** | r5 原数 131 |
+| C-8 | snow-fight 闯关 | crop 172；六钮 462–514 | r4 横屏 172 |
+| C-8 | shoot-range 闯关 | crop 339；键 560–660；canvas 出屏 90 | r4 336/87 |
+| C-8 | hue-hand 关内 | crop 335；抽牌/出牌/暂停 top **416** | r5 新基数 335 |
+| N-17 | prince-princess 闯关 | crop 185；六键 467–513；模式钮 37px | r7 原账 |
+| N-16 | adventure-king 走廊/遗迹 | crop 258；六键 top **567**；canvas 出屏 147 | A 只修了古堡 N-30 |
+| N-31 | fight-king 训练场 | 假人三钮 + 开打仍线下 | B 合入后 915 未绿 |
+| N-39 | hop-pads 地图 | 当前关 426–502 | 配方 K |
+
+### 8.4 新发现（N-46 起；旧账不换号）
+
+| # | 对象 | 实测 | 性质 |
+| --- | --- | --- | --- |
+| N-46 | **sky-squad 关内六键** 915×412 切半（r5 曾写「crop 71、无控件折叠线下」已过期） | 闯关六键 `.sks-key` top **397** h=42 → bottom 439 切出 27px，暂停 33px；**双人同屏** 六键缩到 **36×36**、暂停仍 33，crop 38、折叠线下 0 | 🔧 配方 G：键排贴底或画布再让一档；双人热区抬回 44 |
+| N-47 | **模式菜单芯片热区**（本轮才量的开关态，不是关内） | bowling-lane 菜单「双人对战/人机/无尽/三档 AI」**34×102 / 32px 高**；prince-princess 菜单三人模式钮 **37px**；tank-battle 菜单「单人闯关/无尽/对战」**38px**；shoot-range 模式入口 40px（贴线观察） | 🔧 只改菜单芯片 `min-height:44`，勿动关内判定 |
+
+**未单列新号**：music-stars 音量/音色芯片 top 428 线下——r10 前文已观察，修创作皮肤顺手。fight-king 模式卡「训练场…」top 346 切底 crop 248——观察，N-25 合入后菜单层未单独立项。
+
+### 8.5 配方补笔（不新开字母）
+
+- **配方 F** 继续吃 N-11/N-15/N-19：`stagePlayRoom` 没减自家键排。坦克本轮再证实 crop=0 陷阱。
+- **配方 L** 继续吃 N-40：手势面在屏 ≠ 工具条在屏。
+- **配方 K** 继续吃 N-39。
+- **N-46** 归配方 G（矮横屏键排与画布抢高）；r5 的 sky-squad「HUD 换行干净」不能当操作排结案。
+
+### 8.6 skills
+
+`frontend-design`：1.3 窗口款（坦克/雪仗/泡泡/射击/保龄）画布好看，键排在 412 高下沿——与 N-43 同一句「好看但点不到」。`canvas-design`：棋类 N-10 盘面按高仍 >412。不重复 r9 的 K/L 长文。
