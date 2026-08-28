@@ -288,7 +288,9 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
   wrap.className = "ba-wrap";
   wrap.innerHTML = `
     <style>
-      .ba-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F4FF, #FFEFF7); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: none; }
+      /* PT-1:wrap 不许锁 touch-action:none——地图态/关内溢出全靠手指滚舞台,
+         锁了就是「往下划不了」。瞄准只吃画布,画布自己有 touch-action:none。 */
+      .ba-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F4FF, #FFEFF7); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: manipulation; }
       .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 8px; }
       .ba-badge { background: linear-gradient(180deg, #ffffff, #F4F9FF); border: 1px solid rgba(90,140,200,.16); border-radius: 12px; padding: 5px 7px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 5px rgba(93,84,110,.16); font-size: 14px; white-space: nowrap; }
       .ba-level { flex: 0 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; }
@@ -317,6 +319,17 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .bba-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 #E7C489; }
       .bba-swap { min-width: 44px; min-height: 34px; background: #FFDCEB; color: #A8467A; box-shadow: 0 3px 0 #EEB6CF; }
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
+      /* PT-2:平板/宽屏选关地图别缩在 400px 窄柱里(candy-swing cs-view-map 同款) */
+      @media (min-width: 700px) {
+        .ba-wrap.ba-view-map { max-width: 720px; width: 100%; }
+        .ba-wrap.ba-view-map .ba-grid { grid-template-columns: repeat(8, 1fr); }
+        .ba-wrap.ba-view-map .bba-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
+      }
+      /* PT-3:高个子宽屏(平板横屏)关内画布按可用高度长大,不再钉死 400px;
+         矮横屏(min-height 不满足)与手机竖屏(min-width 不满足)完全不受影响 */
+      @media (min-width: 700px) and (min-height: 700px) {
+        .ba-wrap:not(.ba-view-map) { max-width: clamp(400px, calc((100dvh - 240px) * 0.75), 520px); width: 100%; }
+      }
       ${touchUpliftCss([".ba-btn", ".bba-mode", ".bba-swap"], { minWidth: true })}
       ${bodyFontUpliftCss([".ba-msg"])}
     </style>
@@ -416,6 +429,9 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     topBar.style.display = "none";
     canvas.style.display = "none";
     mapEl.style.display = "";
+    // PT-2:地图态挂宽屏放宽类,进关摘掉(candy-swing cs-view-map 同款;
+    // 单测桩没有 classList,照 cs 先例用 className 直赋值)
+    wrap.className = "ba-wrap ba-view-map";
     mapSubEl.textContent = `⭐ ${totalStars()}/${LEVELS.length * 3} · 通关 ${progress.stars.filter((s) => s > 0).length}/${LEVELS.length}`;
     endlessBtn.textContent = bestEndless > 0 ? `♾️ 无尽墙 · 最好 ${bestEndless} 分` : "♾️ 无尽墙";
     themesEl.innerHTML = "";
@@ -518,6 +534,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
+    wrap.className = "ba-wrap";
     levelIndex = index;
     const def = LEVELS[index];
     grid = parseLayout(def.layout);
@@ -556,6 +573,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
+    wrap.className = "ba-wrap";
     endless = true;
     endlessPoints = 0;
     rowsPushed = 0;

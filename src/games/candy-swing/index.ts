@@ -404,7 +404,8 @@ export function mount(api: GameApi): CandySwingHandle {
       .cs-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .cs-msg { text-align: center; min-height: 20px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14px; }
       .cs-hidden { display: none; }
-      .cs-map { max-height: min(960px, max(180px, calc(100dvh - 120px))); overflow-y: auto; }
+      /* PT-4:预算含壳顶栏+舞台边框+wrap 上下 padding+msg 行,-120px 时外壳仍溢 18px 被裁 */
+      .cs-map { max-height: min(960px, max(180px, calc(100dvh - 138px))); overflow-y: auto; }
       .cs-lv.cs-lv-cur { outline: 3px solid #e0679f; }
       .cs-map-title { text-align: center; font-size: 20px; font-weight: 800; color: #D65C8B; margin: 4px 0 2px; }
       .cs-map-total { text-align: center; font-size: 14px; font-weight: 700; color: #B06AB3; margin-bottom: 10px; }
@@ -474,6 +475,12 @@ export function mount(api: GameApi): CandySwingHandle {
         .cs-wrap.cs-view-map { max-width: 720px; width: 100%; }
         .cs-wrap.cs-view-map .cs-grid { grid-template-columns: repeat(8, 1fr); }
         .cs-wrap.cs-view-map .cds-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
+      }
+      /* PT-3:高个子宽屏(平板横屏 1180×820 等)关内 3:4 画布按可用高度长大到最多 520px,
+         不再钉死 400px 窄柱;矮横屏 915×412(min-height 不满足)与手机竖屏(min-width
+         不满足)完全走不进这一档,N-29 的矮屏账不受影响 */
+      @media (min-width: 700px) and (min-height: 700px) {
+        .cs-wrap:not(.cs-view-map) { max-width: clamp(400px, calc((100dvh - 240px) * 0.75), 520px); width: 100%; }
       }
     </style>
     <div class="cs-map">
