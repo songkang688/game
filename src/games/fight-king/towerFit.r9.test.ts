@@ -22,7 +22,7 @@ describe("N-25 格斗塔出战八宫格矮屏折叠", () => {
 
   it("塔壳有当前出战摘要 + 换人展开，不改 FIGHT_MIN_H", () => {
     expect(FIGHT_MIN_H).toBe(150);
-    expect(src).toContain('class="fk-card fk-hero-row"');
+    expect(src).toContain('el("div", "fk-card fk-hero-row")');
     expect(src).toContain("当前出战：");
     expect(src).toContain("换人 ▾");
     expect(src).toContain(".fk-hero-compact:not(.fk-hero-open) .fk-grid{display:none;}");
