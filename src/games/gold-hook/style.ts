@@ -44,7 +44,7 @@ export const CSS = `
   touch-action:manipulation;cursor:pointer;}
 
 /* 底部一行:放绳 + 道具栏。nowrap 保证它永远是一行,min-height 保证热区够小手点 */
-.gdh-ctrl{display:flex;gap:6px;justify-content:center;align-items:stretch;flex-wrap:nowrap;}
+.gdh-ctrl{display:flex;gap:6px;justify-content:center;align-items:stretch;flex-wrap:nowrap;position:relative;z-index:3;}
 .gdh-btn{border:none;border-radius:999px;padding:9px 14px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe6;color:#7A5A2E;box-shadow:0 3px 0 rgba(170,140,90,.34);
   white-space:nowrap;min-height:${TOUCH_MIN}px;min-width:${TOUCH_MIN}px;display:inline-flex;
@@ -72,9 +72,10 @@ export const CSS = `
 .gdh-toast.gdh-on{opacity:1;}
 
 /* 首尾的 auto 外边距代替 justify-content:center:内容装得下时照样居中,
-   装不下时 auto 收成 0,从顶上开始往下排,标题不会被剪掉,滚动条也够得着 */
+   装不下时 auto 收成 0,从顶上开始往下排,标题不会被剪掉,滚动条也够得着。
+   z-index 压过底栏 HUD:商店打开时 veil 盖住放绳/商店/暂停,关闭钮不会被 HUD 挡住 */
 .gdh-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-  gap:10px;text-align:center;padding:16px;background:rgba(255,251,244,.95);border-radius:16px;overflow:auto;}
+  gap:10px;text-align:center;padding:16px;background:rgba(255,251,244,.95);border-radius:16px;overflow:auto;z-index:6;}
 .gdh-veil>:first-child{margin-top:auto;}
 .gdh-veil>:last-child{margin-bottom:auto;}
 .gdh-veil[hidden]{display:none;}
@@ -82,6 +83,15 @@ export const CSS = `
 .gdh-veil-sub{font-size:14px;font-weight:700;color:#7A6242;line-height:1.6;max-width:320px;}
 
 .gdh-shoplist{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;}
+/* N-45 配方 I:滚动切在货架,「接着挖」钉在 footer。暂停 veil 不挂这套类 */
+.gdh-veil--shop{overflow:hidden;justify-content:flex-start;min-height:0;}
+.gdh-veil--shop>:first-child{margin-top:0;}
+.gdh-veil--shop>:last-child{margin-bottom:0;}
+.gdh-shophead{flex:none;width:100%;max-width:320px;}
+.gdh-veil--shop .gdh-shoplist{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+.gdh-shopfoot{flex:none;position:sticky;bottom:0;z-index:2;width:100%;max-width:300px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 4px 2px;
+  background:#FFFBF4;box-shadow:0 -10px 12px #FFFBF4;}
 .gdh-shopitem{display:flex;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:8px 10px;
   box-shadow:0 3px 8px rgba(170,140,90,.22);text-align:left;}
 .gdh-shopemoji{font-size:24px;line-height:1;}
@@ -128,8 +138,9 @@ export const CSS = `
   .gdh-ctrl{gap:4px;}
   .gdh-kit{padding:0 7px;}
   .gdh-tip{font-size:11px;}
-  /* 商店那三行在窄屏上得瘦一圈,不然浮层比画面还高,得滚动才看得全 */
+  /* 商店那三行在窄屏上得瘦一圈;货架仍自滚,footer 不跟着重排 */
   .gdh-veil{padding:10px;gap:7px;}
+  .gdh-shopfoot{gap:6px;padding:6px 0 0;}
   .gdh-veil-title{font-size:17px;}
   .gdh-veil-sub{font-size:12px;line-height:1.5;}
   .gdh-shoplist{gap:6px;}

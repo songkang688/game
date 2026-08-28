@@ -212,6 +212,7 @@ export const CLF_CSS = `
     max-height:min(200px,calc(100dvh - 120px));align-self:stretch;}
   .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:4px;
     width:100%;max-width:100%;}
+  .clf-wrap.clf-scrolly{overflow:hidden;}
   .clf-wrap .clf-chips{max-height:36px;}
   .clf-wrap .clf-mixer,.clf-wrap .clf-tools,.clf-wrap .clf-primaries{flex-wrap:nowrap;max-width:100%;}
   .clf-wrap .clf-palette{max-width:100%;justify-content:center;padding:0 2px;}

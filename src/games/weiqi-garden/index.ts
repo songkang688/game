@@ -1122,7 +1122,7 @@ function hostWidth(host: HTMLElement): number {
   const ih = (globalThis as { innerHeight?: number }).innerHeight;
   const short = typeof ih === "number" && ih > 0 && ih <= 500;
   const chrome = short ? 168 : 220;
-  const floor = short ? 180 : 240;
+  const floor = short ? 156 : 240;
   const room = stagePlayRoom(host, { w: byWidth, h: byWidth + chrome });
   return Math.max(floor, Math.min(byWidth, room.h - chrome));
 }

@@ -874,7 +874,12 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     const gap = opts.seats > 1 ? 10 : 0;
     const per = (avail - gap) / opts.seats;
     const guessed = Math.max(220, (window.innerHeight || 720) - 300);
-    const roomH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const stageH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const chrome = Math.max(
+      92,
+      (hud.offsetHeight || 0) + (tip.offsetHeight || 0) + (pad.offsetHeight || 0) + 12,
+    );
+    const roomH = Math.max(140, stageH - chrome);
     const byH = (roomH / lv.box.h) * lv.box.w;
     const widthPx = Math.max(120, Math.min(per, byH));
     for (const b of bowls) b.layout(widthPx);

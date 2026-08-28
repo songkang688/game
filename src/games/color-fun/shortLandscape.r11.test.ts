@@ -41,7 +41,8 @@ describe("N-43 color-fun 矮横屏双栏（配方 G/J）", () => {
     expect(dock).toContain('grid-area:stage');
     expect(dock).toContain('grid-area:ops');
     expect(dock).toContain("position:sticky");
-    expect(dock).not.toContain("clf-scrolly");
+    expect(dock).toContain(".clf-wrap.clf-scrolly{overflow:hidden;}");
+    expect(dock).toContain(".clf-wrap .clf-mixer,.clf-wrap .clf-tools,.clf-wrap .clf-primaries{flex-wrap:nowrap");
   });
 
   it("判定 / 线稿 / 混色表零触碰", () => {
