@@ -170,7 +170,7 @@ const CSS = `
 .fk-h svg{vertical-align:-4px;}
 .fk-mode-t{font-size:16px;font-weight:900;color:#5b4890;}
 .fk-mode-d{font-size:14px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
-.fk-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
+.fk-btn{border:none;border-radius:14px;padding:9px 15px;min-height:44px;font-size:15px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;}
 .fk-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,95,170,.28);}
 .fk-btn[disabled]{opacity:.45;cursor:default;box-shadow:none;transform:none;}
@@ -184,7 +184,7 @@ const CSS = `
 .fk-pick{background:#fff;border-radius:16px;padding:10px;box-shadow:0 3px 10px rgba(140,120,190,.14);}
 .fk-pick-t{font-size:14px;font-weight:900;margin-bottom:6px;}
 .fk-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
-.fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
+.fk-ch{border:none;border-radius:13px;padding:7px 2px;min-height:44px;cursor:pointer;font-family:inherit;background:#f6f2ff;
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}
 .fk-ch-a{width:28px;height:28px;flex:0 0 auto;}
@@ -203,6 +203,15 @@ const CSS = `
   .fk-tower-hero{padding:10px;}
 }
 .fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
+/* N-57：训练场选人壳把「开打」钉在舞台底。关内 .fk-train-shell 键排零触碰 */
+@media (max-height:500px){
+  .fk-select-shell .fk-bar-go{
+    position:sticky;bottom:0;z-index:5;margin-bottom:0;
+    background:linear-gradient(180deg,rgba(255,253,255,0),#fffdff 10px);
+    padding:8px 0 2px;
+  }
+  .fk-select-shell .fk-info{min-height:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
   box-shadow:0 4px 14px rgba(140,120,190,.2);}
 .fk-canvas{display:block;width:100%;height:auto;touch-action:none;}
@@ -1867,7 +1876,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     let ai: AiLevel = 1;
     let dummy: DummyMode = "stand";
 
-    const card = el("div", "fk-card");
+    const card = el("div", "fk-card fk-select-shell");
     const bar = el("div", "fk-bar");
     bar.appendChild(
       button("fk-btn", "◀ 返回", () => {
@@ -2002,7 +2011,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       card.appendChild(badge);
     }
 
-    const goRow = el("div", "fk-bar");
+    const goRow = el("div", "fk-bar fk-bar-go");
     goRow.style.marginTop = "12px";
     goRow.appendChild(
       button("fk-btn fk-btn-go", "开打 ▶", () => {

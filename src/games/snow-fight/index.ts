@@ -244,6 +244,17 @@ const CSS = `
   .snf-bar{gap:6px;margin-bottom:4px;}
   .snf-chip{padding:4px 9px;font-size:14px;}
 }
+/* N-55：矮横屏两块操作牌并排靠画布右侧，十二键留在 412 高内 */
+@media (max-height:500px) and (min-width:640px){
+  .snf-wrap:has(.snf-pad-duo){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;width:100%;}
+  .snf-wrap:has(.snf-pad-duo) .snf-hud{grid-column:1/-1;}
+  .snf-wrap:has(.snf-pad-duo) .snf-board{grid-column:1;min-width:0;}
+  .snf-wrap:has(.snf-pad-duo) .snf-say,.snf-wrap:has(.snf-pad-duo) .snf-tip{grid-column:1;}
+  .snf-wrap:has(.snf-pad-duo) .snf-pads{
+    grid-column:2;grid-row:2;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;
+    width:auto;max-width:none;position:sticky;top:0;gap:6px;
+  }
+}
 @media (prefers-reduced-motion:reduce){.snf-btn:active,.snf-btn-hold{transform:none;}}
 `;
 
@@ -814,6 +825,14 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     return Math.round(vv?.height ?? window.innerHeight ?? 0);
   }
 
+  function shortLandscapePads(): boolean {
+    try {
+      return globalThis.matchMedia?.("(max-height: 500px) and (min-width: 640px)")?.matches === true;
+    } catch {
+      return false;
+    }
+  }
+
   function boxOf(el: HTMLElement): { top: number; height: number } {
     const r = el.getBoundingClientRect?.();
     if (!r) return { top: 0, height: el.offsetHeight || 0 };
@@ -825,8 +844,12 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const screen = screenH();
     const top = boxOf(board).top;
     if (screen <= 0 || top <= 0 || top >= screen) return null;
+    const padsBeside = opts.humans === 2 && shortLandscapePads();
     const below =
-      Math.max(boxOf(say).height, SAY_RESERVE) + boxOf(tip).height + boxOf(pads).height + BELOW_PAD;
+      Math.max(boxOf(say).height, SAY_RESERVE) +
+      boxOf(tip).height +
+      (padsBeside ? 0 : boxOf(pads).height) +
+      BELOW_PAD;
     return screen - top - below;
   }
 

@@ -279,10 +279,31 @@ const CSS = `
 .dua-rules p{color:#6A5A4A;font-size:14px;line-height:1.75;margin:6px 0;}
 .dua-rules-close{position:sticky;top:0;float:right;border:none;border-radius:14px;background:#FFB37E;color:#7A3A10;
   font-size:15px;font-weight:800;padding:9px 16px;cursor:pointer;box-shadow:0 3px 0 #E08F55;font-family:inherit;min-height:44px;}
+.dua-setup-foot{display:flex;flex-direction:column;gap:8px;}
 @media (max-width:380px){
   .dua-court{height:168px;}
   .dua-sc{font-size:14px;padding:4px 6px;}
   .dua-clock b{font-size:18px;}
+}
+/* N-52：菜单账 ≠ 对局账。矮横屏菜单把开擂钉底；对局两半场并排，暂停钉底 */
+@media (max-height:500px) and (min-width:640px){
+  .dua-wrap{max-width:none;}
+  .dua-panel{gap:6px;padding:2px;}
+  .dua-group{padding:6px 8px;}
+  .dua-chip small{display:none;}
+  .dua-setup-foot{
+    position:sticky;bottom:0;z-index:4;gap:6px;
+    background:linear-gradient(180deg,rgba(228,239,255,0),#E4EFFF 14px);
+    padding:8px 0 2px;
+  }
+  .dua-game{display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:4px;align-items:start;}
+  .dua-top,.dua-tags,.dua-btns,.dua-msg{grid-column:1/-1;}
+  .dua-court{height:min(168px,calc(100dvh - 148px));margin-bottom:0;}
+  .dua-btns{
+    position:sticky;bottom:0;z-index:3;
+    background:linear-gradient(180deg,rgba(228,239,255,0),#E4EFFF 10px);
+    padding-top:6px;
+  }
 }
 @media (prefers-reduced-motion:reduce){
   .dua-start:active,.dua-pad button:active{transform:none;}
@@ -362,8 +383,10 @@ export function mount(api: GameApi): { destroy: () => void } {
         </div>
       </div>
       <div class="dua-lead dua-best"></div>
+      <div class="dua-setup-foot">
       <button class="dua-rulesbtn" type="button">📖 怎么玩(点我看规则与键位)</button>
       <button class="dua-start" type="button">开擂 ▶</button>
+      </div>
     </div>
     <div class="dua-game dua-hidden">
       <div class="dua-top">

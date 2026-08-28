@@ -163,7 +163,7 @@ const CSS = `
 .tkb-brick{background:#ffeed8;color:#a06a2c;}
 .tkb-key:focus-visible,.tkb-act:focus-visible,.tkb-open:focus-visible,.tkb-mini-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .tkb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.tkb-act{border:none;border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:800;cursor:pointer;
+.tkb-act{border:none;border-radius:999px;padding:7px 14px;min-height:44px;font-size:13.5px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#67529c;box-shadow:0 3px 0 rgba(120,90,160,.26);white-space:nowrap;}
 .tkb-act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.26);}
 .tkb-act-on{background:#e7dcff;color:#4d3a86;}
@@ -178,7 +178,7 @@ const CSS = `
   display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:0;}
 .tkb-mode > *{min-width:0;}
 .tkb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;}
-.tkb-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
+.tkb-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a7a52;box-shadow:0 3px 0 rgba(110,130,80,.3);}
 .tkb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,130,80,.3);}
 @media (max-width:420px){
@@ -214,6 +214,18 @@ const CSS = `
   .tkb-mode{padding:5px;gap:4px;}
   .tkb-pad{gap:2px;}
   .tkb-pads-two .tkb-sticks{gap:3px;}
+}
+/* N-53：双人对战矮横屏把两套垫挪到画布右侧，单人态不走这条 */
+@media (max-height:500px) and (min-width:640px){
+  .tkb-wrap:has(.tkb-pads-two){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;width:100%;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-hud,.tkb-wrap:has(.tkb-pads-two) .tkb-acts{grid-column:1/-1;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-board{grid-column:1;min-width:0;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-tip{grid-column:1;display:-webkit-box;-webkit-line-clamp:1;}
+  .tkb-wrap:has(.tkb-pads-two) .tkb-pads-two{
+    grid-column:2;grid-row:2;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;
+    width:auto;max-width:none;position:sticky;top:0;margin:0;
+  }
+  .tkb-chip{min-height:44px;display:inline-flex;align-items:center;}
 }
 @media (prefers-reduced-motion:reduce){.tkb-key:active{transform:none;}}
 `;
@@ -944,6 +956,14 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     miniCv.hidden = !miniOpen;
   }
 
+  function shortLandscape(): boolean {
+    try {
+      return globalThis.matchMedia?.("(max-height: 500px) and (min-width: 640px)")?.matches === true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * 战场还能占多高。
    *
@@ -951,15 +971,22 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
    * 手指再长也点不到。所以这里不猜,直接量——先找到那个会裁剪的祖先,
    * 再拿它的高度减掉「战场以外的东西」(模式条、HUD、提示、暂停条、摇杆)。
    * 量不到(比如跑在没有布局引擎的测试环境里)就退回按窗口高度估的老办法。
+   * 单人态保持原算法,只在双人对战把垫/暂停算进余量。
    */
   function boardRoom(): number {
     const guess = Math.max(220, Math.min(430, (globalThis.innerHeight || 700) - 300));
     const measured = stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
-    return Math.max(150, Math.min(430, measured));
+    if (opts.players !== 2) return Math.max(150, Math.min(430, measured));
+    const padsBeside = shortLandscape();
+    const below = padsBeside
+      ? (acts.offsetHeight || 0) + 12
+      : (tip.offsetHeight || 0) + (acts.offsetHeight || 0) + (pads.offsetHeight || 0) + 12;
+    return Math.max(150, Math.min(430, measured - below));
   }
 
   function layout(): void {
-    const availW = Math.max(220, (host.clientWidth || 340) - 8);
+    const padReserve = opts.players === 2 && shortLandscape() ? 176 : 0;
+    const availW = Math.max(220, (host.clientWidth || 340) - 8 - padReserve);
     const availH = boardRoom();
     cell = Math.max(14, Math.floor(Math.min(availW / MAP_W, availH / MAP_H, 34)));
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);

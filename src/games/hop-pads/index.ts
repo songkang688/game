@@ -96,6 +96,7 @@ const CSS = `
 .hp-over-s{font-size:16px;font-weight:700;color:#7C6350;line-height:1.6;max-width:300px;}
 .hp-tip{text-align:center;font-size:14px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
+@media (max-height:500px){.hp-duo{gap:4px;}}
 .hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;
   pointer-events:none;text-shadow:0 1px 0 #fff;}
 @media (max-width:420px){
@@ -162,6 +163,22 @@ export function stageHeightPx(want: number, room: number, below: number, min = S
   if (!Number.isFinite(room) || room <= 0) return want;
   const fits = Math.floor(room - Math.max(0, Number.isFinite(below) ? below : 0) - 4);
   return Math.max(min, Math.min(want, fits));
+}
+
+/** 双人同屏每块画布的旧定高(量不出舞台时退回这个数,单测桩走这里) */
+export const DUO_PANE_FALLBACK = 236;
+/** 双人块再矮也要看得见蓄力条;比单人 STAGE_MIN_H 更让,否则两块叠起来会顶出 412 */
+export const DUO_STAGE_MIN_H = 108;
+
+/**
+ * N-54：双人两块画布按「(余量 − 工具) / 2」钳高。
+ * 量不出 room 时退回 DUO_PANE_FALLBACK,单人 stageHeightPx 一字不碰。
+ */
+export function duoPaneHeightPx(room: number, chrome: number, gap = 8): number {
+  if (!Number.isFinite(room) || room <= 0) return DUO_PANE_FALLBACK;
+  const tool = Math.max(0, Number.isFinite(chrome) ? chrome : 0);
+  const each = Math.floor((room - tool - Math.max(0, gap)) / 2);
+  return Math.max(DUO_STAGE_MIN_H, each);
 }
 
 /** 画面能装下多少纵深:决定 scale。台面最远也要能看见前面三四座 */
@@ -1165,6 +1182,43 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: s
   };
 }
 
+/** 从训练壳量舞台余量,再按块钳双人画布高 */
+function duoPaneHeightFromShell(shell: Shell): number {
+  const wrap = shell.wrap;
+  let room = Number.NaN;
+  if (typeof wrap.getBoundingClientRect === "function") {
+    let node: HTMLElement | null = wrap.parentElement;
+    for (let i = 0; node && i < 12; i++) {
+      const cls = typeof node.className === "string" ? node.className : "";
+      if (cls.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        const top = wrap.getBoundingClientRect().top;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0 && Number.isFinite(top)) {
+          room = r.top + inner - top;
+        }
+        break;
+      }
+      node = node.parentElement;
+    }
+  }
+  const topEl = wrap.querySelector(".hp-shelltop") as HTMLElement | null;
+  const topH =
+    topEl && typeof topEl.getBoundingClientRect === "function"
+      ? topEl.getBoundingClientRect().height
+      : (topEl?.offsetHeight ?? 44);
+  const sayH =
+    typeof shell.say.getBoundingClientRect === "function"
+      ? shell.say.getBoundingClientRect().height
+      : (shell.say.offsetHeight ?? 22);
+  const chrome = Math.max(0, topH) + Math.max(0, sayH) + 20;
+  return duoPaneHeightPx(room, chrome);
+}
+
 /** 结算卡要画谁、画什么数:跳数 + 完美率进度环 + 最远台数;双人两角色并排 */
 export interface ResultViz {
   heroes: Array<{ color: string; variant: HeroVariant; win?: boolean }>;
@@ -1558,7 +1612,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         name: seat.name,
         color: seat.color,
         variant: seat.variant,
-        height: 236,
+        height: duoPaneHeightFromShell(shell),
         sfx: (n) => api.play(n),
         onGoal: (run) => {
           if (done[i]) return;
