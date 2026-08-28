@@ -270,6 +270,16 @@ export const CSS = `
   .mst-wrap{padding:6px;--mst-bleed:16px;}
   .mst-seats{flex-direction:column;}
 }
+/* r5:闯关矮横屏(915×412 且套着闯关壳)竖排装不下——盘左 HUD 右双栏,
+   只对玩关容器(mst-lvl)生效,无尽/对战自己的排版不受牵连 */
+@media (min-width:700px) and (max-height:520px){
+  .mst-lvl{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,230px);
+    column-gap:10px;row-gap:4px;align-items:start;padding:8px;}
+  .mst-lvl > .mst-boardwrap{grid-column:1;grid-row:1 / span 5;}
+  .mst-lvl > .mst-top,.mst-lvl > .mst-goals,.mst-lvl > .mst-bar,.mst-lvl > .mst-msg{
+    grid-column:2;margin:0;}
+  .mst-lvl > .mst-goals{flex-wrap:wrap;overflow:visible;}
+}
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}
   .mst-spin,.mst-cell.mst-belt::after,.mst-chainpop,.mst-cheer-star{animation:none;}
@@ -400,6 +410,9 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   }
   fitBoard();
   const fitTimer = typeof setTimeout === "function" ? setTimeout(fitBoard, 0) : null;
+  // r5:进关瞬间 .game-stage 的定高还没夹下来(mole-pop 实测量出 559 的假下沿),
+  // 排版落定后再补一刀,不然首测量出的余量偏大、盘面钳不动
+  const settleTimer = typeof setTimeout === "function" ? setTimeout(fitBoard, 300) : null;
   const hasWin = typeof window !== "undefined" && typeof window.addEventListener === "function";
   if (hasWin) window.addEventListener("resize", fitBoard);
 
@@ -932,6 +945,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       cancelAnimationFrame(raf);
       raf = 0;
       if (fitTimer !== null) clearTimeout(fitTimer);
+      if (settleTimer !== null) clearTimeout(settleTimer);
       if (hasWin) window.removeEventListener("resize", fitBoard);
       runner.clear();
       for (const t of fxTimers) clearTimeout(t);

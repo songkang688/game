@@ -54,6 +54,10 @@ function findStage(from: HTMLElement | null | undefined): HTMLElement | null {
 /**
  * 往上找平台舞台(.game-stage,定高会裁内容)的可视下沿;量不到返回 NaN。
  * 用 clientHeight 口径(舞台有 4px 边框,rect.bottom 会多算,1.2 窗口 5 翻过车)。
+ *
+ * r5:选关图会自动滚到当前关,进关那一刻舞台常带着残余滚动——这时按 rect 量
+ * 「clip − 元素 top」会把预算量大(滚回顶元素就下移了)。这里直接把 scrollTop
+ * 从下沿里扣掉,所有「clip − rect.top」的调用方都自动按「滚回顶」的口径拿预算。
  */
 export function stageClipBottom(from: HTMLElement | null | undefined): number {
   const node = findStage(from);
@@ -63,8 +67,10 @@ export function stageClipBottom(from: HTMLElement | null | undefined): number {
     typeof node.clientHeight === "number" && node.clientHeight > 0
       ? (node.clientTop || 0) + node.clientHeight
       : r.height;
-  if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
-  return Number.NaN;
+  if (!Number.isFinite(r.top) || !Number.isFinite(inner) || inner <= 0) return Number.NaN;
+  const st = (node as { scrollTop?: number }).scrollTop;
+  const scrolled = typeof st === "number" && Number.isFinite(st) ? Math.max(0, st) : 0;
+  return r.top + inner - scrolled;
 }
 
 /**
@@ -170,9 +176,10 @@ export function attachCanvasFit(
     const canvasRect = canvas.getBoundingClientRect();
     if (!Number.isFinite(canvasRect.top)) return;
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    // 减掉舞台残余滚动:预算按「滚回顶」的位置算,画布才装得进第一屏
-    const room = clip - canvasRect.top - stageScrollTopPx(wrap) - below - margin;
-    const px = canvasDisplayCapPx(canvasRect.height, room, opts.minPx);
+    // stageClipBottom 已按「滚回顶」口径扣掉残余滚动;预算是负数(抬头+家当比舞台还高)
+    // 也别一个样式不写——夹到 1 让 minPx 下限接手,总比 600px 原样杵着强
+    const room = clip - canvasRect.top - below - margin;
+    const px = canvasDisplayCapPx(canvasRect.height, Number.isFinite(room) ? Math.max(1, room) : room, opts.minPx);
     if (px === null) return;
     canvas.style.maxHeight = `${px}px`;
     // 这一族画布 CSS 都是 width:100% + 固定分辨率缓冲:光钳高会把画面压扁。
@@ -187,11 +194,23 @@ export function attachCanvasFit(
     }
   }
 
+  // 选关图会自动滚到当前关,进关那一刻舞台常带着残余滚动;开局滚回顶,
+  // 抬头别被卷走(量尺已按「滚回顶」口径,这一下只影响初始视角)
+  resetStageScroll(wrap);
   fit();
   // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
   const timer = typeof setTimeout === "function" ? setTimeout(fit, 0) : null;
   const hasWin = typeof window !== "undefined" && typeof window.addEventListener === "function";
   if (hasWin) window.addEventListener("resize", fit);
+  // r5:进关那一拍 .game-stage 的定高常常还没夹下来(mole-pop 实测量出假下沿,
+  // 首测余量偏大、钳不动)。盯住舞台自己的尺寸,夹下来那一刻再量——
+  // 单测桩(jsdom)没有 ResizeObserver,自动跳过,计时器口径不受影响。
+  let ro: ResizeObserver | null = null;
+  const stage = findStage(wrap);
+  if (stage && typeof ResizeObserver === "function") {
+    ro = new ResizeObserver(() => fit());
+    ro.observe(stage);
+  }
 
   return {
     refit: fit,
@@ -200,6 +219,8 @@ export function attachCanvasFit(
       detached = true;
       if (timer !== null) clearTimeout(timer);
       if (hasWin) window.removeEventListener("resize", fit);
+      ro?.disconnect();
+      ro = null;
     },
   };
 }

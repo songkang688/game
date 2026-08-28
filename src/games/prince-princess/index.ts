@@ -271,6 +271,20 @@ export const CSS = `
   .pcp-cue-line{font-size:14px;}
 }
 @media (hover:none) and (max-width:420px){ .pcp-pad-name{display:none;} }
+/* r5 矮横屏(闯关壳里舞台只剩 300 来像素):键排从竖向流里摘出来,
+   半透明悬浮在画布下沿两角(shoot-range 同方),提示行让位——
+   画布吃满余量,方向/攻击键不再掉出折叠线 */
+@media (min-width:700px) and (max-height:520px){
+  .pcp-pads{position:absolute;left:10px;right:10px;bottom:8px;margin:0;z-index:6;
+    pointer-events:none;--k:44px;}
+  .pcp-pads[data-players="2"]{--k:40px;}
+  .pcp-pad{pointer-events:auto;}
+  .pcp-pad-name{display:none;}
+  .pcp-key{background:rgba(255,255,255,.55);}
+  .pcp-key-atk{background:rgba(255,217,230,.8);}
+  .pcp-key-swap{background:rgba(223,240,255,.8);}
+  .pcp-tip{display:none;}
+}
 @media (max-height:620px){
   .pcp-cv{height:142px;}
   .pcp-wrap[data-players="2"] .pcp-cv{height:216px;}

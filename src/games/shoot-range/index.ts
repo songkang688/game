@@ -203,6 +203,19 @@ export const CSS = `
   .shr-chip{padding:4px 7px;}
   .shr-pads{--k:44px;}
 }
+/* r5 矮横屏(闯关壳里舞台只剩 300 来像素):键排从竖向流里摘出来,
+   半透明悬浮在靶场下沿两角(combo-clash 同方),提示行让位——
+   画布吃满余量,发射/装弹键不再掉出折叠线 */
+@media (min-width:700px) and (max-height:520px){
+  .shr-pads{position:absolute;left:10px;right:10px;bottom:10px;margin:0;z-index:6;
+    pointer-events:none;--k:44px;}
+  .shr-pad{pointer-events:auto;}
+  .shr-pad-name{display:none;}
+  .shr-key{background:rgba(255,255,255,.55);}
+  .shr-key-fire{background:rgba(255,211,226,.8);}
+  .shr-key-reload{background:rgba(223,237,255,.8);}
+  .shr-tip{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .shr-toast{transition:none;}
 }

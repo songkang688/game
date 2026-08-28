@@ -700,6 +700,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
   fitBoard();
   bag.after(fitBoard, 0);
+  // 进关瞬间 .game-stage 的定高还没夹下来(mole-pop 实测量出假下沿),排版落定再补一刀
+  bag.after(fitBoard, 300);
   const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
   if (hasResize) window.addEventListener("resize", fitBoard);
 
@@ -1003,12 +1005,26 @@ export function mount(api: GameApi): { destroy: () => void } {
   });
   refreshBar();
 
+  // r5 N-7:玩关时把「无尽泡泡海」入口收起来——矮横屏舞台只剩 300 来像素,
+  // 这排按钮白占一行,盘面整行掉折叠线下;回地图再放出来
+  const playLevelTucked = (stage: HTMLElement, ctx: PlayCtx): PlayHandle => {
+    bar.hidden = true;
+    const run = playLevel(stage, ctx);
+    return {
+      ...run,
+      destroy() {
+        run.destroy?.();
+        if (!mode) bar.hidden = false;
+      },
+    };
+  };
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelTucked,
       mapHint: "全部清空 3 星，剩得越少星星越多，先规划再出手！",
       grandMessage: "188 关泡泡全部搞定，你的盘面规划能力已经很强了！",
     }

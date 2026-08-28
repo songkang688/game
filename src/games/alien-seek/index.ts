@@ -7,7 +7,7 @@ export { meta };
 // 推理关不给看,只给 3~5 条线索,靠排除法点中唯一的那个藏身点。
 // 三种玩法:188 关八大场景战役、无尽(越找越多越找越快)、双人同屏抢答。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { MIN_CANVAS_DISPLAY_PX, rectBottom, stageClipBottom } from "../stageFit";
+import { MIN_CANVAS_DISPLAY_PX, rectBottom, resetStageScroll, stageClipBottom } from "../stageFit";
 import { save } from "../../engine/save";
 import {
   CHAPTERS,
@@ -166,6 +166,14 @@ const CSS = `
 .als-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
 .als-tool:disabled{opacity:.5;cursor:default;box-shadow:none;}
 .als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+/* r5 复测:915×412 画布钳到 160 下限后 D-pad 还是折叠线下,画布和键没法同屏——
+   画布左、线索/物品单/D-pad/提示右双栏,画布高一口气放回 ~250 */
+@media (min-width:700px) and (max-height:520px){
+  .as-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(260px,440px);
+    column-gap:12px;row-gap:6px;align-items:start;align-content:start;justify-content:center;}
+  .as-wrap > .as-canvas{grid-column:1;grid-row:1 / span 8;}
+  .as-wrap > :not(.as-canvas){grid-column:2;margin:0;}
+}
 @media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
 ${touchUpliftCss([".as-open", ".as-back"])}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
@@ -1122,10 +1130,22 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       const clip = stageClipBottom(wrap);
       if (Number.isFinite(clip)) {
         const rect = canvas.getBoundingClientRect();
-        const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(rect));
+        // 矮横屏走「画布左、键右」双栏,画布下面没有自家家当,below 量的是右栏高,不能扣
+        const shortLand = (() => {
+          const mq = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+          try {
+            return mq ? mq("(min-width:700px) and (max-height:520px)").matches : false;
+          } catch {
+            return false;
+          }
+        })();
+        const below = shortLand
+          ? 0
+          : Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(rect));
         const room = clip - rect.top - below - 4;
-        if (Number.isFinite(room) && room > 0) {
-          const maxH = Math.max(MIN_CANVAS_DISPLAY_PX, Math.floor(room));
+        // 预算是负数(抬头+D-pad 比舞台还高)也要收到下限,别原样杵着(r5 复测)
+        if (Number.isFinite(room)) {
+          const maxH = Math.max(MIN_CANVAS_DISPLAY_PX, Math.floor(Math.max(1, room)));
           if (cssW * (SCENE_H / SCENE_W) > maxH) {
             cssW = Math.max(240, Math.floor(maxH / (SCENE_H / SCENE_W)));
           }
@@ -2025,7 +2045,18 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // r5 复测:玩关时收掉无尽/双人模式条(915×412 它把画布顶出屏),退出关卡还回来
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        resetStageScroll(stage);
+        const run = playLevel(stage, ctx);
+        return {
+          destroy() {
+            run?.destroy?.();
+            bar.hidden = false;
+          },
+        };
+      },
       mapHint: "先看清有几个要找的,再一个个点;后面的推理关要先读线索。",
       grandMessage: "188 张场景全找完啦,外星小朋友们都愿意跟你做朋友!",
       guideTitle: "寻找外星朋友 · 观察手记",

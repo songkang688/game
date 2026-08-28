@@ -734,6 +734,14 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
   if (typeof setTimeout === "function") timers.push(setTimeout(fitSeat, 0));
   const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
   if (hasResize) window.addEventListener("resize", fitSeat);
+  // 进关那一拍 .game-stage 的定高常常还没夹下来,首测余量偏大;盯舞台尺寸落定再量
+  // (jsdom 没有 ResizeObserver,单测自动跳过,计时器口径不变)
+  let fitRo: ResizeObserver | null = null;
+  const stageEl = typeof wrap.closest === "function" ? wrap.closest(".game-stage") : null;
+  if (stageEl && typeof ResizeObserver === "function") {
+    fitRo = new ResizeObserver(() => fitSeat());
+    fitRo.observe(stageEl);
+  }
 
   /** 只有人在玩的那块盘才播;假人一步一句会把读屏刷屏 */
   function announce(text: string): void {
@@ -1151,6 +1159,8 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     finished: () => solved || failed,
     destroy() {
       if (hasResize) window.removeEventListener("resize", fitSeat);
+      fitRo?.disconnect();
+      fitRo = null;
       for (const id of timers) clearTimeout(id);
       timers.length = 0;
       wrap.remove();

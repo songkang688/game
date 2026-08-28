@@ -315,8 +315,9 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
     cssH = clamp(Math.round(cssW * 0.9), 250, 430);
     // 915×412 画布出屏 204、六颗触控键折叠线下(r5 N-16):按舞台可视余量
-    // 再收一刀;镜头 scale 跟着 cssH 走,世界坐标与判定零改动
-    const room = canvasRoomPx(canvas, wrap);
+    // 再收一刀;镜头 scale 跟着 cssH 走,世界坐标与判定零改动。
+    // 余量多留 10px:键排的 3px 立体投影 + 圆整误差,不然键底边还欠 6px
+    const room = canvasRoomPx(canvas, wrap, 10);
     if (Number.isFinite(room) && room > 0 && cssH > room) cssH = Math.max(160, Math.floor(room));
     scale = cssH / VIEW_H;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
@@ -1611,12 +1612,26 @@ export function mount(api: GameApi): { destroy: () => void } {
   timeBtn.addEventListener("click", () => openMode(mountSpeedrun));
   refreshBar();
 
+  // r5:玩关时把模式条(无尽遗迹/无尽古堡/计时速通)收起来——矮横屏舞台只剩
+  // 300 来像素,这排按钮白占一行,触控键欠着 6px 出不来;回地图再放出来
+  const playLevelTucked = (stage: HTMLElement, ctx: PlayCtx): PlayHandle => {
+    bar.hidden = true;
+    const run = playLevel(stage, ctx);
+    return {
+      ...run,
+      destroy() {
+        run.destroy?.();
+        if (!mode) bar.hidden = false;
+      },
+    };
+  };
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelTucked,
       mapHint: "小坑直接跳,宽裂口甩抓钩;集齐三件神器才推得开首领之门。",
       grandMessage: "188 关八大遗迹全部探完,你就是真正的冒险小王!",
       guideTitle: "冒险小王 · 探险手记",

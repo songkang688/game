@@ -569,8 +569,10 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     }
   }
   fitBoard();
-  // 挂载那一刻可能还没排好版,下一拍补量一次(计时统一走 bag,destroy 一并清)
+  // 挂载那一刻可能还没排好版,下一拍补量一次(计时统一走 bag,destroy 一并清);
+  // r5:进关瞬间 .game-stage 的定高还没夹下来(量出 559 的假下沿),300ms 后再补一刀
   bag.after(fitBoard, 0);
+  bag.after(fitBoard, 300);
   window.addEventListener("resize", fitBoard);
 
   return {
@@ -732,12 +734,26 @@ export function mount(api: GameApi): { destroy: () => void } {
   });
   refreshBar();
 
+  // r5:玩关时把「无尽地鼠夜市」入口收起来——矮横屏舞台只剩 300 来像素,
+  // 这排按钮白占一行,底排地鼠洞掉折叠线下;回地图再放出来
+  const playLevelTucked = (stage: HTMLElement, ctx: PlayCtx): PlayHandle => {
+    bar.hidden = true;
+    const run = playLevel(stage, ctx);
+    return {
+      ...run,
+      destroy() {
+        run.destroy?.();
+        if (!mode) bar.hidden = false;
+      },
+    };
+  };
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelTucked,
       mapHint: "命中率满分、再留点时间，3 星就到手！",
       grandMessage: "188 关地鼠全部拍完，你的反应和判断都练出来了！",
       guideTitle: "地鼠嘭嘭 · 锤子手册",

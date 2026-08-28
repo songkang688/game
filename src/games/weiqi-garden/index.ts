@@ -15,7 +15,7 @@ import {
 } from "../../engine";
 import { save } from "../../engine/save";
 import { stagePlayRoom } from "../../engine/stageRoom";
-import { resetStageScroll, stageClipBottom, stageScrollTopPx } from "../stageFit";
+import { resetStageScroll, stageClipBottom } from "../stageFit";
 import guide from "./guide";
 import {
   BLACK,
@@ -561,7 +561,8 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
     if (!Number.isFinite(clip)) return;
     const r = scroll.getBoundingClientRect();
     if (!Number.isFinite(r.top)) return;
-    const room = Math.floor(clip - r.top - stageScrollTopPx(scroll) - 4);
+    // stageClipBottom 已按「滚回顶」口径扣掉残余滚动
+    const room = Math.floor(clip - r.top - 4);
     if (room >= 120 && metrics.extent > room) scroll.style.maxHeight = `${room}px`;
   }
 

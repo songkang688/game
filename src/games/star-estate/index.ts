@@ -264,12 +264,14 @@ const CSS = `
   .se-btn{min-width:72px;font-size:15px;padding:0 8px;}
   .se-deed{flex:1 1 100%;}
 }
-/* r5 N-3:矮横屏竖排装不下(盘 560 + 席位 + 按钮排 > 412),改「盘左控件右」双栏 */
+/* r5 N-3:矮横屏竖排装不下(盘 560 + 席位 + 按钮排 > 412),改「盘左控件右」双栏;
+   回合/目标三枚徽章也进右栏——横跨两栏时把盘顶到 240px 地板以下还差一截 */
 @media (min-width:700px) and (max-height:520px){
   .se-wrap{display:grid;grid-template-columns:minmax(0,11fr) minmax(0,13fr);gap:2px 10px;
     align-items:start;align-content:start;padding:8px;}
-  .se-top{grid-column:1 / -1;margin-bottom:2px;}
-  .se-board-wrap{grid-column:1;grid-row:2 / span 5;align-self:center;}
+  .se-top{grid-column:2;margin-bottom:2px;}
+  .se-badge{font-size:14px;padding:3px 8px;}
+  .se-board-wrap{grid-column:1;grid-row:1 / span 6;align-self:start;}
   .se-seats,.se-actions,.se-msg,.se-drawer{grid-column:2;}
   .se-seats{margin-bottom:2px;}
   .se-seat{flex:1 1 45%;padding:3px 6px;font-size:14px;}
@@ -598,8 +600,9 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
   host.appendChild(wrap);
 
   /* r5 N-3 配方 B:盘面(正方形)按舞台可视余量收宽,按钮排/战报/房契装进一屏。
-     「下方家当」量 wrap 下沿减盘下沿:竖排是按钮排+战报+抽屉,矮横屏双栏右列自理、差值≈0。
-     量不到(单测桩)一个样式不写;缩到 240px 以下宁可交给舞台滚动。 */
+     「下方家当」只数与盘横向重叠的兄弟(竖排是按钮排+战报+抽屉);矮横屏双栏时
+     右列在盘旁边不在盘底下,拿 wrap 下沿减会把右列的高错扣进预算(实测把盘
+     错钳到 240 地板)。量不到(单测桩)一个样式不写;缩到 240px 以下宁可交给舞台滚动。 */
   function fitBoard(): void {
     if (typeof boardWrap.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function")
       return;
@@ -608,7 +611,16 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
     if (!Number.isFinite(clip)) return;
     const b = boardWrap.getBoundingClientRect();
     if (!Number.isFinite(b.top) || !(b.height > 0)) return;
-    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(b));
+    const bBottom = rectBottom(b);
+    let below = 0;
+    for (const sib of Array.from(wrap.children)) {
+      if (sib === boardWrap || typeof sib.getBoundingClientRect !== "function") continue;
+      const s = sib.getBoundingClientRect();
+      if (!Number.isFinite(s.top) || !(s.height > 0)) continue;
+      const sameCol =
+        !Number.isFinite(s.left) || !Number.isFinite(b.left) || (s.left < b.right && s.right > b.left);
+      if (sameCol && s.top >= bBottom - 2) below += s.height + 6;
+    }
     const room = clip - b.top - below - 8;
     if (!Number.isFinite(room) || b.height <= room + 1) return;
     boardWrap.style.maxWidth = `${Math.max(240, Math.floor(room))}px`;

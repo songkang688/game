@@ -250,7 +250,16 @@ const CSS = `
 /* 宽而矮的横屏(915×412 一族,r4 C-8):抽牌/出牌/暂停被顶出裁切线 60px——
    行距/桌面留白/手牌内衬各收一号,键盘提示行让位,三颗主钮回到屏内 */
 @media (min-width:700px) and (max-height:520px){
-  .hh-wrap{gap:4px;padding:8px;}
+  .hh-wrap{gap:4px;padding:8px;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,280px);
+    column-gap:10px;row-gap:4px;align-items:start;}
+  .hh-table{grid-column:1;grid-row:1;margin:0;}
+  .hh-hand{grid-column:1;grid-row:2;margin:0;}
+  .hh-btns{grid-column:1;grid-row:3;margin:0;}
+  .hh-banner{grid-column:2;grid-row:1;margin:0;}
+  .hh-colorbar{grid-column:2;grid-row:2;margin:0;}
+  .hh-foes{grid-column:2;grid-row:3;margin:0;}
+  .hh-say{grid-column:2;grid-row:4;margin:0;}
+  .hh-keys{display:none;}
   .hh-table{min-height:82px;}
   .hh-pile,.hh-deck,.hh-heap,.hh-top{width:56px;height:82px;}
   .hh-hand{padding:6px 4px 4px;min-height:84px;}

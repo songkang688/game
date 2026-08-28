@@ -341,7 +341,13 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
           typeof node.clientHeight === "number" && node.clientHeight > 0
             ? (node.clientTop || 0) + node.clientHeight
             : r.height;
-        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) {
+          // 选关图会自动滚到当前关,进关那一刻舞台常带着残余滚动——把 scrollTop
+          // 扣掉,按「滚回顶」的口径拿预算(和 ../stageFit 的口径一致)
+          const st = node.scrollTop;
+          const scrolled = typeof st === "number" && Number.isFinite(st) ? Math.max(0, st) : 0;
+          return r.top + inner - scrolled;
+        }
         break;
       }
       node = node.parentElement ?? null;
@@ -744,8 +750,10 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   buildGrid();
   refreshTags();
   render();
-  // 挂载那一刻可能还没上屏,量不出宽度;下一帧补量一次
+  // 挂载那一刻可能还没上屏,量不出宽度;下一帧补量一次。
+  // r5:进关瞬间 .game-stage 的定高常常还没夹下来(量出假下沿),300ms 后再补一刀
   const fitRaf = requestAnimationFrame(fitBoard);
+  const fitSettle = setTimeout(fitBoard, 300);
 
   return {
     destroy() {
@@ -753,6 +761,7 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
       cancelAnimationFrame(fitRaf);
+      clearTimeout(fitSettle);
       if (toastTimer) clearTimeout(toastTimer);
       for (const timer of fxTimers) clearTimeout(timer);
       fxTimers.clear();
@@ -964,12 +973,26 @@ export function mount(api: GameApi): { destroy: () => void } {
   });
   refreshBar();
 
+  // r5:玩关时把「仓库大挑战」入口收起来——矮横屏舞台只剩 300 来像素,
+  // 这排按钮白占一行;回地图再放出来
+  const playLevelTucked = (stage: HTMLElement, ctx: PlayCtx): PlayHandle => {
+    bar.hidden = true;
+    const run = playLevel(stage, ctx);
+    return {
+      ...run,
+      destroy() {
+        run.destroy?.();
+        if (!current) bar.hidden = false;
+      },
+    };
+  };
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelTucked,
       mapHint: "步数越省星星越多。撤销和重来都不扣分,想清楚再推!",
       grandMessage: "188 间仓库全部收拾干净,你就是小仓鼠们的整理大王!",
       guide: buildGuide(),

@@ -166,8 +166,8 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
   const blockerTotal = state.blockerLeft;
 
   const wrap = document.createElement("div");
-  // 背景按关卡段换主题:粉黄晨光 → 青绿森林 → 星夜
-  wrap.className = `mst-wrap ${themeClassOf(ctx.level)}`;
+  // 背景按关卡段换主题:粉黄晨光 → 青绿森林 → 星夜;mst-lvl 挂矮横屏双栏
+  wrap.className = `mst-wrap mst-lvl ${themeClassOf(ctx.level)}`;
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="mst-top">
@@ -907,12 +907,26 @@ export function mount(api: GameApi): { destroy: () => void } {
   duoBtn.addEventListener("click", () => openMode((h, a, b) => mountDuel(h, a, b, null)));
   refreshBar();
 
+  // r5:玩关时把模式条(无尽订单/人机/双人)收起来——矮横屏舞台只剩 300 来像素,
+  // 这排按钮白占一行,盘面整片掉折叠线下;回地图再放出来
+  const playLevelTucked = (stage: HTMLElement, ctx: PlayCtx): PlayHandle => {
+    bar.hidden = true;
+    const run = playLevel(stage, ctx);
+    return {
+      ...run,
+      destroy() {
+        run.destroy?.();
+        if (!mode) bar.hidden = false;
+      },
+    };
+  };
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelTucked,
       mapHint: "步数剩得越多星星越多，机关全清才能过关～",
       grandMessage: "188 关全部消除完毕，你的盘面规划和连锁意识都很到位！",
       guide: guideBook,

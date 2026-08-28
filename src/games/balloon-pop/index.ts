@@ -174,6 +174,16 @@ const CSS = `
 .blp-over h3 { margin: 0 0 6px; font-size: 19px; color: #A8386A; }
 .blp-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }
 .blp-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+/* r5:矮横屏(闯关壳里舞台只剩 300 来像素)HUD 徽章与提示行悬浮到天空上,
+   竖向流里只剩天空一件,给 attachSkyFit 多让 70 来像素;
+   气球 44px 热区地板(k≥0.79)不动,残余交给舞台滚动 */
+@media (min-width:700px) and (max-height:520px) {
+  .blp-wrap { padding: 8px; }
+  .blp-top { position: absolute; left: 14px; right: 14px; top: 12px; margin: 0; z-index: 5; pointer-events: none; }
+  .blp-badge { background: rgba(255,255,255,.82); }
+  .blp-msg { position: absolute; left: 14px; right: 14px; bottom: 10px; margin: 0; z-index: 5;
+    pointer-events: none; background: rgba(255,255,255,.72); border-radius: 10px; padding: 2px 8px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .blp-pop, .blp-shake { animation-duration: .01s; }
   .blp-open:active, .blp-balloon:active { transform: none; }
@@ -330,6 +340,8 @@ function attachSkyFit(skyEl: HTMLElement, wrap: HTMLElement, jan: Janitor): void
   };
   fit();
   jan.after(0, fit);
+  // 进关瞬间 .game-stage 的定高常常还没夹下来(mole-pop 实测量出假下沿),落定再补一刀
+  jan.after(300, fit);
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     jan.on(window, "resize", fit);
   }
