@@ -11,28 +11,28 @@ import { describe, expect, it } from "vitest";
 import { FARM_CSS } from "./farmScene";
 import { MTF_CSS, MIN_VERT_PX } from "./runner";
 
-function shortBlock(): string {
-  const at = MTF_CSS.indexOf("@media (max-height: 500px)");
-  expect(at, "MTF_CSS 应有 max-height:500px 档").toBeGreaterThanOrEqual(0);
-  const next = MTF_CSS.indexOf("@media", at + 1);
-  return MTF_CSS.slice(at, next > 0 ? next : undefined);
+function shortBlockOf(css: string, label: string): string {
+  const at = css.indexOf("@media (max-height: 500px)");
+  expect(at, `${label} 应有 max-height:500px 档`).toBeGreaterThanOrEqual(0);
+  const next = css.indexOf("@media", at + 1);
+  return css.slice(at, next > 0 ? next : undefined);
 }
 
 describe("N-97 math-farm root×深关答案行", () => {
-  it("矮横屏答案行 sticky 钉宿主可视段底", () => {
-    const block = shortBlock();
+  it("矮横屏答案行 sticky 钉宿主可视段底(换肤规则,按规矩在 FARM_CSS)", () => {
+    const block = shortBlockOf(FARM_CSS, "FARM_CSS");
     expect(block).toMatch(/\.mtf-quizhost \.qz-choices \{ position: sticky; bottom: 0/);
   });
 
   it("应用题题面矮横屏收到 16px 正文红线(基础态 19px 不动)", () => {
-    const block = shortBlock();
+    const block = shortBlockOf(MTF_CSS, "MTF_CSS");
     expect(block).toMatch(/\.mtf-word \{ font-size: 16px/);
     const base = MTF_CSS.slice(0, MTF_CSS.indexOf("@media"));
     expect(base).toMatch(/\.mtf-word \{[^}]*font-size: 19px/);
   });
 
   it("root 开着才重排:徽章/进度条/朗读/直达让位给题面+答案", () => {
-    const block = shortBlock();
+    const block = shortBlockOf(FARM_CSS, "FARM_CSS");
     expect(block).toMatch(/\.mtf-quizhost:has\(\.qz-jump\) \.qz-wrap > \.qz-bar \{ display: none/);
     expect(block).toMatch(/\.mtf-quizhost:has\(\.qz-jump\) \.qz-say-row \{ order: 7/);
     expect(block).toMatch(/\.mtf-quizhost:has\(\.qz-jump\) \.qz-top \{ order: 8/);
@@ -41,7 +41,7 @@ describe("N-97 math-farm root×深关答案行", () => {
 
   it("N-44 既有钳位不回退:插图钳高(FARM_CSS)与竖式底线原样", () => {
     expect(FARM_CSS).toMatch(/\.mtf-illus:not\(\.mtf-illus-count\) \{ max-height: 56px/);
-    const block = shortBlock();
+    const block = shortBlockOf(MTF_CSS, "MTF_CSS");
     expect(block).toContain(`.mtf-vert-row { font-size: ${MIN_VERT_PX}px`);
     expect(MIN_VERT_PX).toBe(22);
   });
