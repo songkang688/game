@@ -225,7 +225,7 @@ const CSS = `
     background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
   .tkb-acts{position:sticky;bottom:0;z-index:6;}
 }
-/* N-84:915×412 闯关(单人)▲💥464/方向 513 全在舞台裁切线(322px)外。
+/* N-84:915×412 闯关(单人)发射行 464/方向行 513 全在舞台裁切线(322px)外。
    矮横屏单人档改「战场左、暂停+摇杆+提示右」两列;双人档(.tkb-wrap-two)不动 N-53 */
 @media (min-width:640px) and (max-height:500px){
   .tkb-wrap:not(.tkb-wrap-two){display:grid;grid-template-columns:minmax(0,1fr) auto;
