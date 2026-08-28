@@ -397,14 +397,16 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
   function extrasHeight(): number {
     let sum = 0;
     for (const child of Array.from(wrap.children)) {
-      if (child === laneBox || !(child instanceof HTMLElement)) continue;
-      if (child.hidden) continue;
+      // 不用 instanceof HTMLElement:单测桩环境里根本没有这个全局,引用即炸
+      if (child === laneBox) continue;
+      const box = child as HTMLElement;
+      if (box.hidden) continue;
       try {
-        if (getComputedStyle(child).position === "absolute") continue;
+        if (typeof getComputedStyle === "function" && getComputedStyle(box).position === "absolute") continue;
       } catch {
         // 单测桩没有 getComputedStyle 也不能炸
       }
-      sum += child.offsetHeight || 0;
+      sum += box.offsetHeight || 0;
     }
     return sum;
   }
@@ -414,7 +416,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     // 上下还压着 HUD、记分牌、三条指针和按钮。矮屏按舞台剩余高度缩球道。
     const guessed = clamp((window.innerHeight || 700) - 386, 150, 460);
     // r18 B:舞台余高还要扣掉自家 HUD/记分牌/指针/按钮的实测高度,不然 768/844 高
-    // 的屏上球道吃满余高,「🎳 停!(蓄力)」被顶到视口外(量不到就退回老猜法)。
+    // 的屏上球道吃满余高,「停!(蓄力)」被顶到视口外(量不到就退回老猜法)。
     const room = stagePlayRoom(host, { w: avail, h: guessed }).h;
     const extras = extrasHeight();
     const roomH = clamp(extras > 0 ? room - extras - 40 : Math.min(room, guessed), 150, 460);
@@ -436,10 +438,12 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     render();
   };
   window.addEventListener("resize", onResize);
-  // 首帧时提示行/记分牌还没换行定型,extras 量偏小;渲染稳定后再校一次
+  // 首帧时提示行/记分牌还没换行定型,extras 量偏小;渲染稳定后再校一次。
+  // rAF 句柄记下来,destroy 时取消,守卫测试数 rAF 是要归零的。
+  let settleRaf = 0;
   if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(onResize);
+    settleRaf = requestAnimationFrame(() => {
+      settleRaf = requestAnimationFrame(onResize);
     });
   }
 
@@ -1154,6 +1158,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     destroy() {
       finished = true;
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(settleRaf);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
       canvas.removeEventListener("pointerdown", onLaneTap);
