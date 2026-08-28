@@ -251,6 +251,7 @@ export const MG_CSS = `
 @media (max-height:840px) and (min-height:501px){
   .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+  .mg-board{max-width:min(100%, calc(100dvh - 260px));margin-inline:auto;}
 }
 @media (prefers-reduced-motion:reduce){
   .mg-tile{transition:none;}

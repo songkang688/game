@@ -127,6 +127,8 @@ const CSS = `
 }
 @media (max-height: 840px) and (min-height:501px) {
   .llk-board { max-width: min(520px, 70dvh); margin-inline: auto; width: 100%; }
+  .llk-tools { position: sticky; bottom: 0; z-index: 4; padding: 4px 0 2px;
+    background: linear-gradient(180deg, rgba(255,248,236,0), #FFF8EC 40%); }
 }
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
 /* 麻将砖三层:顶面米白渐变(圆角 10px)+ 底部 3px 暖灰立面 + 1px 软影 */

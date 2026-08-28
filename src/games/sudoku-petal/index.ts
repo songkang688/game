@@ -469,6 +469,11 @@ export const SP_CSS = `
   .sp-key{min-height:44px;}
   .sp-msg,.sp-hintbox{max-height:2.2em;overflow:hidden;}
 }
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .sp-seats{flex-wrap:nowrap;gap:10px;}
+  .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:6px;max-width:50%;}
+  .sp-pad{width:auto;max-width:148px;margin-top:0;grid-template-columns:repeat(3,1fr);}
+}
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}
   .sp-cell.sp-bloom .sp-petal{animation:none;}
