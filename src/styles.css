@@ -1191,6 +1191,26 @@ button {
     gap: 4px;
   }
 
+  /* 窄屏顶栏一共五件东西(返回/标题/攻略/暂停/星星),攻略钮的「攻略」两个字
+     和标题里的装饰 emoji 一起让位 —— 否则 flex 收缩全落在游戏名上,
+     每款游戏的标题都被挤成 3px 宽的一条缝(📖 图标和 aria-label 都还在)。 */
+  .game-topbar {
+    gap: 6px;
+  }
+
+  .guide-slot .guide-btn-label {
+    display: none;
+  }
+
+  .game-title-emoji {
+    display: none;
+  }
+
+  .game-topbar .star-chip {
+    padding: 0 10px;
+    font-size: 16px;
+  }
+
   /* 窄屏把「返回」缩成 🏠 图标(aria-label 仍是「返回首页」),
      省下的宽度留给游戏标题,不然标题会被截成一个字 */
   .btn--back .btn-back-label {

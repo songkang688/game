@@ -262,7 +262,16 @@ export function mountGuide(
   const btn = doc.createElement("button");
   btn.type = "button";
   btn.className = "guide-btn";
-  btn.textContent = "📖 攻略";
+  // emoji 和文字分开包:窄屏顶栏塞不下时 CSS 只藏「攻略」两个字,
+  // 📖 图标 + aria-label 还在,游戏名才不会被这颗按钮挤成一条缝
+  const btnEmoji = doc.createElement("span");
+  btnEmoji.className = "guide-btn-emoji";
+  btnEmoji.setAttribute("aria-hidden", "true");
+  btnEmoji.textContent = "📖";
+  const btnLabel = doc.createElement("span");
+  btnLabel.className = "guide-btn-label";
+  btnLabel.textContent = "攻略";
+  btn.append(btnEmoji, btnLabel);
   btn.setAttribute("aria-label", `打开《${book.title}》的攻略`);
   btn.setAttribute("aria-haspopup", "dialog");
   btn.setAttribute("aria-expanded", "false");

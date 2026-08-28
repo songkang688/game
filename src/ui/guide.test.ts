@@ -405,10 +405,12 @@ describe("当前关推断(只读存档,不写)", () => {
 });
 
 describe("攻略抽屉 UI", () => {
-  it("在 host 里挂出「📖 攻略」按钮", () => {
+  it("在 host 里挂出「📖 攻略」按钮(emoji 与文字分开包,窄屏只藏字)", () => {
     const { host, cleanup } = mount(45);
     const btn = findOne(host, "guide-btn");
-    expect(btn?.textContent).toBe("📖 攻略");
+    expect(btn?.children.map((c) => c.textContent).join(" ")).toBe("📖 攻略");
+    expect(btn?.children.find((c) => c.className === "guide-btn-emoji")?.getAttribute("aria-hidden")).toBe("true");
+    expect(btn?.children.find((c) => c.className === "guide-btn-label")?.textContent).toBe("攻略");
     expect(btn?.type).toBe("button");
     expect(btn?.getAttribute("aria-expanded")).toBe("false");
     expect(btn?.getAttribute("aria-haspopup")).toBe("dialog");
