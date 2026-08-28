@@ -26,6 +26,7 @@ import { getLevelExtras } from "../../ui/level188Contract";
 import { stopSpeaking } from "../speech";
 import { save } from "../../engine/save";
 import { stagePlayRoom } from "../../engine/stageRoom";
+import { canvasRoomPx } from "../stageFit";
 import GUIDE from "./guide";
 import {
   AI_LABEL,
@@ -791,7 +792,13 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const wide = (globalThis as { innerWidth?: number }).innerWidth ?? 400;
     const avail = Math.max(MIN_CELL_PX * board.w, Math.min(host.clientWidth || wide, 620));
     const guessed = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    const roomH = Math.max(MIN_CELL_PX * board.h, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    // stagePlayRoom 只减壳层抬头,HUD/提示条/三技能摇杆要自己再减(r5 N-15),
+    // 不然横屏矮屏上这一路 Math.max 会把棋盘撑回超高;量不到退回老口径
+    const measured = canvasRoomPx(canvas, wrap);
+    const roomH = Math.max(
+      MIN_CELL_PX * board.h,
+      Number.isFinite(measured) ? measured : stagePlayRoom(host, { w: avail, h: guessed }).h
+    );
     const maxH = Math.max(MIN_CELL_PX * board.h, roomForBoard(guessed), roomH);
     cell = boardCellSize(board.w, board.h, avail, maxH);
     const cssW = cell * board.w;

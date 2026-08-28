@@ -2,6 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { attachCanvasFit } from "../stageFit";
 import { save } from "../../engine/save";
 import GUIDE from "./guide";
 import { CHAPTERS, HEAVY_FRUITS, LEVELS, THEME_SETS, type CatchLevel } from "./levels";
@@ -89,7 +90,9 @@ function reducedMotion(): boolean {
 }
 
 const CSS = `
-.frc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF9E8, #FFEFEF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
+/* wrap 层只禁横划不禁竖划(pan-y):万一还有裁切,舞台的滚动兜底得留着;
+   画布与按钮各自 touch-action:none,拖篮手感不受影响 */
+.frc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF9E8, #FFEFEF); border-radius: 16px; padding: 12px; user-select: none; touch-action: pan-y; position: relative; }
 .frc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
 .frc-badge { background: #fff; border: 1px solid rgba(220,170,100,.35); border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D08A3E; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; white-space: nowrap; }
 .frc-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
@@ -620,6 +623,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if ((left && dir === -1) || (right && dir === 1)) dir = 0;
   });
 
+  // 915×412 画布出屏 617、1024×768 也出 281,左右按钮折叠线下(r5 N-1):
+  // 显示高按舞台可视余量钳,物理分辨率与接果判定坐标不动
+  const fit = attachCanvasFit(canvas, wrap);
+
   updateTop();
   draw();
   raf = requestAnimationFrame((t) => {
@@ -632,6 +639,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      fit.detach();
       // 粒子与篮内小果全清零，离场一件不剩
       fx.clear();
       items.length = 0;
@@ -918,6 +926,9 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
   });
   jan.on(wrap.querySelector(".frc-back") as HTMLButtonElement, "click", back);
 
+  // 双人同屏同款钳高:横屏矮屏上两侧键盘提示与返回键要在屏内
+  const fit = attachCanvasFit(canvas, wrap);
+
   updateTop();
   draw();
   loop();
@@ -926,6 +937,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     destroy() {
       over = true;
       cancelAnimationFrame(raf);
+      fit.detach();
       fx.clear();
       items.length = 0;
       jan.destroy();
@@ -1219,6 +1231,9 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
   });
   jan.on(wrap.querySelector(".frc-back") as HTMLButtonElement, "click", back);
 
+  // 无尽水果雨同款钳高
+  const fit = attachCanvasFit(canvas, wrap);
+
   reset();
   draw();
   loop();
@@ -1227,6 +1242,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     destroy() {
       over = true;
       cancelAnimationFrame(raf);
+      fit.detach();
       fx.clear();
       items.length = 0;
       recentCatch.length = 0;

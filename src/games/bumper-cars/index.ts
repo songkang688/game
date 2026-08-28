@@ -12,6 +12,7 @@ export { meta };
 // 全程没有血也没有伤:被顶出场地只是转一圈再开回来,生命用光就是这一局结束。
 import { save } from "../../engine/save";
 import { stagePlayRoom } from "../../engine/stageRoom";
+import { canvasRoomPx } from "../stageFit";
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import { AI_LABEL, AI_LEVELS, chooseCarAction, huntersFor, type AiLevel } from "./ai";
 import GUIDE from "./guide";
@@ -558,7 +559,13 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
     // 场地上下压着标题栏、HUD、提示语和摇杆。矮屏按舞台剩余高度缩，不再猜 innerHeight-320。
     const guessed = Math.max(200, (window.innerHeight || 700) - 320);
-    const roomH = Math.max(200, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    // stagePlayRoom 只减壳层抬头,HUD 与冲撞/刹车摇杆排要自己再减(r5 N-14):
+    // 量得到就用真实余量,量不到(测试桩)退回老口径
+    const measured = canvasRoomPx(canvas, wrap);
+    const roomH = Math.max(
+      200,
+      Number.isFinite(measured) ? measured : stagePlayRoom(host, { w: avail, h: guessed }).h
+    );
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);

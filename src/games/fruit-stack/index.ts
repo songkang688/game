@@ -14,6 +14,7 @@ export { meta };
 //  - 无尽:全链条开放,记最高分与最大的那颗果。
 import { save } from "../../engine/save";
 import { stagePlayRoom } from "../../engine/stageRoom";
+import { canvasRoomPx } from "../stageFit";
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import { AI_LABEL, chooseDropX, type AiLevel } from "./ai";
 import { SPRITE_PAD, blinkAlpha, createFx, fruitSprite } from "./art";
@@ -874,7 +875,17 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     const gap = opts.seats > 1 ? 10 : 0;
     const per = (avail - gap) / opts.seats;
     const guessed = Math.max(220, (window.innerHeight || 720) - 300);
-    const roomH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    // stagePlayRoom 只减壳层抬头,HUD/果篮名/下一颗/提示/按钮排要自己再减
+    // (r5 N-13,三档全中):拿第一只果盆的画布量真实余量,量不到退回老口径
+    const cv =
+      typeof bowlRow.querySelector === "function"
+        ? (bowlRow.querySelector("canvas") as HTMLElement | null)
+        : null;
+    const measured = cv ? canvasRoomPx(cv, wrap) : Number.NaN;
+    const roomH = Math.max(
+      180,
+      Number.isFinite(measured) ? measured : stagePlayRoom(host, { w: avail, h: guessed }).h
+    );
     const byH = (roomH / lv.box.h) * lv.box.w;
     const widthPx = Math.max(120, Math.min(per, byH));
     for (const b of bowls) b.layout(widthPx);

@@ -63,6 +63,33 @@ export function stageClipBottom(from: HTMLElement | null | undefined): number {
   return Number.NaN;
 }
 
+/**
+ * 画布下方自家家当(按钮排/提示行/徽章排)的实高:容器下沿减画布下沿。
+ * `stagePlayRoom(host).h` 只减了壳层抬头,自家按钮排要各款自己再减(r5 配方 F);
+ * 家当高度不随画布显示高变,量一次就是稳的。量不到返回 0,永不抛。
+ */
+export function belowCanvasPx(canvas: HTMLElement, wrap: HTMLElement): number {
+  if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return 0;
+  const c = canvas.getBoundingClientRect();
+  const w = wrap.getBoundingClientRect();
+  if (!Number.isFinite(c.top) || !Number.isFinite(w.top)) return 0;
+  return Math.max(0, rectBottom(w) - rectBottom(c));
+}
+
+/**
+ * 画布(或棋盘)这一刻真正可用的显示高:舞台可视下沿 − 画布上沿 − 画布下方家当。
+ * 比 `stagePlayRoom(host).h` 准:抬头 HUD 与自家按钮排都量进去了。
+ * 量不到(单测桩)返回 NaN,调用方自己兜底(一般退回原来的估法)。
+ */
+export function canvasRoomPx(canvas: HTMLElement, wrap: HTMLElement, margin = 4): number {
+  if (typeof canvas.getBoundingClientRect !== "function") return Number.NaN;
+  const clip = stageClipBottom(wrap);
+  if (!Number.isFinite(clip)) return Number.NaN;
+  const rect = canvas.getBoundingClientRect();
+  if (!Number.isFinite(rect.top)) return Number.NaN;
+  return clip - rect.top - belowCanvasPx(canvas, wrap) - margin;
+}
+
 export interface CanvasFitHandle {
   /** 排版变了(resize / 关内重排)再量一次 */
   refit: () => void;

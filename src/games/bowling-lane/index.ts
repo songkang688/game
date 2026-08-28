@@ -15,6 +15,7 @@ import { stagePlayRoom } from "../../engine/stageRoom";
 import { shade, withAlpha } from "../../art/kit/palette";
 import { mirrorEllipse, reflectStreak } from "../../art/kit/mirror";
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
+import { canvasRoomPx } from "../stageFit";
 import GUIDE from "./guide";
 import {
   BL_COLORS,
@@ -384,7 +385,14 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 520));
     // 上下还压着 HUD、记分牌、三条指针和按钮。矮屏按舞台剩余高度缩球道。
     const guessed = clamp((window.innerHeight || 700) - 386, 150, 460);
-    const roomH = clamp(stagePlayRoom(host, { w: avail, h: guessed }).h, 150, 460);
+    // stagePlayRoom 只减壳层抬头,HUD/记分牌/指针/按钮排要自己再减(r5 N-11):
+    // 不然 390×844 上四颗操作钮全掉在折叠线下。量得到就用真实余量,量不到退回老口径
+    const measured = canvasRoomPx(canvas, wrap);
+    const roomH = clamp(
+      Number.isFinite(measured) ? measured : stagePlayRoom(host, { w: avail, h: guessed }).h,
+      150,
+      460
+    );
     const w = Math.round(avail);
     const h = Math.round(Math.min(roomH, w * 1.25));
     const dpr = Math.min(2, window.devicePixelRatio || 1);

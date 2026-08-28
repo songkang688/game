@@ -10,8 +10,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MIN_CANVAS_DISPLAY_PX,
   attachCanvasFit,
+  belowCanvasPx,
   boardCapWidthPx,
   canvasDisplayCapPx,
+  canvasRoomPx,
   rectBottom,
   stageClipBottom,
 } from "./stageFit";
@@ -70,6 +72,32 @@ describe("rectBottom · 测试桩的 rect 没有 bottom 也量得出", () => {
   it("有 bottom 用 bottom,没有用 top+height", () => {
     expect(rectBottom({ top: 10, bottom: 110, height: 100 })).toBe(110);
     expect(rectBottom({ top: 10, height: 100 })).toBe(110);
+  });
+});
+
+describe("belowCanvasPx / canvasRoomPx · 配方 F 的两把尺", () => {
+  it("画布下方家当 = wrap 下沿 − 画布下沿,量不到返回 0", () => {
+    const { canvas, wrap } = harness({
+      stageClientHeight: 376,
+      canvasRect: { top: 60, height: 900 },
+      wrapRect: { top: 48, height: 1040 },
+    });
+    expect(belowCanvasPx(canvas, wrap)).toBe(128);
+    const bare = { className: "" } as unknown as HTMLElement;
+    expect(belowCanvasPx(bare, bare)).toBe(0);
+  });
+
+  it("canvasRoomPx = 舞台可视下沿 − 画布上沿 − 家当 − margin;量不到返回 NaN", () => {
+    const { canvas, wrap } = harness({
+      stageClientHeight: 376,
+      canvasRect: { top: 60, height: 900 },
+      wrapRect: { top: 48, height: 1040 },
+    });
+    // clip=380,top=60,below=128,margin=4 → 188
+    expect(canvasRoomPx(canvas, wrap)).toBe(188);
+    const orphanWrap = stubEl({ top: 0, height: 100 });
+    const orphanCv = stubEl({ top: 0, height: 60 });
+    expect(Number.isNaN(canvasRoomPx(orphanCv as unknown as HTMLElement, orphanWrap as unknown as HTMLElement))).toBe(true);
   });
 });
 

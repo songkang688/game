@@ -15,6 +15,7 @@
  */
 import type { SoundName } from "../level99";
 import { stagePlayRoom } from "../../engine/stageRoom";
+import { canvasRoomPx } from "../stageFit";
 import {
   GOLD,
   ballIconSvg,
@@ -537,7 +538,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       w: viewportWidth(),
       h: MAX_VERTICAL_PX,
     });
-    lay = tableLayout(viewportWidth(), room.h);
+    // stagePlayRoom 只减壳层抬头,HUD/力度条/瞄准排/口袋排/提示都要自己再减
+    // (r5 N-12):量得到就用真实余量,量不到(测试桩)退回老口径
+    const measured = canvasRoomPx(canvas, wrap);
+    lay = tableLayout(viewportWidth(), Number.isFinite(measured) ? measured : room.h);
     canvas.width = Math.round(lay.cssW);
     canvas.height = Math.round(lay.cssH);
     canvas.style.width = `${lay.cssW}px`;

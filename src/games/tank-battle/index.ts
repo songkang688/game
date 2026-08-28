@@ -25,6 +25,7 @@ import {
 import { getLevelExtras } from "../../ui/level188Contract";
 import { save } from "../../engine/save";
 import { stagePlayRoom } from "../../engine/stageRoom";
+import { canvasRoomPx } from "../stageFit";
 import { speak, stopSpeaking } from "../speech";
 import guide from "./guide";
 import {
@@ -953,8 +954,13 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
    */
   function boardRoom(): number {
     const guess = Math.max(220, Math.min(430, (globalThis.innerHeight || 700) - 300));
-    const measured = stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
-    return Math.max(150, Math.min(430, measured));
+    // stagePlayRoom 只减壳层抬头:HUD/提示/暂停条/摇杆这些「战场以外的东西」
+    // 要自己再减(r5 N-19),不然横屏矮屏 D-pad 掉在 .tkb-root 自滚层的折叠线下
+    const measured = canvasRoomPx(canvas, wrap);
+    const room = Number.isFinite(measured)
+      ? measured
+      : stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
+    return Math.max(150, Math.min(430, room));
   }
 
   function layout(): void {
