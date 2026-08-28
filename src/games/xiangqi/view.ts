@@ -176,6 +176,10 @@ export const CSS = `
   .xq-wrap{max-width:248px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
+/* 412 高时 248 宽棋盘仍把悔棋排顶出首屏,再收一档 */
+@media (min-width:700px) and (max-height:430px){
+  .xq-wrap{max-width:196px;}
+}
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}
 }

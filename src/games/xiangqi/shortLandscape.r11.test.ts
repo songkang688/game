@@ -7,4 +7,9 @@ describe("N-10 xiangqi r11 矮横屏工具行钉底", () => {
     expect(CSS).toContain(".xq-wrap{max-width:248px;}");
     expect(CSS).toContain(".xq-btns{position:sticky;bottom:0");
   });
+
+  it("412 高再收到 196，棋盘与工具行能进同一屏", () => {
+    expect(CSS).toContain("@media (min-width:700px) and (max-height:430px)");
+    expect(CSS).toContain(".xq-wrap{max-width:196px;}");
+  });
 });
