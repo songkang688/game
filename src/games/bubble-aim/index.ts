@@ -298,6 +298,14 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
       .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; max-height: 520px; overflow-y: auto; }
       .ba-map { max-height: min(960px, max(160px, calc(100dvh - 120px))); }
+      /* r18 B:宽屏选关页别挤在 400px 一条里;只放宽地图态,打泡泡仍是 400 竖版 */
+      @media (min-width: 700px) {
+        .ba-wrap.ba-wrap--map { max-width: 680px; }
+        .ba-wrap--map .ba-grid { grid-template-columns: repeat(6, 1fr); }
+      }
+      @media (min-width: 1000px) {
+        .ba-wrap.ba-wrap--map { max-width: 820px; }
+      }
       .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
       .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
       .ba-theme { border-radius: 14px; padding: 10px; margin-bottom: 10px; }
@@ -413,6 +421,8 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     flight = null;
     aiming = false;
     endless = false;
+    // r18 B:选关页在宽屏放宽列宽(见 .ba-wrap--map),打泡泡时仍回 400px 竖版
+    wrap.classList.add("ba-wrap--map");
     topBar.style.display = "none";
     canvas.style.display = "none";
     mapEl.style.display = "";
@@ -515,6 +525,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
 
   function startLevel(index: number): void {
     screen = "play";
+    wrap.classList.remove("ba-wrap--map");
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
@@ -553,6 +564,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
    */
   function startEndless(): void {
     screen = "play";
+    wrap.classList.remove("ba-wrap--map");
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
