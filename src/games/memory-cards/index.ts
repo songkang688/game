@@ -3,6 +3,7 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import { CHAPTERS, LEVELS, type MemoryLevel } from "./levels";
 import { BONUS_ICONS, THEME_PACKS, packForTheme, type Icon, type IconCtx } from "./art";
 import {
@@ -308,6 +309,30 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   boardEl.style.gridTemplateColumns = `repeat(${cfg.cols}, minmax(0, 1fr))`;
   boardEl.style.gap = `${boardGap(cfg.cols, rows)}px`;
 
+  /* r5 N-5 配方 B 之 3:翻牌记位置必须整盘可见。卡面 3:4,由舞台可视余量反解卡宽,
+     再折回盘宽上限(格宽两把尺取小);卡宽底线 44px,缩到底还装不下交给舞台滚动。
+     量不到(单测桩)一个样式不写,永不抛。 */
+  function fitBoard(): void {
+    if (typeof boardEl.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function")
+      return;
+    boardEl.style.maxWidth = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const b = boardEl.getBoundingClientRect();
+    if (!Number.isFinite(b.top) || !(b.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(b));
+    const room = clip - b.top - below - 6;
+    if (!Number.isFinite(room) || b.height <= room + 1) return;
+    const gap = boardGap(cfg.cols, rows);
+    const cardH = (room - (rows - 1) * gap) / rows;
+    const cardW = Math.max(44, (cardH * 3) / 4);
+    boardEl.style.maxWidth = `${Math.ceil(cfg.cols * cardW + (cfg.cols - 1) * gap)}px`;
+    boardEl.style.marginLeft = "auto";
+    boardEl.style.marginRight = "auto";
+  }
+  const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasResize) window.addEventListener("resize", fitBoard);
+
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
       timeouts.delete(t);
@@ -358,6 +383,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     boardEl.appendChild(btn);
     slots.push({ btn, inner, pic, name, text });
   }
+  fitBoard();
+  later(fitBoard, 0);
 
   /** 把某张牌的正面画到某个槽位上（算式关写字，其余关画原创图案 + 名字） */
   function paintFace(s: number): void {
@@ -691,6 +718,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     destroy() {
       destroyed = true;
       done = true;
+      if (hasResize) window.removeEventListener("resize", fitBoard);
       if (ticker) clearInterval(ticker);
       ticker = null;
       if (beat) clearInterval(beat);
@@ -947,6 +975,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   });
 
   function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+    // 进关收模式条(r5 N-5,照 snake-royale c0b9c62b):关内那两颗模式钮点不得,还占一排高
+    bar.hidden = true;
+    tipEl.hidden = true;
     const cfg: MemoryLevel = LEVELS[ctx.level];
     const run = createBoard(stage, {
       cfg,
@@ -958,7 +989,13 @@ export function mount(api: GameApi): { destroy: () => void } {
         else ctx.lose(lostLine(r.timeUp));
       },
     });
-    return { destroy: () => run.destroy() };
+    return {
+      destroy: () => {
+        run.destroy();
+        bar.hidden = false;
+        tipEl.hidden = false;
+      },
+    };
   }
 
   function refreshBar(): void {
