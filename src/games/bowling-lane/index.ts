@@ -11,6 +11,7 @@ export { meta };
 // 记分完全交给 scoring.ts 那个纯函数,画面上看到的每一次滚瓶也都是 logic.ts 真算出来的,
 // 和单测跑的是同一套代码。
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import { shade, withAlpha } from "../../art/kit/palette";
 import { mirrorEllipse, reflectStreak } from "../../art/kit/mirror";
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
@@ -381,9 +382,9 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
 
   function layout(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 520));
-    // 上下还压着 HUD、记分牌、三条指针和按钮,球道最多吃掉这么高。
-    // 记分表字号提到 14px、落点微调键补到 44px 热区之后这几行各高了一点,预留值跟着让出来。
-    const roomH = clamp((window.innerHeight || 700) - 386, 150, 460);
+    // 上下还压着 HUD、记分牌、三条指针和按钮。矮屏按舞台剩余高度缩球道。
+    const guessed = clamp((window.innerHeight || 700) - 386, 150, 460);
+    const roomH = clamp(stagePlayRoom(host, { w: avail, h: guessed }).h, 150, 460);
     const w = Math.round(avail);
     const h = Math.round(Math.min(roomH, w * 1.25));
     const dpr = Math.min(2, window.devicePixelRatio || 1);

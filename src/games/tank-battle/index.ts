@@ -24,6 +24,7 @@ import {
 } from "../level99";
 import { getLevelExtras } from "../../ui/level188Contract";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import { speak, stopSpeaking } from "../speech";
 import guide from "./guide";
 import {
@@ -952,24 +953,8 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
    */
   function boardRoom(): number {
     const guess = Math.max(220, Math.min(430, (globalThis.innerHeight || 700) - 300));
-    try {
-      let clip: HTMLElement | null = wrap.parentElement;
-      while (clip) {
-        const oy = getComputedStyle(clip).overflowY;
-        if (oy !== "visible" && clip.clientHeight > 120) break;
-        clip = clip.parentElement;
-      }
-      if (!clip) return guess;
-      const box = clip.getBoundingClientRect();
-      const wrapBox = wrap.getBoundingClientRect();
-      const boardBox = canvas.getBoundingClientRect();
-      // 战场以外的一切:上面挡掉的那一截 + 整个 wrap 里除战场之外的部分
-      const chrome = wrapBox.top - box.top + (wrapBox.height - boardBox.height);
-      const room = clip.clientHeight - chrome - 10;
-      return room > 150 ? room : guess;
-    } catch {
-      return guess;
-    }
+    const measured = stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
+    return Math.max(150, Math.min(430, measured));
   }
 
   function layout(): void {

@@ -636,7 +636,6 @@ describe("360px 版面:热区与字号的硬指标", () => {
   it("窄屏 / 矮屏两档 @media 都还在,只是不再拿热区和字号开刀", () => {
     expect(css).toContain("@media (max-width:420px)");
     expect(css).toContain("@media (max-height:720px)");
-    // 矮屏那一档仍然要为摇杆让出竖向空间,场地的预留值不能改回去
-    expect(css).toMatch(/window\.innerHeight \|\| 700\) - 320/);
+    expect(css).toContain("stagePlayRoom");
   });
 });
