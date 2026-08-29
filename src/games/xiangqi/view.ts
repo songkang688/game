@@ -116,7 +116,7 @@ export const CSS = `
 .xq-restart{background:#FFD9C4;color:#8A421F;}
 .xq-hint{background:#FFF0BF;color:#7A5A10;}
 .xq-help{background:#D9F2C4;color:#3E6A22;}
-.xq-back{background:#FFE0C2;color:#8A4E19;}
+.xq-back{background:#FFE0C2;color:#8A4E19;min-height:${MIN_HIT_PX}px;}
 .xq-confirm{background:#EDE2FF;color:#553A8B;}
 .xq-resign{background:#FFDDE4;color:#8E2B4A;}
 .xq-draw{background:#E2F0F5;color:#255E70;}
@@ -169,8 +169,23 @@ export const CSS = `
   .xq-badge{font-size:28px;}
 }
 /* 平板横屏高度是短边:460 宽的棋盘(高≈510)会把悔棋/提示那排顶出首屏,收窄一点整套都装得下 */
-@media (min-width:700px) and (max-height:840px){
+@media (min-width:700px) and (max-height:840px) and (min-height:501px){
   .xq-wrap{max-width:380px;}
+  .xq-msg{position:sticky;bottom:102px;z-index:3;background:#FFF8F0;}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
+}
+/* 390×667/844:宽<700 时 wrap 100% 仍等于屏宽,钳 wrap 无效。按余高反推棋盘宽。不盲拷 248px */
+@media (max-width:699px) and (max-height:840px) and (min-height:501px){
+  .xq-wrap{max-height:100%;overflow-y:auto;}
+  .xq-boardbox{max-width:min(100%, calc((100dvh - 420px) * 0.85));margin-inline:auto;}
+  .xq-msg{position:sticky;bottom:110px;z-index:3;background:#FFF8F0;}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
+}
+@media (max-width:699px) and (max-height:900px) and (min-height:841px){
+  .xq-wrap{max-height:100%;overflow-y:auto;}
+  .xq-boardbox{max-width:min(100%, calc((100dvh - 420px) * 0.85));margin-inline:auto;}
+  .xq-msg{position:sticky;bottom:110px;z-index:3;background:#FFF8F0;}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
 @media (min-width:700px) and (max-height:500px){
   .xq-wrap{max-width:248px;}
@@ -185,6 +200,18 @@ export const CSS = `
   .xq-panel .xq-start{padding:10px;font-size:17px;}
   .xq-panel>button.xq-start:first-of-type{position:sticky;bottom:0;z-index:3;
     box-shadow:0 -8px 14px rgba(255,249,240,.95),0 5px 0 #E890B2;}
+}
+/* N-124 模式:915×412 自由对战开始钮,840/500 档原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .xq-wrap:has(.xq-start){max-width:min(640px,96%);max-height:calc(100dvh - 108px);overflow:auto;
+    display:flex;flex-direction:column;box-sizing:border-box;}
+  .xq-panel{gap:6px;}
+  .xq-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  .xq-seg button{min-height:44px;}
+  .xq-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
+  .xq-start{position:sticky;bottom:0;z-index:5;min-height:44px;background:#FFB3CD;}
+  .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}

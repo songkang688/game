@@ -259,6 +259,12 @@ const CSS = `
   .snf-pads[data-duo]{position:fixed;left:10px;right:10px;bottom:6px;
     background:linear-gradient(180deg,rgba(238,245,253,.65),#eef5fd 12px);}
 }
+@media (max-height:840px) and (min-height:501px){
+  .snf-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(238,245,253,0),#eef5fd 16px);}
+  .snf-canvas{max-height:min(220px,48dvh);}
+  .snf-pads[data-duo]{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:none;flex-wrap:nowrap;}
+}
 `;
 
 // ---------------------------------------------------------------------------

@@ -10,4 +10,9 @@ describe("N-84 tank-battle 闯关键排", () => {
     expect(SRC).toContain(".tkb-pads{position:sticky;bottom:0");
     expect(SRC).toContain(".tkb-pads-two{flex-wrap:nowrap;position:sticky;bottom:0");
   });
+
+  it("U-7 双人再扣垫高,840 档也钉垫", () => {
+    expect(SRC).toContain("const duoPad = opts.players === 2 ? 96 : 0");
+    expect(SRC).toContain("@media (max-height:840px)");
+  });
 });

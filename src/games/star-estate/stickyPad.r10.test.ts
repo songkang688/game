@@ -11,4 +11,8 @@ describe("N-3 star-estate 操作行配方 E", () => {
     expect(SRC).toContain("position:sticky;bottom:0");
     expect(SRC).toContain(".se-board-wrap{max-width:min(560px, calc(100dvh - 140px));}");
   });
+
+  it("U-1 平板横屏扩到 900 档钉 .se-pad", () => {
+    expect(SRC).toContain("@media (max-height:900px)");
+  });
 });

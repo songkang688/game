@@ -136,6 +136,11 @@ const CSS = `
   .rbt-chip { padding: 2px 8px; font-size: ${CHIP_TIGHT_FONT_PX}px; }
   .rbt-msg { margin-top: ${MSG_TIGHT_GAP_PX}px; min-height: ${MSG_TIGHT_MIN_PX}px; font-size: 14px; }
 }
+/* 独立平板档：不改 SHORT_LANDSCAPE_PX（守门钉死 <568）。点热区不动。 */
+@media (max-height:840px) and (min-height:501px) {
+  .rbt-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 8px;
+    background: linear-gradient(180deg, rgba(255,255,255,0), #ffffffee 40%); padding-top: 4px; }
+}
 `;
 
 export const ENDLESS_CSS = `
@@ -157,7 +162,7 @@ export const ENDLESS_CSS = `
 .rte-over { position: absolute; inset: 0; border-radius: 16px; background: rgba(248,251,255,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
 .rte-over-title { font-size: 22px; font-weight: 900; color: #3F5C9A; }
 .rte-over-sub { font-size: 15px; font-weight: 700; color: #5E729B; line-height: 1.6; max-width: 300px; }
-.rte-btn { border: none; border-radius: 18px; padding: 12px 24px; font-size: 16px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; }
+.rte-btn { border: none; border-radius: 18px; padding: 12px 24px; font-size: 16px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 .rte-btn.rte-ghost { background: linear-gradient(180deg, #F0A0C0, #DB6E9B); box-shadow: 0 5px 0 #B14E79; }
 .rte-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #3B55C2; }
 `;

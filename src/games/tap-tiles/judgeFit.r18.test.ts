@@ -36,4 +36,12 @@ describe("N-90 tap-tiles 判定线进可视区", () => {
     expect(SRC).toContain('o === "hidden" || o === "clip"');
     expect(SRC).toContain(".tt-keys{display:none;}");
   });
+
+  it("840 档钉底栏,不把 500 档隐藏键盘拷过去", () => {
+    const at = SRC.indexOf("@media (max-height:840px) and (min-height:501px)");
+    const next = SRC.indexOf("@media (prefers-reduced-motion:reduce)");
+    const block = SRC.slice(at, next);
+    expect(block).toContain(".tt-btns{position:sticky;bottom:0");
+    expect(block).not.toContain(".tt-keys{display:none;}");
+  });
 });

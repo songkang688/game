@@ -111,6 +111,7 @@ const P_NAME = ["朵朵", "星星"];
 const CSS = `
 .as-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
+.as-side{display:flex;flex-direction:column;gap:6px;min-width:0;min-height:0;}
 .as-canvas{width:100%;display:block;border-radius:16px;background:#28234d;touch-action:none;cursor:pointer;}
 .as-clues{background:#fffdf6;border-radius:14px;padding:9px 12px;display:flex;flex-direction:column;gap:5px;
   box-shadow:0 2px 8px rgba(160,150,190,.22);}
@@ -140,7 +141,7 @@ const CSS = `
   background:linear-gradient(180deg,#f6f2ff,#fff4f8);display:flex;flex-direction:column;gap:8px;}
 .as-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .as-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
+  min-height:44px;font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
 .as-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
 .as-chip{background:#fff;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:800;color:#63528c;
   box-shadow:0 2px 6px rgba(150,140,180,.25);}
@@ -180,6 +181,64 @@ const CSS = `
   .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
+}
+/* U-x(#107):501–840 平板中间档双栏兜底,写在 HEAD 已验收档之前 */
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    gap:6px 12px;align-items:stretch;min-height:0;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+  .as-wrap>.as-clues{grid-column:2;max-height:32%;overflow:auto;}
+  .as-wrap>.als-list{grid-column:2;}
+  .as-wrap>.als-tools,.as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;}
+  .as-wrap>.as-tip{grid-column:2;}
+}
+/* r18 B:412 高的找物关侧栏(清单56+缩放96+方向盘166+提示)总高≈380px,as-wrap 可视只有
+   ~208px。病根是没有显式行模板时 grid-row:1/-1 跨不了隐式行——画布把第 1 行撑到自己那么
+   高,侧栏其余行整段被推下去还被 overflow:hidden 裁掉。补上显式行模板让画布真正跨行,
+   找物关放开自钳交给 l99-stage 的竖向滚动安全网,画布 sticky 钉顶滚动时场景不消失。
+   线索关侧栏塞得下,一字不动。 */
+@media (max-height:500px) and (min-width:640px){
+  .as-wrap:has(.als-tools){height:auto;max-height:none;overflow:visible;
+    grid-template-rows:repeat(4,auto) minmax(0,1fr);}
+  .as-wrap:has(.als-tools)>.as-canvas{position:sticky;top:0;z-index:1;align-self:start;}
+  /* 工具/方向盘都回文档流:sticky 钉底会把方向盘拽上来盖住缩放工具 */
+  .as-wrap:has(.als-tools)>.als-tools{position:static;}
+  .as-wrap:has(.als-tools)>.as-pads{position:static;background:none;}
+  /* auto 行里清单的百分比内容会塌成一条缝,目标头像看不见;钉回 56px */
+  .as-wrap:has(.als-tools)>.als-list{min-height:56px;}
+}
+/* r18 B:平板横屏(501–900 高)缩放工具 755、方向盘 831+ 同样沉出视口,复用 C-6 双栏配方,
+   并声明显式行模板(见上):侧栏清单/工具/方向盘紧凑排在画布右边,中间不再破一个大洞。
+   ≤500 的 r11 档一字不动。 */
+@media (max-height:900px) and (min-height:501px) and (min-width:900px){
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    grid-template-rows:repeat(4,auto) minmax(0,1fr);
+    gap:8px 12px;align-items:stretch;height:100%;max-height:100%;min-height:0;overflow:hidden;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;align-self:start;}
+  .as-wrap>.as-clues{grid-column:2;max-height:28%;overflow:auto;padding:6px 8px;gap:3px;}
+  .as-wrap>.als-list{grid-column:2;max-height:76px;}
+  .as-wrap>.als-tools{grid-column:2;}
+  .as-wrap>.as-pads{grid-column:2;margin:0;}
+  .as-wrap>.as-tip{grid-column:2;}
+}
+/* 内联 <style> 占掉第一格,D-pad 会掉出 412;仅矮宽横屏藏掉,500 双栏原文不动 */
+@media (max-height:500px) and (min-width:640px){
+  .as-wrap>style{display:none;}
+  .as-wrap{max-height:calc(100dvh - 76px);grid-template-rows:minmax(0,1fr);}
+  .as-wrap>.as-canvas{grid-row:1;}
+  .as-wrap>.as-side{grid-column:2;grid-row:1;min-height:0;overflow:auto;justify-content:flex-end;}
+  .as-side .as-pads{position:sticky;bottom:0;flex:none;}
+}
+/* N-124 模式:1024×768 不命中 500 档;中间档复用双栏,500 原文不动 */
+@media (max-height:820px) and (min-width:640px){
+  .as-wrap>style{display:none;}
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    grid-template-rows:minmax(0,1fr);
+    gap:4px 10px;align-items:stretch;height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1;width:100%;max-height:100%;}
+  .as-wrap>.as-side{grid-column:2;grid-row:1;min-height:0;overflow:auto;justify-content:flex-end;}
+  .as-side .as-pads{position:sticky;bottom:0;flex:none;margin:0;
+    background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
 .as-open,.as-back{min-height:44px;}
@@ -987,6 +1046,9 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   );
   wrap.appendChild(canvas);
   if (deduce) wrap.classList.add("as-deduce");
+  const side = document.createElement("div");
+  side.className = "as-side";
+  wrap.appendChild(side);
 
   if (deduce) {
     const box = document.createElement("div");
@@ -1002,22 +1064,22 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       row.append(n, txt);
       box.appendChild(row);
     });
-    wrap.appendChild(box);
+    side.appendChild(box);
   }
 
   // 找物关的清单栏:缩略图 + 名字,横着滑,找到一个打一个勾
   const list = document.createElement("div");
   list.className = "als-list";
-  if (!deduce && targets.length > 0) wrap.appendChild(list);
+  if (!deduce && targets.length > 0) side.appendChild(list);
 
   // 单人才给缩放与望远镜:双人抢答两个人共用一块屏,镜头必须固定
   const tools = document.createElement("div");
   tools.className = "als-tools";
-  if (opts.players === 1) wrap.appendChild(tools);
+  if (opts.players === 1) side.appendChild(tools);
 
   const pads = document.createElement("div");
   pads.className = "as-pads";
-  wrap.appendChild(pads);
+  side.appendChild(pads);
 
   const tip = document.createElement("div");
   tip.className = "as-tip";
@@ -1025,7 +1087,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     opts.players === 2
       ? `${lv.hint} Esc 暂停。`
       : `${lv.hint} 直接点画面,或用 W A S D + F(方向键 + L 也行)挪光标,Esc 暂停。`;
-  wrap.appendChild(tip);
+  side.appendChild(tip);
   host.appendChild(wrap);
   if (deduce) {
     for (let p: HTMLElement | null = wrap; p; p = p.parentElement) {
@@ -1151,6 +1213,11 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (vh > 0 && vh <= 500 && vw >= 640) {
       const cap = Math.max(96, room - 8);
       if (nextH > cap) nextH = cap;
+      if (nextH > vh - 8) nextH = Math.max(96, vh - 8);
+    } else if (vh > 0 && vh <= 820 && vw >= 640) {
+      const cap = Math.max(96, room - 8);
+      if (nextH > cap) nextH = cap;
+      if (nextH > vh - 8) nextH = Math.max(96, vh - 8);
     }
     cssH = nextH;
     view = clampView(view, viewport());

@@ -3,6 +3,7 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import { CHAPTERS, LEVELS, type MemoryLevel } from "./levels";
 import { BONUS_ICONS, THEME_PACKS, packForTheme, type Icon, type IconCtx } from "./art";
 import {
@@ -110,9 +111,9 @@ const CSS = `
 .mmc-modes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .mmc-modes[hidden] { display: none; }
-.mmc-open { border: none; border-radius: 999px; padding: 8px 16px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FA8DC, #4E86BC); box-shadow: 0 4px 0 #3C6C9C; }
+.mmc-open { border: none; border-radius: 999px; padding: 8px 16px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FA8DC, #4E86BC); box-shadow: 0 4px 0 #3C6C9C; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 .mmc-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3C6C9C; }
-.mmc-toggle { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7A5AA0; box-shadow: 0 3px 0 rgba(120,90,160,.25); white-space: nowrap; }
+.mmc-toggle { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7A5AA0; box-shadow: 0 3px 0 rgba(120,90,160,.25); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; box-sizing: border-box; }
 .mmc-toggle:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,90,160,.25); }
 .mmc-tip { text-align: center; font-size: 13px; font-weight: 700; color: #77619B; margin-bottom: 8px; line-height: 1.5; }
 .mmc-mhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
@@ -130,6 +131,10 @@ const CSS = `
   .mmc-board { gap: 4px; max-height: min(280px, 68dvh); }
   .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(48px, 16dvh, 72px); }
   .mmc-msg { min-height: 0; margin-top: 4px; }
+}
+@media (min-width: 640px) and (max-height: 840px) and (min-height: 501px) {
+  .mmc-board { gap: 6px; max-height: min(420px, 58dvh); }
+  .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(52px, 14dvh, 88px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .mmc-inner { transition: none; }
@@ -315,6 +320,36 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
 
   boardEl.style.gridTemplateColumns = `repeat(${cfg.cols}, minmax(0, 1fr))`;
   boardEl.style.gap = `${boardGap(cfg.cols, rows)}px`;
+
+  /**
+   * r18 B:中等高度(平板横屏 768/820)卡片跟着 660px 容器等比放大到 276px 高,
+   * 后排整行沉出视口。按「舞台余高 ÷ 行数」反推卡宽给棋盘限宽,整副牌进一屏。
+   * ≤500px 矮横屏另有 N-69 的钳高媒体,这里不掺和;量不到舞台(单测桩)不动。
+   */
+  function capBoardWidth(): void {
+    const vh = window.innerHeight || 0;
+    if (!(vh > 500)) {
+      boardEl.style.maxWidth = "";
+      boardEl.style.margin = "";
+      return;
+    }
+    const room = stagePlayRoom(host, { w: 0, h: 0 }).h;
+    if (room <= 1) return;
+    const gap = boardGap(cfg.cols, rows);
+    const chrome = 150; // 徽章行 + 进度条 + 底部提示行的呼吸量
+    const cardH = Math.max(72, (room - chrome - gap * (rows - 1)) / rows);
+    const maxW = Math.round(cfg.cols * (cardH * 3) / 4 + gap * (cfg.cols - 1));
+    if (maxW > 0 && maxW < (boardEl.clientWidth || Number.MAX_SAFE_INTEGER)) {
+      boardEl.style.maxWidth = `${maxW}px`;
+      boardEl.style.margin = "0 auto";
+    } else {
+      boardEl.style.maxWidth = "";
+      boardEl.style.margin = "";
+    }
+  }
+  capBoardWidth();
+  const onBoardResize = (): void => capBoardWidth();
+  window.addEventListener("resize", onBoardResize);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -699,6 +734,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     destroy() {
       destroyed = true;
       done = true;
+      window.removeEventListener("resize", onBoardResize);
       if (ticker) clearInterval(ticker);
       ticker = null;
       if (beat) clearInterval(beat);

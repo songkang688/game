@@ -210,7 +210,7 @@ export const ARENA_CSS = `
 .rbt-vs-over { position: absolute; inset: 0; border-radius: 16px; background: rgba(248,251,255,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
 .rbt-vs-over-title { font-size: 22px; font-weight: 900; color: #3F5C9A; }
 .rbt-vs-over-sub { font-size: 15px; font-weight: 700; color: #5E729B; line-height: 1.6; max-width: 320px; }
-.rbt-vs-btn { border: none; border-radius: 18px; padding: 12px 24px; font-size: 16px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; }
+.rbt-vs-btn { border: none; border-radius: 18px; padding: 12px 24px; font-size: 16px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; min-height: ${TOUCH_MIN_PX}px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 .rbt-vs-btn.rbt-vs-ghost { background: linear-gradient(180deg, #F0A0C0, #DB6E9B); box-shadow: 0 5px 0 #B14E79; }
 .rbt-vs-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #3B55C2; }
 .rbt-ready .rbt-key { animation: rbtBreath 1s ease-in-out infinite; }

@@ -144,6 +144,11 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+/* U-x(#107):501–840 中间档 sticky 兜底,写在前面不抢下面已验收档位 */
+@media (max-height:840px) and (min-height:501px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,250,0),#fff7fa 16px);}
+}
 /* N-107:双人同屏六键 .fs-key 522~566 整排被 .l99-host(overflow:hidden)排线下。
    矮横屏键排 fixed 钉视口底(44px 底线),提示条让位,双盆画布在 layout() 里按实测余量让高。
    合成判定/先赢局数零触碰。 */
@@ -155,6 +160,22 @@ const CSS = `
     background:linear-gradient(180deg,rgba(255,244,248,0),rgba(255,244,248,.92) 10px,#fff4f8);
     padding:4px 2px 2px;border-radius:0 0 14px 14px;}
   .fs-wrap>.fs-pad .fs-pad{position:static;background:none;padding:0;}
+}
+/* 以下三档是 r21-B 的 sticky 兜底,选择器特异度低于上面的 .fs-wrap>.fs-pad,
+   所以 915×412 仍走 N-107 的 fixed 钉底,不会互相打架。 */
+@media (max-height:500px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,244,248,.35),#FFF4F8 40%);}
+}
+/* N-124 模式:768 不命中 500;粗指针中间档钉投放键。玩法/物理零改 */
+@media (max-height:820px) and (pointer:coarse){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,244,248,.35),#FFF4F8 40%);}
+}
+/* N-122 模式:390×844 不命中 500/820;竖屏钉投放键,舞台可滚到底 */
+@media (max-width:430px) and (min-height:700px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:8px 0 4px;
+    background:linear-gradient(180deg,rgba(255,244,248,.2),#FFF4F8 32%);}
 }
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}
@@ -886,7 +907,13 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     const gap = opts.seats > 1 ? 10 : 0;
     const per = (avail - gap) / opts.seats;
     const guessed = Math.max(220, (window.innerHeight || 720) - 300);
-    const stageH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const view = host.closest?.(".l99-view") as HTMLElement | null;
+    const viewH = view && view.clientHeight > 0 ? view.clientHeight : 0;
+    const vhCap = Math.max(180, (window.innerHeight || 720) - 96);
+    const stageH = Math.max(
+      180,
+      Math.min(stagePlayRoom(host, { w: avail, h: guessed }).h, viewH > 0 ? viewH : vhCap, vhCap),
+    );
     const chrome = Math.max(
       92,
       (hud.offsetHeight || 0) + (tip.offsetHeight || 0) + (pad.offsetHeight || 0) + 12,

@@ -163,7 +163,8 @@ const CSS = `
 .fk-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 @media (max-width:420px){.fk-modes{grid-template-columns:1fr;}}
 .fk-mode{border:none;border-radius:18px;padding:14px;text-align:left;cursor:pointer;font-family:inherit;
-  background:#fff;box-shadow:0 4px 0 rgba(130,105,180,.22);display:flex;gap:10px;align-items:flex-start;}
+  background:#fff;box-shadow:0 4px 0 rgba(130,105,180,.22);display:flex;gap:10px;align-items:flex-start;
+  min-height:44px;}
 .fk-mode:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(130,105,180,.22);}
 .fk-mode-emoji{font-size:26px;line-height:1;flex:0 0 auto;}
 .fk-mode-emoji svg{display:block;}
@@ -192,6 +193,11 @@ const CSS = `
   }
   .fk-pick-versus .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .fk-pick-train .fk-dummy-go,.fk-pick-versus .fk-versus-go{
+    position:sticky;top:0;z-index:5;background:#fffdff;padding:6px 0;margin-bottom:8px;
+  }
+}
 .fk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .fk-bar[hidden]{display:none;}
@@ -201,7 +207,8 @@ const CSS = `
 .fk-pick-t{font-size:14px;font-weight:900;margin-bottom:6px;}
 .fk-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
 .fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
-  display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
+  display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);
+  min-height:44px;}
 .fk-ch:active{transform:translateY(1px);}
 .fk-ch-a{width:28px;height:28px;flex:0 0 auto;}
 .fk-ch-n{font-size:14px;font-weight:900;color:#5b4890;}
@@ -294,6 +301,16 @@ const CSS = `
   .fk-train-shell .fk-train-modes{
     position:sticky;top:0;z-index:4;background:#fffdff;padding:4px 0;
   }
+}
+@media (max-height:840px) and (min-height:641px){
+  .fk-train-shell .fk-pads{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;
+    background:linear-gradient(180deg,rgba(255,253,255,0),#fffdff 12px);
+    padding:8px 0 4px;
+  }
+  .fk-tower-hero:not(.fk-tower-open) .fk-grid,
+  .fk-tower-hero:not(.fk-tower-open) .fk-pick-t{display:none;}
+  .fk-tower-hero .fk-tower-compact{display:flex;}
 }
 .fk-live b{color:#c8497f;}
 .fk-hidden{display:none !important;}

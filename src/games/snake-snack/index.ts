@@ -111,11 +111,11 @@ const CSS = `
 .sn-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .sn-bar-modes[hidden] { display: none; }
-.sn-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FC468, #5E9E4A); box-shadow: 0 4px 0 #487A38; }
+.sn-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FC468, #5E9E4A); box-shadow: 0 4px 0 #487A38; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .sn-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #487A38; }
 .sn-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .sn-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.sn-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #5E9E4A; box-shadow: 0 3px 0 rgba(100,150,70,.3); }
+.sn-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #5E9E4A; box-shadow: 0 3px 0 rgba(100,150,70,.3); min-height: 44px; }
 .sn-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(100,150,70,.3); }
 .sn-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #5E9E4A; box-shadow: 0 2px 6px rgba(120,180,110,.25); }
 .sn-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(120,180,110,.25); }
@@ -146,6 +146,11 @@ const CSS = `
   .sn-mode .sn-canvas { max-height: min(128px, 31dvh); }
   .sn-mode .sn-pad { position: fixed; left: 10px; right: 10px; bottom: 6px;
     background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 12px); }
+}
+@media (max-height: 840px) and (min-height: 501px) {
+  .sn-pad { position: sticky; bottom: 0; z-index: 5; flex: 0 0 auto; margin-top: 6px;
+    background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 14px); padding-top: 4px; }
+  .sn-canvas { max-height: min(240px, 48dvh); }
 }
 `;
 

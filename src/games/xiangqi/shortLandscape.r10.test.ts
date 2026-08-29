@@ -7,5 +7,6 @@ describe("N-10 xiangqi 矮横屏再收棋盘", () => {
     expect(CSS).toContain(".xq-wrap{max-width:380px;}");
     expect(CSS).toContain("@media (min-width:700px) and (max-height:500px)");
     expect(CSS).toContain(".xq-wrap{max-width:248px;}");
+    expect(CSS).toContain("@media (max-width:699px) and (max-height:840px) and (min-height:501px)");
   });
 });

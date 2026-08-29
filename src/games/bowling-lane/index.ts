@@ -106,7 +106,8 @@ const CSS = `
 .bl-chip-p1{color:#28568f;background:#e6f0ff;}
 .bl-chip-now{outline:2px solid #ffb43c;}
 .bl-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 3px 0 #3f6da8;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 3px 0 #3f6da8;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 .bl-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #3f6da8;}
 .bl-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-btn--ghost{background:linear-gradient(180deg,#b3aecd,#918bb0);box-shadow:0 3px 0 #736e8f;}
@@ -159,6 +160,7 @@ const CSS = `
   background:linear-gradient(180deg,#eef4ff,#fdf1f6);display:flex;flex-direction:column;gap:8px;}
 .bl-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .bl-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
+  min-height:44px;box-sizing:border-box;
   font-family:inherit;background:#ffffffdd;color:#3f6da8;box-shadow:0 3px 0 rgba(90,120,180,.28);}
 .bl-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(90,120,180,.28);}
 .bl-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -201,6 +203,13 @@ const CSS = `
   .bwl-legend{font-size:11px;}
   .bwl-undo{min-width:46px;padding:0 6px;}
 }
+/* r18 B:极矮横屏内容仍可能溢出(l99 舞台已可滚),三段式的「停!」是每球必按的
+   核心键,钉在可视底不许滚丢。 */
+@media (max-height:520px){
+  .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(253,241,246,0),#fdf1f6 40%);}
+  .bwl-legend{display:none;}
+}
 /* 手机竖屏统共 667 像素高,球道上面还压着标题栏,每一行都收一点 */
 @media (max-height:720px){
   .bl-wrap{gap:5px;}
@@ -211,6 +220,15 @@ const CSS = `
   .bl-gauge-tag,.bl-gauge-val{line-height:18px;}
   .bl-roll{padding:10px 20px;}
   .bwl-legend{display:none;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(253,241,246,0),#fdf1f6 40%);}
+}
+@media (max-height:840px) and (min-height:721px){
+  .bl-wrap{gap:5px;}
+  .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(253,241,246,0),#fdf1f6 40%);}
 }
 @media (prefers-reduced-motion:reduce){
   .bl-btn:active,.bl-roll:active,.bl-pick:active,.bl-nudge button:active{transform:none;}
@@ -386,12 +404,35 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
   // 所有碰撞还是在俯视坐标里算(logic.ts),这里只是把 (x, y) 投影到画布上。
   const view: LaneView = { w: 320, h: 360 };
 
+  /** 球道下面自家的记分牌/指针/按钮实测总高(绝对定位的遮罩不算流内,跳过) */
+  function extrasHeight(): number {
+    let sum = 0;
+    for (const child of Array.from(wrap.children)) {
+      // 不用 instanceof HTMLElement:单测桩环境里根本没有这个全局,引用即炸
+      if (child === laneBox) continue;
+      const box = child as HTMLElement;
+      if (box.hidden) continue;
+      try {
+        if (typeof getComputedStyle === "function" && getComputedStyle(box).position === "absolute") continue;
+      } catch {
+        // 单测桩没有 getComputedStyle 也不能炸
+      }
+      sum += box.offsetHeight || 0;
+    }
+    return sum;
+  }
+
   function layout(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 520));
     // 上下还压着 HUD、记分牌、三条指针和按钮。矮屏按舞台剩余高度缩球道。
     const guessed = clamp((window.innerHeight || 700) - 386, 150, 460);
-    const roomH = clamp(stagePlayRoom(host, { w: avail, h: guessed }).h, 150, 460);
-    const w = Math.round(avail);
+    // r18 B:舞台余高还要扣掉自家 HUD/记分牌/指针/按钮的实测高度,不然 768/844 高
+    // 的屏上球道吃满余高,「停!(蓄力)」被顶到视口外(量不到就退回老猜法)。
+    const room = stagePlayRoom(host, { w: avail, h: guessed }).h;
+    const extras = extrasHeight();
+    const roomH = clamp(extras > 0 ? room - extras - 40 : Math.min(room, guessed), 150, 460);
+    // 球道高度被压扁时同步收窄,近宽远窄的梯形不至于摊成一条横带
+    const w = Math.round(Math.min(avail, Math.max(260, roomH / 0.85)));
     const h = Math.round(Math.min(roomH, w * 1.25));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.style.width = `${w}px`;
@@ -408,6 +449,14 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     render();
   };
   window.addEventListener("resize", onResize);
+  // 首帧时提示行/记分牌还没换行定型,extras 量偏小;渲染稳定后再校一次。
+  // rAF 句柄记下来,destroy 时取消,守卫测试数 rAF 是要归零的。
+  let settleRaf = 0;
+  if (typeof requestAnimationFrame === "function") {
+    settleRaf = requestAnimationFrame(() => {
+      settleRaf = requestAnimationFrame(onResize);
+    });
+  }
 
   // ---- 一局的状态 --------------------------------------------------------------
   let turnSeat = 0;
@@ -1120,6 +1169,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     destroy() {
       finished = true;
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(settleRaf);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
       canvas.removeEventListener("pointerdown", onLaneTap);

@@ -15,6 +15,15 @@ describe("N-40 duo-rush 赛道态工具条矮横屏常驻", () => {
     expect(INDEX).toContain(".dur-padbtn");
   });
 
+  it("840 档封顶画布显示高，不隐藏键盘提示", () => {
+    const start = INDEX.indexOf("@media (max-height: 840px) and (min-height: 501px)");
+    const end = INDEX.indexOf("@media (max-width: 480px)");
+    const tablet = INDEX.slice(start, end);
+    expect(start).toBeGreaterThan(0);
+    expect(tablet).toContain(".dr-canvas { max-height: min(52dvh, 320px)");
+    expect(tablet).not.toContain(".dr-keys { display: none; }");
+  });
+
   it("赛道数学零触碰", () => {
     expect(MATCH).toContain("export function");
     expect(MATCH).not.toContain("sticky");

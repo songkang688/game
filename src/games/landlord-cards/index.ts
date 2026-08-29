@@ -214,9 +214,10 @@ const CSS = `
 .ld-hidden{display:flex;align-items:center;justify-content:center;height:100%;
   font-size:14px;font-weight:800;color:#d9d0ec;}
 .ld-btns{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;}
-.ld-btn{border:none;border-radius:999px;min-height:42px;padding:8px 15px;font-size:15px;font-weight:900;
+.ld-btn{border:none;border-radius:999px;min-height:44px;padding:8px 15px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#5b4a7a;background:linear-gradient(180deg,#fbf8ff,#e9e1fb);
   box-shadow:0 3px 0 rgba(80,60,110,.55);}
+.ld-btn{min-height:44px;}
 .ld-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(80,60,110,.55);}
 .ld-btn:disabled{opacity:.45;cursor:default;box-shadow:none;transform:none;}
 .ld-btn-go{background:linear-gradient(180deg,#f793b6,#e2648f);color:#fff;box-shadow:0 3px 0 #b8496f;}
@@ -255,6 +256,11 @@ const CSS = `
   flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
 .ld-over-t{font-size:20px;font-weight:900;color:#6a4fa8;}
 .ld-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;}
+@media (max-height:840px) and (min-height:501px){
+  .ld-btns,.ldc-mainbar,.ldc-subbar{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(246,242,255,0),#f6f2ff 40%);}
+  .ldc-subbar{bottom:52px;z-index:5;}
+}
 @media (max-width:420px){
   /* 手机竖屏寸土寸金:对手面板改成横排,省下来的高度全留给手牌和按钮 */
   .ld-wrap{padding:8px;gap:6px;}

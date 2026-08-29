@@ -207,7 +207,8 @@ const CSS = `
 .pfb-veil-sub{font-size:14px;font-weight:700;color:#4E7295;line-height:1.6;max-width:340px;}
 .pfb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .pfb-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;
+  min-height:44px;display:inline-flex;align-items:center;}
 .pfb-veil-btn.pfb-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .pfb-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #B95278;}
 .pfb-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -249,7 +250,7 @@ const CSS = `
 .pfb-picker-title{font-size:17px;font-weight:900;color:#2F5A8C;}
 .pfb-picks{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .pfb-pick{border:none;border-radius:18px;padding:12px 16px;min-width:132px;cursor:pointer;font-family:inherit;
-  background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;}
+  background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;min-height:${TOUCH_MIN}px;}
 .pfb-pick:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(110,140,175,.3);}
 .pfb-pick-name{font-size:16px;font-weight:900;color:#2F5A8C;}
 .pfb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
@@ -288,6 +289,16 @@ const CSS = `
   .pfb-stagebox{grid-column:1;min-width:0;}
   .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;}
   .pfb-tip{grid-column:1/-1;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:10px;}
+  .pfb-hud{grid-column:1/-1;}
+  .pfb-stagebox{grid-column:1;min-width:0;}
+  .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;position:sticky;top:0;}
+  .pfb-tip{grid-column:1/-1;}
+}
+@media (max-height:840px) and (min-height:501px) and (max-width:639px){
+  .pfb-pads{position:sticky;bottom:0;z-index:4;padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }
 `;

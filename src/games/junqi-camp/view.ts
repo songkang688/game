@@ -175,6 +175,11 @@ export const CSS = `
   .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
 }
+@media (max-height:840px) and (min-height:501px){
+  .jq-stage{min-height:0;height:min(64dvh,320px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+}
 @media (prefers-reduced-motion:reduce){
   .jq-face{transition-duration:.06s;animation:none!important;}
   .jq-fx{animation:none!important;transition:none!important;}
@@ -190,6 +195,34 @@ export const CSS = `
   .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
   .jq-duoplay .jq-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
   .jq-duoplay .jq-legend{display:none;}
+}
+/* U-x(#107):501–840 中间档双人盘按余高收敛并钉工具/行棋行 */
+@media (max-height:840px) and (min-height:501px){
+  .jq-duoplay .jq-stage{height:min(62dvh,300px);min-height:180px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:52px;z-index:5;}
+}
+/* N-124 模式:768 不命中 500;粗指针钉工具行。N-64 500 原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .jq-stage{min-height:0;height:min(62dvh,420px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+  .jq-duoplay .jq-stage{height:min(52dvh,360px);min-height:140px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
+}
+/* N-122 模式:390×844 钉确认/行棋 */
+@media (max-width:420px) and (min-height:700px){
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
 }
 `;
 

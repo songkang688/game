@@ -12,4 +12,8 @@ describe("N-66 chess-garden 双人末行", () => {
     expect(SHEET).toContain(".cg-wrap .cg-tools");
     expect(SHEET).toContain("position: sticky");
   });
+
+  it("U-9 平板横屏扩 N-66 到 840 高", () => {
+    expect(SHEET).toContain("@media (min-width: 700px) and (max-height: 840px)");
+  });
 });

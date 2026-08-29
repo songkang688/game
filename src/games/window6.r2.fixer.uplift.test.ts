@@ -28,23 +28,23 @@ function src(rel: string): string {
 }
 
 describe("窗口6 r2 fixer · uiTouch kit 规格(W6R1-09/10 唯一口径)", () => {
-  it("触区最小高度 40px、过窄补宽 44px、正文最低 14px", () => {
-    expect(MIN_TOUCH_PX).toBe(40);
+  it("触区最小高度 44px、过窄补宽 44px、正文最低 16px", () => {
+    expect(MIN_TOUCH_PX).toBe(44);
     expect(MIN_TOUCH_WIDE_PX).toBe(44);
-    expect(MIN_BODY_FONT_PX).toBe(14);
+    expect(MIN_BODY_FONT_PX).toBe(16);
   });
 
   it("touchUpliftCss 只输出 min-height(可选 min-width),不动布局与热区判定", () => {
-    expect(touchUpliftCss([".x-btn"])).toBe(".x-btn{min-height:40px;}");
+    expect(touchUpliftCss([".x-btn"])).toBe(".x-btn{min-height:44px;}");
     expect(touchUpliftCss([".a", ".b"], { minWidth: true })).toBe(
-      ".a,.b{min-height:40px;min-width:44px;}"
+      ".a,.b{min-height:44px;min-width:44px;}"
     );
     expect(touchUpliftCss([])).toBe("");
     expect(touchUpliftCss([".x"])).not.toMatch(/width:(?!44px)/);
   });
 
-  it("bodyFontUpliftCss 只输出 font-size:14px", () => {
-    expect(bodyFontUpliftCss([".t1", ".t2"])).toBe(".t1,.t2{font-size:14px;}");
+  it("bodyFontUpliftCss 只输出 font-size:16px", () => {
+    expect(bodyFontUpliftCss([".t1", ".t2"])).toBe(".t1,.t2{font-size:16px;}");
     expect(bodyFontUpliftCss([])).toBe("");
   });
 });

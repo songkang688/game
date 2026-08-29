@@ -58,19 +58,33 @@ interface FakeTab {
   classes: Set<string>;
   classList: { remove(cls: string): void };
   textContent: string | null;
+  querySelector(selector: string): { remove(): void } | null;
 }
 
-function fakeLockedTab(label: string): FakeTab {
+function fakeLockedTab(label: string, withLockmark = false): FakeTab {
   const classes = new Set(["l99-tab", "l99-tab-lock"]);
-  return {
+  const tab: FakeTab = {
     classes,
     classList: {
       remove: (cls) => {
         classes.delete(cls);
       }
     },
-    textContent: label
+    textContent: label,
+    querySelector: (selector) => {
+      if (selector === ".l99-tab-lockmark") return lockmark;
+      return null;
+    }
   };
+  let lockmark: { remove(): void } | null = withLockmark
+    ? {
+        remove() {
+          lockmark = null;
+          tab.textContent = stripLockMark(tab.textContent);
+        }
+      }
+    : null;
+  return tab;
 }
 
 interface FakeMapOptions {
@@ -210,6 +224,15 @@ describe("applyRootUnlock:管理员开着才解锁", () => {
     const tab = fakeLockedTab("🌋 火山谷 🔒");
     applyRootUnlock(fakeHost([fakeMap([], [tab])]), NOW);
     expect(tab.classes.has("l99-tab-lock")).toBe(false);
+    expect(tab.textContent).toBe("🌋 火山谷");
+  });
+
+  it("N-117 独立锁标节点优先摘除,不整段改写页签文字", () => {
+    openRootSession(NOW, "1h", null);
+    const tab = fakeLockedTab("🌋 火山谷 🔒", true);
+    applyRootUnlock(fakeHost([fakeMap([], [tab])]), NOW);
+    expect(tab.classes.has("l99-tab-lock")).toBe(false);
+    expect(tab.querySelector(".l99-tab-lockmark")).toBeNull();
     expect(tab.textContent).toBe("🌋 火山谷");
   });
 

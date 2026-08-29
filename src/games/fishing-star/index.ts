@@ -211,7 +211,7 @@ const CSS = `
   background:#ffffffcc;border-radius:12px;padding:5px 10px;min-height:19px;}
 .fs-act{border:none;border-radius:18px;padding:13px 30px;font-size:17px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f0a35c,#dd8232);box-shadow:0 5px 0 #b4652248;
-  min-width:190px;touch-action:none;}
+  min-width:190px;min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;touch-action:none;}
 .fs-act:active{transform:translateY(3px);box-shadow:0 2px 0 #b4652248;}
 .fs-act:focus-visible{outline:3px solid #ffb43c;outline-offset:3px;}
 .fs-act--reel{background:linear-gradient(180deg,#6fc48f,#3f9c68);box-shadow:0 5px 0 #2d7a4e48;}
@@ -224,8 +224,9 @@ const CSS = `
 .fs-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#eaf6fd,#fdf3ea);display:flex;flex-direction:column;gap:8px;}
 .fs-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.fs-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#2f7ba6;box-shadow:0 3px 0 rgba(80,130,170,.28);}
+.fs-back{border:none;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:900;cursor:pointer;min-height:44px;
+  font-family:inherit;background:#ffffffdd;color:#2f7ba6;box-shadow:0 3px 0 rgba(80,130,170,.28);
+  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 .fs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(80,130,170,.28);}
 .fs-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .fs-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
@@ -256,7 +257,7 @@ const CSS = `
 .fs-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 @media (max-width:420px){
   .fs-chip{font-size:11.5px;padding:3px 8px;}
-  .fs-act{padding:12px 22px;font-size:16px;min-width:160px;}
+  .fs-act{padding:12px 22px;font-size:16px;min-width:160px;min-height:${TOUCH_MIN_PX}px;}
   .fs-dex{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));}
 }
 /* 手机竖屏一共 667 像素高,水面上面还压着标题栏。每一行都收一点,
@@ -265,8 +266,12 @@ const CSS = `
   .fs-wrap{gap:5px;}
   .fs-chip{font-size:11px;padding:2px 7px;}
   .fs-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
-  .fs-act{padding:11px 20px;font-size:15.5px;}
+  .fs-act{padding:11px 20px;font-size:15.5px;min-height:${TOUCH_MIN_PX}px;}
   .fs-track{height:14px;}
+}
+@media (max-height:840px) and (min-height:721px){
+  .fs-wrap{gap:6px;}
+  .fs-act{min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-act:active,.fs-open:active{transform:none;}
@@ -356,6 +361,10 @@ const CSS = `
   .fs-act{padding:10px 18px;min-height:44px;box-sizing:border-box;}
   .fss-wind{font-size:11px;padding:2px 7px;}
   .fss-row{gap:4px;}
+}
+@media (max-height:840px) and (min-height:661px){
+  .fs-wrap{max-height:100%;overflow-y:auto;}
+  .fs-act{min-height:44px;box-sizing:border-box;}
 }
 @media (prefers-reduced-motion:reduce){
   .fss-shake{animation:none;}

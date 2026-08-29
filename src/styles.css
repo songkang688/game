@@ -61,6 +61,7 @@ body {
 #app,
 .view {
   min-height: 100dvh;
+  min-height: var(--vv-h, 100dvh);
 }
 
 button {
@@ -846,6 +847,26 @@ button {
   padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
 }
 
+/* 刘海/横屏圆角：返回钮躲开 inset-left；地址栏用 --vv-h，未注入时 100svh 封顶以免裁 .l99-view */
+.screen.game-screen {
+  padding-left: max(clamp(14px, 4vw, 32px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(14px, 4vw, 32px), env(safe-area-inset-right, 0px));
+  height: var(--vv-h, 100dvh);
+  max-height: var(--vv-h, 100dvh);
+}
+
+@supports (height: 100svh) {
+  .screen.game-screen {
+    max-height: var(--vv-h, 100svh);
+  }
+
+  .view:has(.game-screen) {
+    height: var(--vv-h, 100svh);
+    max-height: var(--vv-h, 100svh);
+    overflow: hidden;
+  }
+}
+
 .game-topbar {
   display: flex;
   align-items: center;
@@ -1334,6 +1355,8 @@ button {
   display: flex;
   justify-content: flex-end;
   background: rgba(91, 74, 85, 0.34);
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 .guide-drawer {
@@ -1341,6 +1364,8 @@ button {
   flex-direction: column;
   width: min(420px, 92vw);
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   border-radius: 28px 0 0 28px;
   background: linear-gradient(170deg, #fff8fc 0%, #fdf5ff 60%, #f4f9ff 100%);
   box-shadow: -12px 0 34px rgba(140, 110, 160, 0.24);
@@ -1362,6 +1387,7 @@ button {
 .guide-drawer--sheet {
   width: 100%;
   height: 62vh;
+  min-height: 0;
   margin-top: auto;
   border-radius: 28px 28px 0 0;
   box-shadow: 0 -12px 34px rgba(140, 110, 160, 0.24);
@@ -1388,6 +1414,7 @@ button {
   align-items: center;
   gap: 10px;
   padding: 18px 18px 10px;
+  flex: 0 0 auto;
 }
 
 .guide-title {
@@ -1411,8 +1438,10 @@ button {
 
 .guide-close {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border: none;
   border-radius: 50%;
   font-size: 17px;
@@ -1425,9 +1454,12 @@ button {
 
 .guide-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 4px 18px 8px;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 .guide-section {
@@ -1476,6 +1508,7 @@ button {
   align-items: center;
   gap: 12px;
   padding: 10px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  flex: 0 0 auto;
 }
 
 .guide-tail {
@@ -1580,6 +1613,12 @@ button {
   min-height: 44px;
 }
 
+/* N-201：上面分组与 .btn 同优先级，后写把 58 压成 44。暂停/结算主按钮列在 390
+   上量出来只有 44，看起来扁。地板仍是 44，.btn 自己回到 58。不改 dialogs.ts。 */
+.btn {
+  min-height: 58px;
+}
+
 .icon-btn,
 .guide-close {
   min-width: 44px;
@@ -1676,6 +1715,8 @@ button {
 html {
   max-width: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .screen,
@@ -1683,6 +1724,13 @@ html {
 .home-screen {
   width: 100%;
   max-width: min(1080px, 100%);
+}
+
+/* N-201：.tabs 是设计内 overflow-x:auto 横滑条。touch-action 沿祖先取交集，
+   整页只写 pan-y 时，分类页签（对战/学习/动手在 390 上溢出）手指横划不动。
+   竖滑首页仍走 html 的 overflow-y:auto；横滑只发生在页签条自己的 scrollLeft。 */
+.home-screen {
+  touch-action: pan-x pan-y;
 }
 
 .game-topbar,
@@ -1705,6 +1753,11 @@ html {
   .screen {
     padding-left: 10px;
     padding-right: 10px;
+  }
+
+  .screen.game-screen {
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
   }
 
   .game-topbar {
@@ -1742,6 +1795,36 @@ html {
 
   .recent-grid {
     grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+  }
+}
+
+/* N-123：1024×768 平板横屏 hero 横向留白收敛；915×412 不命中 min-height:600 */
+@media (min-width: 980px) and (min-height: 600px) {
+  .home-screen .home-hero {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin: 6px 0 8px;
+  }
+
+  .home-screen .hero-bubble {
+    flex: 1 1 auto;
+    max-width: none;
+    text-align: left;
+    margin-bottom: 0;
+    padding: 12px 20px;
+  }
+
+  .home-screen .hero-bubble::after {
+    left: 36px;
+    transform: rotate(45deg);
+  }
+
+  .home-screen .grid,
+  .home-screen .recent-grid,
+  .home-screen .fav-grid {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   }
 }
 
@@ -1913,6 +1996,57 @@ html {
 }
 
 @media (max-height: 500px) {
+  /* N-202：915×412 暂停列仍 58，遮罩 20+弹窗 18 把标题和「回首页」裁掉。
+     只收 overlay/dialog 边距与暂停说明，不把 .btn 压回 44。 */
+  .overlay {
+    padding: 6px 12px;
+  }
+
+  .dialog {
+    max-height: calc(var(--vv-h, 100dvh) - 12px);
+    padding: 8px 16px 8px;
+  }
+
+  @supports (height: 100svh) {
+    .dialog {
+      max-height: calc(var(--vv-h, 100svh) - 12px);
+    }
+  }
+
+  .dialog-title {
+    font-size: 20px;
+    margin-bottom: 2px;
+  }
+
+  .pause-content .dialog-text {
+    display: none;
+  }
+
+  /* N-216：915×412 攻略抽屉正文要能滚，头/脚收边，关闭钮仍 44。不挡关卡格子
+     （遮罩全屏点在抽屉外才关）。不改 N-202 暂停 / N-201 横滑。 */
+  .guide-head {
+    padding: 8px 14px 6px;
+    gap: 8px;
+  }
+
+  .guide-title {
+    font-size: 16px;
+  }
+
+  .guide-foot {
+    padding: 6px 14px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .guide-body {
+    padding: 2px 14px 6px;
+  }
+
+  .dialog-buttons {
+    margin-top: 8px;
+    gap: 6px;
+    padding-top: 6px;
+  }
+
   /* N-89:915×412 关内顶栏再收 ~28px 给 sticky 底键；热区仍 ≥44。勿改 orb/snake paneH=200 */
   .game-screen .game-topbar {
     padding: 0;
@@ -2035,6 +2169,57 @@ html {
   .home-screen .section-title {
     margin-bottom: 6px;
     font-size: 18px;
+  }
+}
+
+/* U-4:平板横屏(1024×768) hero 偏肥,首卡只露半行;480/500 档零回退 */
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
+  .home-screen .home-hero {
+    margin: 4px 0 2px;
+    gap: 0;
+  }
+
+  .home-screen .hero-figure {
+    display: none;
+  }
+
+  .home-screen .hero-bubble {
+    padding: 6px 14px;
+    margin-bottom: 4px;
+  }
+
+  .home-screen .hero-bubble span {
+    display: none;
+  }
+
+  .home-screen .tabs {
+    margin-top: 4px;
+    padding: 2px 4px 4px;
+  }
+
+  .home-screen .tabs.mode-chips,
+  .home-screen .tabs.platform-chips {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+    vertical-align: top;
+    gap: 6px;
+  }
+
+  .home-screen .home-toolbar {
+    margin: 4px 0 8px;
+  }
+
+  .home-screen .home-count {
+    display: none;
+  }
+
+  .home-screen .recent-section {
+    margin: 4px 0 2px;
+  }
+
+  .home-screen .section-title {
+    margin-bottom: 6px;
   }
 }
 
@@ -2333,6 +2518,10 @@ html {
   font-weight: 800;
   color: #7a5f3c;
   cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
 }
 
 .cg-log-list {
@@ -3261,6 +3450,9 @@ html {
 .cg-wrap .cg-log-row {
   font-size: 14px;
 }
+.cg-wrap .cg-log-sum {
+  min-height: 44px;
+}
 
 /* B 档 r2 一致性③：cg-wrap 无壳卡，闯关模式下石板棋盘裸坐白底（对战/无尽另有 .cg-mode 卡）。
    草绿壳卡与盘面石板草地同族，按 B 档要求排在 r2-2 修复之后落地。
@@ -3332,5 +3524,20 @@ html {
   .cg-wrap .cg-log {
     max-height: 2.4em;
     overflow: hidden;
+  }
+}
+
+/* U-9:平板横屏「重摆题面」扩 N-66 档,500 档原文不动 */
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
+  .cg-wrap .cg-board {
+    max-width: min(360px, 62dvh);
+    margin-inline: auto;
+  }
+  .cg-wrap .cg-tools {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: 4px 0 2px;
+    background: linear-gradient(180deg, rgba(242, 247, 234, 0.35), #eaf3e4);
   }
 }

@@ -440,7 +440,7 @@ export function mount(api: GameApi): CandySwingHandle {
       .cs-chapter.moonfair .cs-ch-name { color: #FFE9B8; }
       .cs-chapter.moonfair .cs-ch-blurb { color: #C9BDEA; }
       .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
+      .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 44px; min-width: 44px; box-sizing: border-box; }
       .cs-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
       .cs-lv .n { font-size: 16px; font-weight: 800; color: #B03A6B; }
       .cs-lv .s { font-size: 10px; letter-spacing: 1px; }
@@ -474,6 +474,19 @@ export function mount(api: GameApi): CandySwingHandle {
         .cs-wrap.cs-view-map { max-width: 720px; width: 100%; }
         .cs-wrap.cs-view-map .cs-grid { grid-template-columns: repeat(8, 1fr); }
         .cs-wrap.cs-view-map .cds-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
+      }
+      .cs-btn { min-height: 44px; box-sizing: border-box; }
+      /* U-x(#107):矮屏与 501–840 中间档按余高钳画布,写在 N-29 之前不抢已验收档 */
+      @media (max-height:500px) {
+        .cs-canvas { max-height: min(42dvh, 168px); width: auto; margin: 0 auto; }
+      }
+      @media (max-height:840px) and (min-height:501px) {
+        .cs-wrap { padding: 8px; }
+        .cs-top { position: sticky; top: 0; z-index: 3; margin-bottom: 6px; padding-bottom: 4px;
+          background: linear-gradient(180deg, #FFF0F6, rgba(255,240,246,0.85)); }
+        .cs-canvas { max-height: min(52dvh, 280px); width: auto; margin: 0 auto; }
+        .cs-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 6px;
+          background: linear-gradient(180deg, rgba(234,244,255,0), #EAF4FF 45%); padding-top: 4px; }
       }
       /* N-29 尾款:915×412 关内画布 166~660 出屏 248(3:4 定比被 400px 宽驱动)。
          矮横屏按余量钳「显示高」,宽度让 auto 保持长宽比居中;指针按 rect 换算,物理零触碰。 */

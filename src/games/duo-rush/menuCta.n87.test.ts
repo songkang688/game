@@ -19,6 +19,10 @@ describe("N-87 duo-rush 模式菜单怎么玩/收藏册", () => {
     expect(cta).toContain("top: 0");
   });
 
+  it("U-3 竖屏 480 档同样把菜单 CTA 钉顶", () => {
+    expect(INDEX).toContain("@media (max-width: 480px)");
+  });
+
   it("不回退 N-40 赛道 .dr-btns sticky,赛道数学零触碰", () => {
     expect(INDEX).toContain(".dr-btns");
     expect(INDEX).toContain("position: sticky; bottom: 0");

@@ -108,7 +108,7 @@ export const SR_CSS = `
 .sr-board{position:absolute;top:46px;right:14px;background:linear-gradient(180deg,#ffffffe8,#f3fbf1e0);
   border:1px solid #d4ecd4;border-radius:12px;padding:6px 9px;box-shadow:0 3px 10px rgba(90,150,110,.18);
   font-size:16px;font-weight:800;color:#3f7a52;line-height:1.5;max-width:44%;}
-.sr-board summary{cursor:pointer;font-size:16px;}
+.sr-board summary{cursor:pointer;font-size:16px;min-height:44px;display:flex;align-items:center;box-sizing:border-box;}
 .sr-me{color:#b85a2a;}
 .sr-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
 .sr-btn{min-width:88px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:15px;
@@ -152,6 +152,10 @@ export const SR_CSS = `
   .sr-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(234,247,228,.25),#EAF7E4 40%);}
   .sr-msg{min-height:0;max-height:1.5em;overflow:hidden;margin-top:4px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .sr-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(234,247,228,.25),#EAF7E4 40%);}
 }
 `;
 

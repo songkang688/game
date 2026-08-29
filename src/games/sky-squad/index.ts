@@ -126,7 +126,8 @@ export const CSS = `
 .sks-veil-sub{font-size:15px;font-weight:700;color:#5E769C;line-height:1.6;max-width:330px;}
 .sks-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .sks-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;
+  min-height:44px;display:inline-flex;align-items:center;}
 .sks-veil-btn.sks-ghost{background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
 .sks-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #4570B8;}
 .sks-toast{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -141,11 +142,11 @@ export const CSS = `
 .sks-legend{align-self:center;font-size:14px;font-weight:700;color:#63799C;white-space:nowrap;
   flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
 /* 方向盘排成一横条:纵版飞行最缺的就是竖着的地方,九宫格那一坨会把飞机顶出屏幕 */
-.sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:42px;flex-wrap:wrap;}
+.sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:44px;flex-wrap:wrap;}
 .sks-pads[data-players="2"]{--k:44px;}
 .sks-pad{display:flex;align-items:center;gap:4px;}
 .sks-pad-name{font-size:14px;font-weight:800;white-space:nowrap;}
-.sks-key{width:var(--k);height:var(--k);flex:none;}
+.sks-key{width:var(--k);height:var(--k);flex:none;min-width:44px;min-height:44px;}
 .sks-key{border:none;border-radius:13px;font-size:17px;font-weight:900;cursor:pointer;font-family:inherit;
   background:#ffffffe0;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.34);touch-action:none;padding:0;}
 .sks-key:active,.sks-key.sks-down{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,150,200,.34);background:#E3EFFF;}
@@ -162,7 +163,7 @@ export const CSS = `
 .sks-modebar[hidden]{display:none;}
 .sks-mode{border:none;border-radius:999px;padding:8px 13px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;
-  white-space:nowrap;flex:none;}
+  white-space:nowrap;flex:none;min-height:44px;box-sizing:border-box;display:inline-flex;align-items:center;}
 .sks-mode.sks-mode-duo{background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
 .sks-mode.sks-mode-vs{background:linear-gradient(180deg,#FFC46B,#E79B36);box-shadow:0 4px 0 #C07C1F;}
 .sks-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #4570B8;}
@@ -171,7 +172,7 @@ export const CSS = `
   font-family:inherit;background:#ffffffdd;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.3);min-height:44px;}
 .sks-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#35608F;}
 @media (max-width:420px){
-  .sks-pads{--k:38px;gap:6px;}
+  .sks-pads{--k:44px;gap:6px;}
   .sks-pads[data-players="2"]{--k:44px;}
   /* 手机上是拖着飞的,键盘说明先让位给天空 */
   .sks-legend{display:none;}
@@ -179,6 +180,11 @@ export const CSS = `
      换来「暂停」「判定点」这些按钮永远看得见 —— 藏在横滑里孩子根本发现不了 */
   .sks-hud{flex-wrap:wrap;overflow-x:visible;justify-content:center;}
   .sks-modebar{flex-wrap:wrap;overflow-x:visible;}
+}
+/* U-19:中高视口钉方向盘,避免 915/平板切底 */
+@media (max-height:840px) and (min-height:501px){
+  .sks-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(240,246,255,0),#F0F6FF 14px);}
 }
 @media (prefers-reduced-motion:reduce){
   .sks-toast{transition:none;}

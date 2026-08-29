@@ -248,6 +248,18 @@ export const MG_CSS = `
     background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
   .mg-msg{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
 }
+/* U-x(#107):501–840 中间档钉键并按余高钳盘宽 */
+@media (max-height:840px) and (min-height:501px){
+  .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+  .mg-board{max-width:min(100%, calc(100dvh - 260px));margin-inline:auto;}
+}
+/* N-124:平板横屏 768 不命中 500 档;粗指针中间档只抬触区+钉键,不动上面 500 规则 */
+@media (max-height:820px) and (pointer:coarse){
+  .mg-open,.mg-back,.mg-btn{min-height:44px;}
+  .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+}
 @media (prefers-reduced-motion:reduce){
   .mg-tile{transition:none;}
   .mg-tile.mg-pop{animation:none;}

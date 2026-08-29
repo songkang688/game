@@ -94,7 +94,7 @@ export const OA_CSS = `
 .oa-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .oa-board{position:absolute;top:44px;right:14px;background:#ffffffdb;border-radius:12px;padding:6px 9px;
   font-size:16px;font-weight:800;color:#5b4a86;line-height:1.5;max-width:44%;}
-.oa-board summary{cursor:pointer;font-size:16px;}
+.oa-board summary{cursor:pointer;font-size:16px;min-height:44px;display:flex;align-items:center;box-sizing:border-box;}
 .oa-row{display:flex;align-items:center;gap:5px;}
 .oa-row canvas{flex:0 0 auto;border-radius:50%;}
 .oa-rname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:8em;}
@@ -112,8 +112,9 @@ export const OA_CSS = `
 .oa-open:active{transform:translateY(2px);box-shadow:0 2px 0 #62479f;}
 .oa-mode{max-width:720px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
 .oa-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;}
-.oa-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffd9;color:#7b5cc4;box-shadow:0 3px 0 rgba(120,90,180,.3);}
+.oa-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;min-height:44px;
+  font-family:inherit;background:#ffffffd9;color:#7b5cc4;box-shadow:0 3px 0 rgba(120,90,180,.3);
+  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 .oa-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(150,130,200,.25);}
 .oa-over-t{font-size:21px;font-weight:900;color:#6b53a8;margin-bottom:8px;}
 .oa-over-s{font-size:16px;font-weight:700;color:#7a67ab;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
@@ -128,6 +129,11 @@ export const OA_CSS = `
     background:linear-gradient(180deg,rgba(243,238,255,.2),#F3EEFF 40%);}
   .oa-msg{min-height:0;max-height:1.5em;overflow:hidden;margin-top:4px;}
   .oa-board{max-width:36%;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .oa-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(243,238,255,.2),#F3EEFF 40%);}
+  .oa-board{max-width:min(52%, 58dvh);}
 }
 `;
 

@@ -175,7 +175,8 @@ export const PH_CSS = `
 .ph-veil-sub{font-size:14px;font-weight:700;color:#9A7A5E;line-height:1.6;max-width:320px;}
 .ph-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .ph-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;
+  min-height:44px;display:inline-flex;align-items:center;}
 .ph-veil-btn.ph-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .ph-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #C25A80;}
 .ph-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -238,6 +239,15 @@ export const PH_CSS = `
   .ph-pads{--k:44px;margin-top:4px;}
   .ph-pads[data-players="2"]{--k:44px;}
   .ph-tip{margin-top:4px;font-size:11px;}
+}
+@media (max-height:840px) and (min-height:621px){
+  .ph-cv{height:220px;}
+  .ph-wrap[data-players="2"] .ph-cv{height:256px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .ph-pads{position:sticky;bottom:0;z-index:5;margin-top:4px;--k:44px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .ph-pads[data-players="2"]{--k:44px;}
 }
 
 /* ---- 1.2 新增(一律 pph- 前缀)---- */

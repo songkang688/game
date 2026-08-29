@@ -455,13 +455,38 @@ export const SP_CSS = `
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .sp-wrap{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
+    padding-top:4px;}
+}
 /* N-70 双人同屏:数字排在盘下会切 394 / 工具 452。N-49 竞速:两盘折行叠高。矮宽屏左右分座+键靠盘 */
 @media (min-width:640px) and (max-height:500px){
   .sp-seats{flex-wrap:nowrap;gap:8px;}
   .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px;max-width:50%;}
   .sp-pad{width:auto;max-width:128px;margin-top:0;grid-template-columns:repeat(3,1fr);}
-  .sp-key{min-height:40px;font-size:15px;}
+  .sp-key{min-height:44px;font-size:15px;}
   .sp-msg,.sp-hintbox{max-height:2.2em;overflow:hidden;}
+}
+/* U-x(#107):平板 501–840 中间档双人席横排,写在 N-124 之前 */
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .sp-seats{flex-wrap:nowrap;gap:10px;}
+  .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:6px;max-width:50%;}
+  .sp-pad{width:auto;max-width:148px;margin-top:0;grid-template-columns:repeat(3,1fr);}
+}
+/* N-124 模式:915×412 盘旁 3 列数字排,500 档原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .sp-wrap{max-height:calc(100dvh - 108px);display:flex;flex-direction:column;min-height:0;box-sizing:border-box;}
+  .sp-top{flex:0 0 auto;}
+  .sp-seats{flex:1 1 auto;min-height:0;overflow:auto;flex-wrap:nowrap;gap:8px;}
+  .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px;max-width:50%;}
+  .sp-grid{min-width:0;max-height:min(280px,68dvh);}
+  .sp-pad{width:auto;max-width:140px;min-width:132px;margin-top:0;grid-template-columns:repeat(3,1fr);
+    position:sticky;bottom:0;z-index:5;flex:0 0 auto;
+    background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);padding-top:4px;}
+  .sp-key{min-width:44px;min-height:44px;}
+  .sp-tools{position:sticky;bottom:0;z-index:6;flex:0 0 auto;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
+    padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}

@@ -298,13 +298,30 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
       .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; max-height: 520px; overflow-y: auto; }
       .ba-map { max-height: min(960px, max(160px, calc(100dvh - 120px))); }
+      /* r18 B:宽屏选关页别挤在 400px 一条里;只放宽地图态,打泡泡仍是 400 竖版 */
+      @media (min-width: 700px) {
+        .ba-wrap.ba-wrap--map { max-width: 680px; }
+        .ba-wrap--map .ba-grid { grid-template-columns: repeat(6, 1fr); }
+      }
+      @media (min-width: 1000px) {
+        .ba-wrap.ba-wrap--map { max-width: 820px; }
+      }
+      .ba-btn { min-height: 44px; box-sizing: border-box; }
+      .ba-lv { min-height: 44px; box-sizing: border-box; }
+      @media (max-height:840px) and (min-height:501px) {
+        .ba-wrap { padding: 8px; }
+        .ba-top { margin-bottom: 6px; }
+        .ba-canvas { max-height: min(56dvh, 320px); width: auto; margin: 0 auto; }
+        .ba-msg { position: sticky; bottom: 0; z-index: 2; margin-top: 6px;
+          background: linear-gradient(180deg, rgba(232,244,255,0), #E8F4FF 40%); padding-top: 4px; }
+      }
       .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
       .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
       .ba-theme { border-radius: 14px; padding: 10px; margin-bottom: 10px; }
       .ba-th-head { font-weight: 800; font-size: 14px; margin-bottom: 2px; }
       .ba-th-blurb { font-size: 11px; opacity: 0.85; margin-bottom: 8px; }
       .ba-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .ba-lv { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 3px 0 #C7DEF2; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .ba-lv { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 3px 0 #C7DEF2; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 44px; min-width: 44px; box-sizing: border-box; }
       .ba-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 #C7DEF2; }
       .ba-lv .num { font-weight: 800; font-size: 15px; color: #2A6099; }
       .ba-lv .stars { font-size: 10px; letter-spacing: -1px; }
@@ -318,6 +335,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .bba-swap { min-width: 44px; min-height: 34px; background: #FFDCEB; color: #A8467A; box-shadow: 0 3px 0 #EEB6CF; }
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
       ${touchUpliftCss([".ba-btn", ".bba-mode", ".bba-swap"], { minWidth: true })}
+      .bba-mode,.bba-swap{min-height:44px;box-sizing:border-box;}
       ${bodyFontUpliftCss([".ba-msg"])}
       /* N-29 尾款:关内/无尽工具排(回地图/换弹/🔄)从 kit 的 40px 抬到 44px 热区线 */
       .ba-btn, .bba-mode, .bba-swap { min-height: 44px; min-width: 44px; }
@@ -415,6 +433,9 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     flight = null;
     aiming = false;
     endless = false;
+    // r18 B:选关页在宽屏放宽列宽(见 .ba-wrap--map),打泡泡时仍回 400px 竖版。
+    // 用 className 拼字符串:单测的假元素没有 classList,classList.add 会炸。
+    wrap.className = "ba-wrap ba-wrap--map";
     topBar.style.display = "none";
     canvas.style.display = "none";
     mapEl.style.display = "";
@@ -517,6 +538,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
 
   function startLevel(index: number): void {
     screen = "play";
+    wrap.className = "ba-wrap";
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";
@@ -555,6 +577,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
    */
   function startEndless(): void {
     screen = "play";
+    wrap.className = "ba-wrap";
     topBar.style.display = "";
     canvas.style.display = "";
     mapEl.style.display = "none";

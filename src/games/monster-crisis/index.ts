@@ -185,6 +185,22 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+/* U-x(#107):501–840 中间档把操控排 sticky 钉底 */
+@media (max-height:840px) and (min-height:501px){
+  .mcr-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,253,250,0),#fffdfa 16px);}
+}
+/* N-124 模式:915×412 摇杆/甩弹并排钉在画布旁,不改 ARENA 尺寸与 arenaCanvasSize。
+   写在 N-106 之前:≤500 两档同时命中,让 1.3 已验收的 fixed 钉底方案最终生效;
+   501~820 的粗指针中间档只命中本档,拿到并排栅格。 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .mcr-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;justify-items:stretch;
+    max-height:calc(100dvh - 108px);overflow:hidden;box-sizing:border-box;}
+  .mcr-hud,.mcr-tip{grid-column:1/-1;}
+  .mcr-stage{grid-column:1;min-width:0;}
+  .mcr-pads{grid-column:2;grid-row:2;flex-direction:column;align-items:flex-start;width:auto;min-height:0;
+    position:sticky;top:0;z-index:5;}
+}
 /* N-106:双人合作双摇杆 370~462 / 甩弹 379~453 被排到 412 线下(裁切壳 overflow:hidden)。
    矮横屏两组操控 fixed 钉视口左右下角:画布(154~360)两侧全是空地,盖不到战场;
    摇杆判定走自身 rect,fixed 后照常。技能三卡 .mcr-cards 一条不动。 */

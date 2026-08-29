@@ -144,17 +144,26 @@ const CSS = `
 .mp-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .mp-bar-modes[hidden] { display: none; }
-.mp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8FBB4E, #6F9C36); box-shadow: 0 4px 0 #567A28; }
+.mp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8FBB4E, #6F9C36); box-shadow: 0 4px 0 #567A28; min-height: 44px; }
 .mp-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #567A28; }
 .mp-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .mp-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.mp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6F8C42; box-shadow: 0 3px 0 rgba(110,150,60,.3); }
+.mp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6F8C42; box-shadow: 0 3px 0 rgba(110,150,60,.3); min-height: 44px; }
 .mp-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,150,60,.3); }
 .mp-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6F8C42; box-shadow: 0 2px 6px rgba(130,170,90,.25); }
 .mp-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(150,170,110,.25); }
 .mp-over-t { font-size: 22px; font-weight: 900; color: #6F8C42; margin-bottom: 8px; }
 .mp-over-s { font-size: 15px; font-weight: 700; color: #8A7A3E; line-height: 1.6; margin-bottom: 14px; }
 @media (max-width: 380px) { .mp-board { gap: 12px; } .mp-badge { font-size: 14px; padding: 4px 8px; } }
+/* C-5 / U-8:3×3 洞格按余高反推,915 与平板横屏都能看见三排。
+   写在下面 C-5 两栏档之前:915×412 仍走已验收的两栏方案。 */
+@media (max-height: 500px) {
+  .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
+}
+/* 1024×768 实测 240 预算仍让第三排切出舞台 58px;500 档 240 原文不动 */
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
+  .mp-board { max-width: min(100%, calc(100dvh - 320px)); margin: 0 auto; gap: 8px; }
+}
 /* C-5:915×412 九洞 250~894(root×167 更差),洞径被 3 列全宽驱动撑到 207px。
    矮横屏改两栏:徽章/算式/进度条挪左栏,九洞盘上顶,盘宽按「视口高 − 盘顶那摞」反推——
    洞径 ≈ (盘宽 − 2×gap) ÷ 3 ≥ 44px。390×844 竖屏不吃这一档,谱面/判定零触碰。 */

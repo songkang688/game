@@ -1147,6 +1147,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function inRect(x: number, y: number, r: Rect | null): boolean {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
+  /** N-126:画可以小于 44,点按按中心扩到 44 且不落到画布外 */
+  function hit44(r: Rect | null): Rect | null {
+    if (!r) return null;
+    const w = Math.max(r.w, 44);
+    const h = Math.max(r.h, 44);
+    return { x: Math.max(0, r.x + (r.w - w) / 2), y: Math.max(0, r.y + (r.h - h) / 2), w, h };
+  }
 
   function onPointerDown(e: PointerEvent): void {
     if (destroyed) return;
@@ -1165,7 +1172,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "themes") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "menu";
         return;
@@ -1185,7 +1192,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "map") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "themes";
         return;
@@ -2395,7 +2402,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         color: "#6fc7a8",
       },
     ];
-    const cardH = Math.min(88, (h * 0.66) / configs.length - 12);
+    const cardH = Math.max(44, Math.min(88, (h * 0.66) / configs.length - 12));
     for (let i = 0; i < configs.length; i++) {
       const c = configs[i];
       const rect: Rect = { x: (w - bw) / 2, y: h * 0.26 + i * (cardH + 16), w: bw, h: cardH };

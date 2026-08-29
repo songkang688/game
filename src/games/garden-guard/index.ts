@@ -708,6 +708,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function inRect(x: number, y: number, r: Rect | null): boolean {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
+  /** N-126/N-129:绘制可小于 44,点按中心扩到 44 */
+  function hit44(r: Rect | null): Rect | null {
+    if (!r) return null;
+    const w = Math.max(r.w, 44);
+    const h = Math.max(r.h, 44);
+    return { x: Math.max(0, r.x + (r.w - w) / 2), y: Math.max(0, r.y + (r.h - h) / 2), w, h };
+  }
 
   function onPointerDown(e: PointerEvent): void {
     if (destroyed) return;
@@ -728,7 +735,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "themes") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "home";
         return;
@@ -748,7 +755,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "map") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "themes";
         return;
@@ -767,7 +774,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "intro") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = mode === "endless" ? "home" : "map";
         return;
@@ -825,7 +832,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     // 玩关卡时左上角随时回地图
-    if (inRect(x, y, btnBack)) {
+    if (inRect(x, y, hit44(btnBack))) {
       api.play("tap");
       phase = mode === "endless" ? "home" : "map";
       return;
@@ -859,7 +866,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 塔操作面板
     if (selectedTower) {
       const t = selectedTower;
-      if (inRect(x, y, panelUpgrade) && t.level < MAX_TOWER_LEVEL) {
+      if (inRect(x, y, hit44(panelUpgrade)) && t.level < MAX_TOWER_LEVEL) {
         const cost = upgradeCost(t.kind, t.level);
         if (petals >= cost) {
           petals -= cost;
@@ -873,7 +880,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         }
         return;
       }
-      if (inRect(x, y, panelSell)) {
+      if (inRect(x, y, hit44(panelSell))) {
         const refund = sellRefund(t.kind, t.level);
         petals += refund;
         occupied.delete(`${t.col},${t.row}`);
@@ -1870,7 +1877,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = "#7a6a52";
     ctx.fillText("在格子上种下小塔,别让小怪走到花朵那儿", w / 2, 70);
 
-    const bw2 = Math.min(300, w - 48);
+    // r18 B:平板横屏画布 900px+ 宽时,300px 的入口卡浮在大片渐变里显得空。放宽到 420
+    // 更压得住场;命中判定和绘制共用同一 Rect,热区跟着一起变,窄屏还是 300。
+    const bw2 = Math.min(w >= 720 ? 420 : 300, w - 48);
     const bh2 = Math.min(120, (h - 130) / 2.4);
     const gap = 18;
     const y0 = Math.max(96, h / 2 - bh2 - gap / 2);

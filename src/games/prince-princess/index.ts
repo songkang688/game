@@ -212,7 +212,8 @@ export const CSS = `
 .pcp-veil-sub{font-size:14px;font-weight:700;color:#96658C;line-height:1.6;max-width:330px;}
 .pcp-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .pcp-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;
+  min-height:44px;display:inline-flex;align-items:center;}
 .pcp-veil-btn.pcp-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .pcp-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #A6486F;}
 .pcp-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -226,9 +227,9 @@ export const CSS = `
 .pcp-cue-icons{font-size:26px;letter-spacing:8px;line-height:1.1;}
 .pcp-cue-line{font-size:15px;font-weight:900;color:#6B3A62;white-space:nowrap;}
 .pcp-cue-legend{font-size:12px;font-weight:800;color:#8A5A2B;white-space:nowrap;}
-.pcp-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;}
-.pcp-pads[data-players="2"]{--k:42px;}
-.pcp-pad{display:grid;grid-template-columns:repeat(4,var(--k));grid-auto-rows:var(--k);gap:4px;justify-content:center;}
+.pcp-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;--cols:4;}
+.pcp-pads[data-players="2"]{--k:44px;--cols:3;}
+.pcp-pad{display:grid;grid-template-columns:repeat(var(--cols),var(--k));grid-auto-rows:var(--k);gap:4px;justify-content:center;}
 .pcp-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#7B4A72;text-align:center;line-height:1.3;}
 .pcp-key{border:none;border-radius:14px;font-size:19px;font-weight:900;cursor:pointer;font-family:inherit;
   background:#ffffffe0;color:#7B4A72;box-shadow:0 3px 0 rgba(170,120,160,.34);touch-action:none;padding:0;
@@ -254,13 +255,14 @@ export const CSS = `
 .pcp-over-s{font-size:14px;font-weight:700;color:#96658C;line-height:1.6;max-width:330px;}
 .pcp-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .pcp-act{border:none;border-radius:16px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;}
+  font-family:inherit;background:linear-gradient(180deg,#E784AE,#C85E8C);box-shadow:0 4px 0 #A6486F;
+  min-height:44px;}
 .pcp-direct{position:relative;min-height:120px;}
 @media (max-width:420px){
   .pcp-cv{height:180px;}
   .pcp-wrap[data-players="2"] .pcp-cv{height:270px;}
   .pcp-pads{--k:46px;margin-top:6px;}
-  .pcp-pads[data-players="2"]{--k:37px;}
+  .pcp-pads[data-players="2"]{--k:44px;}
   .pcp-chip{font-size:14px;padding:3px 6px;}
   .pcp-hud{gap:4px;margin-bottom:4px;}
   .pcp-bar{min-width:78px;height:20px;}
@@ -274,8 +276,12 @@ export const CSS = `
 @media (max-height:620px){
   .pcp-cv{height:142px;}
   .pcp-wrap[data-players="2"] .pcp-cv{height:216px;}
-  .pcp-pads{--k:42px;margin-top:4px;}
-  .pcp-pads[data-players="2"]{--k:34px;}
+  .pcp-pads{--k:44px;margin-top:4px;}
+  .pcp-pads[data-players="2"]{--k:44px;}
+}
+@media (max-height:840px) and (min-height:621px){
+  .pcp-cv{height:220px;}
+  .pcp-wrap[data-players="2"] .pcp-cv{height:252px;}
 }
 /* N-79:两人一起闯关 D-pad 540/578。无尽城堡塔画布本轮已在屏,此档只压双人闯关画布 */
 @media (max-height:500px){
@@ -284,10 +290,15 @@ export const CSS = `
   .pcp-hud{flex:0 0 auto;margin-bottom:4px;}
   .pcp-cv{height:118px;}
   .pcp-wrap[data-players="2"] .pcp-cv{height:118px;}
-  .pcp-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;--k:40px;margin-top:4px;
+  .pcp-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;--k:44px;margin-top:4px;
     background:linear-gradient(180deg,rgba(255,245,250,0),#FFF5FA 16px);padding-top:4px;}
-  .pcp-pads[data-players="2"]{--k:36px;}
+  .pcp-pads[data-players="2"]{--k:44px;}
   .pcp-tip{max-height:1.2em;overflow:hidden;margin-top:2px;}
+}
+/* U-20:平板横屏键排不命中 500 档,同款 sticky 扩到 840 */
+@media (max-height:840px) and (min-height:501px){
+  .pcp-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,245,250,0),#FFF5FA 16px);padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .pcp-bar-fill,.pcp-toast{transition:none;}
@@ -864,7 +875,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     for (const k of PAD_KEYS) {
       const btn = el("button", `pcp-key${k.cls ? ` ${k.cls}` : ""}`, k.label);
       btn.type = "button";
-      btn.style.gridColumn = String(k.col);
+      const col = opts.players === 2 && k.col > 3 ? 3 : k.col;
+      btn.style.gridColumn = String(col);
       btn.style.gridRow = String(k.row);
       btn.setAttribute("aria-label", `${opts.players === 2 ? HERO_COLORS[pi].name : ""}${k.aria}`);
       pad.appendChild(btn);

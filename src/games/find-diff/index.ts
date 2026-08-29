@@ -174,7 +174,7 @@ const CSS = `
 @keyframes fdfRipple{from{transform:scale(.35);opacity:.9}to{transform:scale(1.15);opacity:0}}
 .fdf-confetti{font-size:20px;letter-spacing:6px;animation:fdfPop .6s ease-out;}
 @keyframes fdfPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
-.fdf-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;line-height:1.4;}
+.fdf-msg{min-height:20px;font-size:16px;font-weight:800;text-align:center;line-height:1.4;}
 .fdf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
 /* 两张图收到底线仍装不下时（横屏 640×360）由 fitViewport() 挂上这一档：
    整屏自己滚，翻到底不许把外面那层也带着走。两张图那一格有自己的滚动条与
@@ -182,6 +182,10 @@ const CSS = `
 .fdf-wrap.fdf-scroll{overscroll-behavior:contain;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
 .fdf-tools[hidden]{display:none;}
+@media (max-height:840px) and (min-height:501px){
+  .fdf-tools{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#fff8ec 40%);}
+}
 .fdf-btn{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;cursor:pointer;
   min-height:44px;color:#fff;background:linear-gradient(180deg,#74c0fc,#4dabf7);box-shadow:0 4px 0 #1c7ed6;
   font-family:inherit;white-space:nowrap;}
@@ -197,6 +201,10 @@ const CSS = `
 @media (max-width:380px){
   .fdf-wrap{padding:8px;}
   .fdf-zoomrow input{width:88px;}
+}
+@media (max-height:820px) and (pointer:coarse){
+  .fdf-wrap{padding:8px;gap:6px;}
+  .fdf-btn{min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .fdf-cell.fdf-slide,.fdf-cell.fdf-hintspot,.fdf-ripple,.fdf-confetti{animation:none;}

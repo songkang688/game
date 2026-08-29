@@ -375,9 +375,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-seg button.on { border-color: #F2A0C0; background: #FFE4EF; color: #C2497E; }
       .dr-hint { color: #6E86A0; font-size: 13.5px; margin: 8px 2px 0; min-height: 19px; line-height: 1.5; }
       .dr-ghostline { color: #8A6AB0; font-size: 13.5px; font-weight: 700; margin: 0 2px; min-height: 19px; }
-      .dr-start { border: none; border-radius: 18px; padding: 15px; font-size: 20px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 5px 0 #64AEE0; width: 100%; font-family: inherit; }
+      .dr-start { border: none; border-radius: 18px; padding: 15px; font-size: 20px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 5px 0 #64AEE0; width: 100%; font-family: inherit; min-height: 44px; }
       .dr-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #64AEE0; }
-      .dr-softbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #D9F2C4; color: #4A7A2A; cursor: pointer; box-shadow: 0 4px 0 #ADD68E; width: 100%; font-family: inherit; }
+      .dr-softbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #D9F2C4; color: #4A7A2A; cursor: pointer; box-shadow: 0 4px 0 #ADD68E; width: 100%; font-family: inherit; min-height: 44px; }
       .dr-softbtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #ADD68E; }
       .dr-collectbtn { background: #FFE7C2; color: #9A5A20; box-shadow: 0 4px 0 #E2BE87; }
       .dr-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; background: #EAF3FF; }
@@ -406,6 +406,34 @@ export function mount(api: GameApi): { destroy: () => void } {
           box-shadow: 0 -8px 14px rgba(90,140,190,.16);
         }
       }
+      @media (max-height: 840px) and (min-height: 501px) {
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
+        .dr-canvas { max-height: min(52dvh, 320px); width: auto; max-width: 100%; margin: 0 auto; }
+        .dr-btns {
+          position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
+          background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
+          box-shadow: 0 -8px 14px rgba(90,140,190,.16);
+        }
+      }
+      @media (max-width: 480px) {
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
+      }
       .dr-pause { background: #E3E8FF; color: #4A55A8; }
       .dr-again { background: #D9F2C4; color: #4A7A2A; }
       .dr-back { background: #FFE0C2; color: #9A5A20; }
@@ -414,11 +442,19 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-pausepanel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(244,250,255,.94); border-radius: 20px; z-index: 5; }
       .dr-pausepanel h3 { color: #C2497E; font-size: 22px; margin: 0; }
       .dr-pausepanel p { color: #4A6A8A; font-size: 14.5px; margin: 0; text-align: center; padding: 0 18px; line-height: 1.6; }
-      .dr-resume { border: none; border-radius: 16px; padding: 13px 28px; font-size: 17px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 4px 0 #64AEE0; font-family: inherit; }
+      .dr-resume { border: none; border-radius: 16px; padding: 13px 28px; font-size: 17px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 4px 0 #64AEE0; font-family: inherit; min-height: 44px; }
       .dr-rules { position: absolute; inset: 0; background: #F4FAFF; border-radius: 20px; padding: 14px; overflow-y: auto; z-index: 6; }
       .dr-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
       .dr-rules p { color: #4A6A8A; font-size: 14.5px; line-height: 1.75; margin: 6px 0; }
-      .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; }
+      .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; min-height: 44px; }
+      /* N-122:390×844 不命中 500 档;竖屏把菜单 CTA 钉视口底,长表单可滚到、开跑不裁 */
+      @media (max-width: 430px) and (min-height: 700px) {
+        .dr-menu-cta {
+          position: sticky; bottom: 0; z-index: 4; padding: 8px 0 4px;
+          background: linear-gradient(180deg, rgba(233,244,255,.2), #E9F4FF 28%, #FFEEF6);
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start { min-height: 44px; }
+      }
       /* ---- 1.2 第 11 步 A 新增,一律 dur- 前缀 ---- */
       .dur-stage { position: relative; line-height: 0; }
       .dur-pad { position: absolute; display: flex; align-items: center; gap: 8px; pointer-events: none; }

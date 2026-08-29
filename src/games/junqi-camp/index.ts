@@ -37,7 +37,8 @@ const SHELL_CSS = `
 .jq-sub{font-size:14px;font-weight:700;color:#6f7c59;text-align:center;line-height:1.6;max-width:330px;}
 .jq-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .jq-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8FBF63,#71A248);box-shadow:0 4px 0 #5c8639;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8FBF63,#71A248);box-shadow:0 4px 0 #5c8639;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .jq-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #5c8639;}
 .jq-mode.jq-b{background:linear-gradient(180deg,#5F8FD0,#4B76B4);box-shadow:0 4px 0 #3b5e92;}
 .jq-mode.jq-c{background:linear-gradient(180deg,#D89A54,#BC7F3C);box-shadow:0 4px 0 #9a662d;}
@@ -56,6 +57,14 @@ const SHELL_CSS = `
 .jq-crest{display:inline-flex;align-items:center;gap:4px;background:#fff;border-radius:999px;padding:5px 10px;
   font-size:14px;font-weight:800;color:#5f6b4b;box-shadow:0 2px 6px rgba(120,130,100,.22);white-space:nowrap;}
 .jq-crest svg{display:block;}
+/* r18 B:同 dark-chess —— 平板横屏首屏菜单 326px 沉在白卡顶部,下方空洞。
+   竖直居中 + 模式块 420→560 放宽,窄屏/矮横屏零变化。 */
+@media (min-width:900px) and (min-height:620px){
+  .jq-menu{min-height:calc(100dvh - 180px);justify-content:center;gap:14px;}
+  .jq-sub{max-width:430px;}
+  .jq-modes{max-width:560px;gap:12px;grid-template-columns:repeat(2,1fr);}
+  .jq-mode{padding:18px 12px;font-size:18px;}
+}
 `;
 
 const AI_DELAY_MS = 560;

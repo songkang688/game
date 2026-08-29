@@ -183,6 +183,10 @@ const REVIEW_CSS = `
   .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt img{max-height:40px;}
   .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-choices{position:sticky;bottom:0;z-index:2;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-choices{position:sticky;bottom:0;z-index:2;
+    padding-top:4px;background:linear-gradient(180deg,rgba(255,255,255,0),#fff 42%);}
+}
 `;
 
 export interface ReviewOptions {

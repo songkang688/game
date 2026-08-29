@@ -273,6 +273,15 @@ const CSS = `
   .se-wrap{max-height:calc(100dvh - 76px);}
   .se-board-wrap{max-height:min(156px,38dvh);}
 }
+/* U-1:平板横屏(768/820 高)吃不到 500 档,同款 sticky + 棋盘钳高扩一档 */
+@media (max-height:900px) and (min-height:501px){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(280px,52dvh);max-width:min(280px,52dvh,calc(100dvh - 140px));}
+}
 /* r18 · N-3:模式屏(1v3/短盘/双人)实测 .se-wrap 顶距 128,76 的预算让 .se-pad 的
    sticky 根本钉不住(掷骰 442 线下)。只在模式屏补真预算;座位藏净资产行抬棋盘;
    行动排收窄靠右,少遮棋盘下缘。闯关 .se-wrap 与 38dvh 棋盘钳一律不动。 */
@@ -280,6 +289,32 @@ const CSS = `
   .se-mode .se-wrap{max-height:calc(100dvh - 128px);}
   .se-mode .se-seat-info{display:none;}
   .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* U-x(#107):平板 501–840 中间档手牌排右对齐 */
+@media (max-height:840px) and (min-height:501px) and (min-width:700px){
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* N-124 模式:768 不命中 500;粗指针钉行动排+收盘。r10/r14/r18 500 原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-wrap{max-height:calc(100dvh - 96px);min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .se-board-wrap{max-height:min(280px,48dvh);max-width:min(280px,48dvh,calc(100dvh - 140px));}
+}
+@media (max-height:820px) and (min-width:700px) and (pointer:coarse){
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* N-122 模式:390×844 钉掷骰行,不拆 500 档 overflow:hidden 锁 */
+@media (max-width:430px) and (min-height:700px){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(52dvh,320px);max-width:min(52dvh,320px);}
 }
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}

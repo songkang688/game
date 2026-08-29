@@ -106,7 +106,7 @@ export const CSS = `
 
 /* 结算跳数:${TALLY_MS}ms 走完,点一下立刻停在终值;上面那块小画布是矿石飞进钱袋的清点台 */
 .gdh-tally{font-size:26px;font-weight:900;color:#B37514;cursor:pointer;line-height:1.2;
-  display:flex;align-items:center;justify-content:center;gap:6px;}
+  display:flex;align-items:center;justify-content:center;gap:6px;min-height:${TOUCH_MIN}px;box-sizing:border-box;}
 .gdh-tally-hint{font-size:11px;font-weight:700;color:#A08A66;}
 .gdh-tally-fly{display:block;margin:0 auto;width:140px;height:44px;}
 
@@ -126,6 +126,26 @@ export const CSS = `
 .gdh-topbar-title{flex:1;text-align:center;font-size:14px;font-weight:900;color:#7A5A2E;}
 .gdh-btn:focus-visible,.gdh-buy:focus-visible,.gdh-card:focus-visible,.gdh-cv:focus-visible{
   outline:3px solid #6B4A16;outline-offset:3px;}
+
+/* r18 B:平板横屏/桌面首页只占 250px 贴顶,下方 400px 空白。竖直居中 + 卡片放大一档;
+   只作用于首页(gdh-home),关内结算面板同用 gdh-modes,不许被扫到。窄屏/矮横屏原样。 */
+@media (min-width:900px) and (min-height:620px){
+  .gdh-home{min-height:calc(100dvh - 180px);justify-content:center;gap:16px;}
+  .gdh-home .gdh-cards{gap:16px;}
+  .gdh-home .gdh-card{min-width:200px;max-width:260px;padding:18px 20px;}
+  .gdh-home .gdh-card-emoji{font-size:36px;}
+  .gdh-home .gdh-card-name{font-size:18px;}
+  .gdh-home .gdh-card-sub{font-size:13px;}
+}
+@media (min-width:700px) and (max-width:899px) and (min-height:700px){
+  .gdh-home{min-height:calc(100dvh - 180px);justify-content:center;gap:14px;}
+  .gdh-home .gdh-cards{gap:14px;}
+  .gdh-home .gdh-card{min-width:180px;max-width:240px;padding:16px 18px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .gdh-ctrl{position:sticky;bottom:0;z-index:3;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,251,244,0),#FFFBF4 40%);}
+}
 
 @media (max-width:420px){
   /* 窄屏上按钮把文字收起来只留图标,一行才塞得下,但热区一格都不缩 */
