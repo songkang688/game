@@ -218,6 +218,22 @@ jobs:
           **没有广告、没有内购、不用注册、不联网、不收集任何数据。**
 
           正式发行只挂 **三个包**:Mac 安装包、Windows 便携版、安卓 APK。
+          EOF
+
+          # 本版亮点:有 docs/release-notes/<版本>.md 就插进来,没有就跳过。
+          # 以后每发一版只要加一个笔记文件,不用再回来改这个工作流。
+          if [ -f "docs/release-notes/$VERSION.md" ]; then
+            {
+              echo ""
+              echo "## 这一版新增了什么"
+              echo ""
+              cat "docs/release-notes/$VERSION.md"
+            } >> RELEASE_BODY.md
+          else
+            echo "::warning::没有 docs/release-notes/$VERSION.md,Release 说明里不会有本版亮点"
+          fi
+
+          cat >> RELEASE_BODY.md <<EOF
 
           ## 下载哪一个?
 
