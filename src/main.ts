@@ -2,6 +2,7 @@ import "./styles.css";
 import { loadGames } from "./engine/loader";
 import { createApp } from "./ui/app";
 import { bindVisualViewportHeight } from "./ui/viewportHeight";
+import { restoreFromVault, startAutoBackup } from "./engine/vault";
 
 /** 底部小吐司:提示有新版本,点一下就更新 */
 function showUpdateToast(onUpdate: () => void): void {
@@ -54,9 +55,32 @@ function setupPWA(): void {
     });
 }
 
+/**
+ * 开机自检:本地一片空白(新装 / 卸载重装 / 刚清空)时,把保险箱里的进度接回来。
+ * 本地已经有进度就一律不碰,恢复交给家长面板里的按钮。
+ * 恢复发生在建界面之前,首页的星星和关卡进度一上来就是对的。
+ */
+function bootVault(mount: () => void): void {
+  let mounted = false;
+  const go = (): void => {
+    if (mounted) return;
+    mounted = true;
+    mount();
+    startAutoBackup();
+  };
+  // 保险箱慢或没反应都不能把孩子挡在门外:最多等 1.5 秒就先开门
+  const guard = window.setTimeout(go, 1500);
+  restoreFromVault()
+    .catch(() => undefined)
+    .then(() => {
+      window.clearTimeout(guard);
+      go();
+    });
+}
+
 const appEl = document.getElementById("app");
 if (appEl) {
   bindVisualViewportHeight();
-  createApp(appEl, loadGames());
+  bootVault(() => createApp(appEl, loadGames()));
 }
 setupPWA();
