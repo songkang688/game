@@ -224,6 +224,29 @@ export const HC_CSS = `
   .hc-seats{margin-bottom:4px;}
   .hc-wrap{max-height:calc(100dvh - 76px);}
 }
+/* N-124 模式:768 不命中 500;粗指针钉手牌/出牌。500 overflow 锁原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .hc-log{min-height:0;max-height:3.2em;}
+  .hc-hand{
+    position:sticky;bottom:52px;z-index:5;margin:0;padding:8px 4px 6px;
+    background:linear-gradient(180deg, rgba(255,248,242,.35), #FFF8F2 40%);
+  }
+  .hc-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:0;padding:6px 4px 4px;
+    background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
+  }
+}
+/* N-122 模式:390×844 钉确定行 */
+@media (max-width:430px) and (min-height:700px){
+  .hc-hand{
+    position:sticky;bottom:52px;z-index:5;margin:0;padding:8px 4px 6px;
+    background:linear-gradient(180deg, rgba(255,248,242,.35), #FFF8F2 40%);
+  }
+  .hc-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:0;padding:6px 4px 4px;
+    background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
+  }
+}
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
   .hc-petal{display:none;}

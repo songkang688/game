@@ -346,6 +346,13 @@ export const WQ_CSS = `
   .wq-wrap>.wq-hud{position:absolute;top:0;left:0;width:auto;z-index:6;margin:0;}
   .wq-scroll{max-height:min(280px, calc(100dvh - 128px));}
 }
+/* N-124 模式:915×412 钉开始钮,500 盘钳原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .wq-setup{max-height:calc(100dvh - 108px);overflow:auto;gap:6px;box-sizing:border-box;}
+  .wq-row{flex-wrap:nowrap;overflow-x:auto;max-width:100%;}
+  .wq-note{max-height:2.2em;overflow:hidden;}
+  .wq-setup .wq-open{position:sticky;bottom:0;z-index:5;}
+}
 @media (prefers-reduced-motion:reduce){
   .wq-canvas{transition:none;}
 }

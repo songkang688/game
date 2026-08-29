@@ -141,6 +141,17 @@ const CSS = `
   .brk-btn:active, .brk-open:active { transform: none; }
 }
 ${touchUpliftCss([".brk-open", ".brk-back"])}
+/* N-124 模式:915×412 钉回关。写在 uiTouch 40 后面,才能盖过 min-height:40 */
+@media (max-height:820px) and (pointer:coarse){
+  .brk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;
+    box-sizing:border-box;min-height:0;}
+  .brk-top,.brk-power,.brk-msg{flex:0 0 auto;}
+  .brk-canvas{max-height:min(160px,38dvh);}
+  .brk-ctrl,.brk-again{position:sticky;bottom:0;z-index:4;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,239,228,.2),#FFEFE4);}
+  .brk-msg{max-height:1.3em;overflow:hidden;margin-top:2px;}
+  .brk-back{min-height:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
+}
 `;
 
 function reducedMotion(): boolean {

@@ -2467,6 +2467,10 @@ html {
   font-weight: 800;
   color: #7a5f3c;
   cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
 }
 
 .cg-log-list {
@@ -3394,6 +3398,9 @@ html {
 .cg-wrap .cg-log-sum,
 .cg-wrap .cg-log-row {
   font-size: 14px;
+}
+.cg-wrap .cg-log-sum {
+  min-height: 44px;
 }
 
 /* B 档 r2 一致性③：cg-wrap 无壳卡，闯关模式下石板棋盘裸坐白底（对战/无尽另有 .cg-mode 卡）。

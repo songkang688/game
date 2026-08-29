@@ -9,6 +9,9 @@ describe("N-56 sky-squad 双人合作只抬热区", () => {
     expect(SRC).toMatch(/\.sks-back\{[^}]*min-height:44px/);
     expect(SRC).toMatch(/\.sks-opt\{[^}]*min-height:44px/);
     expect(SRC).toContain('.sks-pads[data-players="2"]{--k:44px;}');
+    expect(SRC).toContain(".sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:44px;flex-wrap:wrap;}");
+    expect(SRC).not.toContain("--k:38px");
+    expect(SRC).not.toContain("--k:42px");
     expect(SRC).not.toContain("--k:36px");
     expect(SRC).not.toContain("--k:34px");
   });

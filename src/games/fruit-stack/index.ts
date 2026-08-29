@@ -156,6 +156,22 @@ const CSS = `
     padding:4px 2px 2px;border-radius:0 0 14px 14px;}
   .fs-wrap>.fs-pad .fs-pad{position:static;background:none;padding:0;}
 }
+/* 以下三档是 r21-B 的 sticky 兜底,选择器特异度低于上面的 .fs-wrap>.fs-pad,
+   所以 915×412 仍走 N-107 的 fixed 钉底,不会互相打架。 */
+@media (max-height:500px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,244,248,.35),#FFF4F8 40%);}
+}
+/* N-124 模式:768 不命中 500;粗指针中间档钉投放键。玩法/物理零改 */
+@media (max-height:820px) and (pointer:coarse){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(255,244,248,.35),#FFF4F8 40%);}
+}
+/* N-122 模式:390×844 不命中 500/820;竖屏钉投放键,舞台可滚到底 */
+@media (max-width:430px) and (min-height:700px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:8px 0 4px;
+    background:linear-gradient(180deg,rgba(255,244,248,.2),#FFF4F8 32%);}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}
 }
@@ -886,7 +902,13 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     const gap = opts.seats > 1 ? 10 : 0;
     const per = (avail - gap) / opts.seats;
     const guessed = Math.max(220, (window.innerHeight || 720) - 300);
-    const stageH = Math.max(180, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const view = host.closest?.(".l99-view") as HTMLElement | null;
+    const viewH = view && view.clientHeight > 0 ? view.clientHeight : 0;
+    const vhCap = Math.max(180, (window.innerHeight || 720) - 96);
+    const stageH = Math.max(
+      180,
+      Math.min(stagePlayRoom(host, { w: avail, h: guessed }).h, viewH > 0 ? viewH : vhCap, vhCap),
+    );
     const chrome = Math.max(
       92,
       (hud.offsetHeight || 0) + (tip.offsetHeight || 0) + (pad.offsetHeight || 0) + 12,

@@ -658,6 +658,13 @@ export function mount(api: GameAPI): SproutDefenseHandle {
   function inRect(x: number, y: number, r: Rect | null): boolean {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
+  /** N-126/N-129:绘制可小于 44,点按中心扩到 44 */
+  function hit44(r: Rect | null): Rect | null {
+    if (!r) return null;
+    const w = Math.max(r.w, 44);
+    const h = Math.max(r.h, 44);
+    return { x: Math.max(0, r.x + (r.w - w) / 2), y: Math.max(0, r.y + (r.h - h) / 2), w, h };
+  }
 
   /** 卡片条横滑:按下记起点,拖过 8px 就算滑动、不选卡。 */
   let strip: { id: number; x0: number; scroll0: number; moved: number } | null = null;
@@ -721,7 +728,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       return;
     }
     if (phase === "map") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "themes";
         return;
@@ -740,7 +747,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       return;
     }
     if (phase === "intro") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = mode === "endless" ? "themes" : "map";
         return;
@@ -785,7 +792,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       return;
     }
 
-    if (inRect(x, y, btnBack)) {
+    if (inRect(x, y, hit44(btnBack))) {
       api.play("tap");
       phase = mode === "endless" ? "themes" : "map";
       return;

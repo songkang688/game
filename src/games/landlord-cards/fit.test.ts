@@ -160,7 +160,7 @@ describe("朵朵抢地主 · 两档收紧不许动热区", () => {
   it("出牌那一排、底下那一排、模式入口,两档里一个都没被碰", () => {
     expect(px(rule(".ldc-mainbar .ld-btn"), "min-height")).toBeGreaterThanOrEqual(44);
     expect(px(rule(".ldc-subbar .ld-btn"), "min-height")).toBe(44);
-    expect(px(rule(".ld-btn"), "min-height")).toBeGreaterThanOrEqual(42);
+    expect(px(rule(".ld-btn"), "min-height")).toBeGreaterThanOrEqual(44);
     for (const sel of [".ld-btn", ".ldc-mainbar", ".ldc-subbar", ".ld-open"]) {
       expect(TIERS.includes(sel), `收紧那两档动了热区 ${sel}`).toBe(false);
     }

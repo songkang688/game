@@ -237,7 +237,8 @@ ${BVP_LOBBY_CSS}
 .bvp-opts{display:grid;grid-template-columns:1fr;gap:9px;}
 @media(min-width:520px){.bvp-opts.bvp-opts-2{grid-template-columns:1fr 1fr;}}
 .bvp-opt{border:none;border-radius:16px;padding:13px;cursor:pointer;font-family:inherit;text-align:left;
-  background:#fff;box-shadow:0 3px 10px rgba(140,120,190,.18);color:var(--bvp-ink);display:flex;gap:10px;align-items:center;}
+  background:#fff;box-shadow:0 3px 10px rgba(140,120,190,.18);color:var(--bvp-ink);display:flex;gap:10px;align-items:center;
+  min-height:44px;}
 .bvp-opt:active{transform:translateY(2px);}
 .bvp-opt-em{font-size:27px;line-height:1;display:block;width:34px;height:34px;flex:0 0 auto;}
 .bvp-opt-em svg{width:100%;height:100%;display:block;}
@@ -327,7 +328,19 @@ ${BVP_LOBBY_CSS}
   .bvp-row:hover,.bvp-act:hover:not([disabled]){transform:none;}
 }
 ${touchUpliftCss([".bvp-btn"])}
+/* N-150:顶栏/技能叠 44;window6 守门仍消费 touchUpliftCss(=40),本条叠在后面 */
+.bvp-btn,.bvp-btn-sm,.bvp-act{min-height:44px;}
 ${bodyFontUpliftCss([".bvp-chip", ".bvp-btn-sm"])}
+/* N-124 模式:915×412 对战大厅开打,500 档 .bvp-lobby / 无尽三钮原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .bvp-arena-setup{max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;
+    display:flex;flex-direction:column;}
+  .bvp-arena-setup .bvp-card{padding:8px 10px;margin-bottom:6px;}
+  .bvp-arena-setup .bvp-sub{max-height:2.2em;overflow:hidden;}
+  .bvp-arena-setup .bvp-team{gap:6px;min-height:0;}
+  .bvp-arena-setup .bvp-bar{order:-1;position:sticky;top:0;z-index:5;margin:0 0 6px;padding:6px 0 8px;
+    background:linear-gradient(180deg,#f6efe4 72%,rgba(246,239,228,.88));}
+}
 `;
 
 /* ------------------------------------------------------------------ */
@@ -1655,6 +1668,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     function lobby(message?: string): void {
       cleanup.killTimers();
       dropRace();
+      wrap.className = "bvp-arena-setup";
       wrap.innerHTML = "";
       const intro = el("div", "bvp-card");
       intro.appendChild(el("div", "bvp-h", "⚔️ 和星星的队伍比一场"));
@@ -1714,6 +1728,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     function race(): void {
       cleanup.killTimers();
       dropRace();
+      wrap.className = "";
       wrap.innerHTML = "";
       const seed = (Date.now() ^ ((save.arenaPlays + 1) * 7919)) >>> 0;
       const maze = roadMaze(seed, 4 + Math.min(6, Math.floor(save.arenaWins / 2)));
@@ -1752,6 +1767,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     function fight(): void {
       cleanup.killTimers();
       dropRace();
+      wrap.className = "";
       wrap.innerHTML = "";
       const seed = (Date.now() ^ (save.arenaPlays * 7919)) >>> 0;
       const outcome = runArena(save, seed);

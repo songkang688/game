@@ -301,7 +301,7 @@ describe("四、reduced 与清理", () => {
     const mobile = shell.slice(shell.indexOf("@media (max-width:420px){", shell.indexOf("/* --- 1.2 新增")));
     expect(mobile).toContain(".ldc-hintline{font-size:14px;}");
     // 按钮胶囊化,热区没缩
-    expect(shell).toMatch(/\.ld-btn\{border:none;border-radius:999px;min-height:42px/);
+    expect(shell).toMatch(/\.ld-btn\{border:none;border-radius:999px;min-height:44px/);
   });
 
   it("17. 叫分倍数牌是翻牌小卡,分数变了才翻面", () => {

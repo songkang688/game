@@ -214,7 +214,7 @@ const CSS = `
 .ld-hidden{display:flex;align-items:center;justify-content:center;height:100%;
   font-size:14px;font-weight:800;color:#d9d0ec;}
 .ld-btns{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;}
-.ld-btn{border:none;border-radius:999px;min-height:42px;padding:8px 15px;font-size:15px;font-weight:900;
+.ld-btn{border:none;border-radius:999px;min-height:44px;padding:8px 15px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#5b4a7a;background:linear-gradient(180deg,#fbf8ff,#e9e1fb);
   box-shadow:0 3px 0 rgba(80,60,110,.55);}
 .ld-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(80,60,110,.55);}

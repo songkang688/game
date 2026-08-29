@@ -176,7 +176,7 @@ const CSS = `
 .dvs-sub{text-align:center;font-size:13.5px;font-weight:700;color:#7b6aa0;line-height:1.6;margin:0 0 10px;}
 .dvs-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;}
 .dvs-mode{border:none;border-radius:16px;padding:13px 10px;cursor:pointer;font-family:inherit;text-align:left;
-  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);}
+  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);min-height:44px;}
 .dvs-mode:active{transform:translateY(2px);}
 .dvs-mode b{display:block;font-size:15.5px;color:#6b4a94;margin-bottom:3px;}
 .dvs-mode span{display:block;font-size:12.5px;color:#8a7aa6;line-height:1.5;}
@@ -229,7 +229,7 @@ const CSS = `
 .dvs-padname{font-size:11.5px;font-weight:900;color:#8a7aa6;width:100%;text-align:center;}
 .dvs-lesson{display:grid;gap:8px;margin-top:6px;}
 .dvs-lessonbtn{border:none;border-radius:16px;padding:11px 12px;cursor:pointer;font-family:inherit;text-align:left;
-  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);}
+  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);min-height:44px;}
 .dvs-lessonbtn b{display:block;font-size:15px;color:#6b4a94;margin-bottom:3px;}
 .dvs-lessonbtn span{display:block;font-size:12.5px;color:#8a7aa6;line-height:1.5;}
 .dvs-lessonbtn:active{transform:translateY(2px);}
@@ -241,7 +241,8 @@ const CSS = `
 .dvs-over .sub{font-size:14.5px;font-weight:700;color:#77619b;line-height:1.6;max-width:330px;}
 .dvs-over .row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;}
 .dvs-over button{border:none;border-radius:16px;padding:11px 22px;font-size:15.5px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;
+  min-height:44px;}
 .dvs-over button.ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
 .dvs-over button:active{transform:translateY(2px);}
 .dvs-hidden{display:none;}
@@ -292,6 +293,13 @@ const CSS = `
   .dvs-menu .dvs-go{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:30;
     width:min(480px,92vw);margin-top:0;box-shadow:0 3px 0 #8f2c5c,0 -8px 16px rgba(255,242,248,.9);}
   .dvs-menu .dvs-go:active{transform:translateX(-50%) translateY(2px);}
+}
+/* N-124 模式:915×412 设置页开打钮,380/420/520 原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .dvs-menu:has(.dvs-go){max-height:calc(100dvh - 108px);overflow:auto;box-sizing:border-box;}
+  .dvs-menu:has(.dvs-go) .dvs-sub{max-height:2.2em;overflow:hidden;}
+  .dvs-menu:has(.dvs-go) .dvs-pickrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+  .dvs-go{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,#c84483,#ad3a72);}
 }
 `;
 

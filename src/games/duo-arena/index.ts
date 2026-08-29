@@ -303,6 +303,15 @@ const CSS = `
   .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
 }
+/* N-124 模式:915×412 开擂钮,500 档原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .dua-wrap{max-width:min(920px,100%);max-height:calc(100dvh - 108px);overflow:auto;box-sizing:border-box;}
+  .dua-chip small{display:none;}
+  .dua-panel{gap:6px;}
+  .dua-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  .dua-start{position:sticky;bottom:0;z-index:5;background:#FFB37E;}
+  .dua-rulesbtn{position:sticky;bottom:52px;z-index:4;}
+}
 `;
 
 export function mount(api: GameApi): { destroy: () => void } {

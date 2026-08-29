@@ -188,10 +188,11 @@ export const CSS = `
 .shr-mode.shr-mode-co{background:linear-gradient(180deg,#9FD8AE,#6FB98A);box-shadow:0 4px 0 #4E8E67;}
 .shr-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #C25A80;}
 .shr-topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-.shr-back{border:none;border-radius:999px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#A2557C;box-shadow:0 3px 0 rgba(190,140,170,.3);white-space:nowrap;}
-/* 5px 竖向内边距量出来才 29px 高,手机上小拇指都嫌挤,垫到 36px 起 */
-.shr-toggle{border:none;border-radius:999px;min-height:36px;padding:6px 12px;font-size:14px;font-weight:800;cursor:pointer;
+.shr-back{border:none;border-radius:999px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;min-height:44px;
+  font-family:inherit;background:#ffffffdd;color:#A2557C;box-shadow:0 3px 0 rgba(190,140,170,.3);white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
+/* 5px 竖向内边距量出来才 29px 高,N-124 抬到 44,390 不命中 820 也要够点 */
+.shr-toggle{border:none;border-radius:999px;min-height:44px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#FFF0F6;color:#A2557C;box-shadow:0 2px 0 rgba(190,140,170,.3);white-space:nowrap;
   flex:0 0 auto;}
 .shr-toggle[aria-pressed="false"]{background:#F0EDF2;color:#8B8291;}
@@ -214,6 +215,16 @@ export const CSS = `
   .shr-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
     background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
   .shr-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:2px;}
+}
+/* N-124:1024×768 粗指针中间档;抬 toggle/回关/开火格,不改 500 档画布 140 钳 */
+@media (max-height:820px) and (pointer:coarse){
+  .shr-toggle,.shr-back,.shr-veil-btn,.shr-mode{min-height:44px;}
+  .shr-pads{--k:46px;position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
+  .shr-key{min-height:44px;}
+}
+@media (max-height:820px) and (min-height:501px) and (pointer:coarse){
+  .shr-cv{height:min(200px,36dvh);}
 }
 @media (prefers-reduced-motion:reduce){
   .shr-toast{transition:none;}

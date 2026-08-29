@@ -273,6 +273,24 @@ export const CSS = `
   .fc-wrap{max-height:calc(100dvh - 76px);}
   .fc-boardwrap{max-height:min(156px,38dvh);}
 }
+/* N-124 模式:768 不命中 500;粗指针钉掷骰行。r12/r14 500 锁原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .fc-hud{
+    position:sticky;bottom:0;z-index:6;margin:4px 0 0;padding:6px 4px 4px;
+    background:linear-gradient(180deg, rgba(234,246,255,.4), #EAF6FF 36%, #FFF2F7);
+    box-shadow:0 -8px 14px rgba(120,160,200,.16);
+  }
+  .fc-boardwrap{max-height:min(280px,48dvh);max-width:min(280px,48dvh,calc(100dvh - 148px));}
+}
+/* N-122 模式:390×844 钉掷骰 */
+@media (max-width:430px) and (min-height:700px){
+  .fc-hud{
+    position:sticky;bottom:0;z-index:6;margin:4px 0 0;padding:6px 4px 4px;
+    background:linear-gradient(180deg, rgba(234,246,255,.4), #EAF6FF 36%, #FFF2F7);
+    box-shadow:0 -8px 14px rgba(120,160,200,.16);
+  }
+  .fc-boardwrap{max-height:min(52dvh,320px);max-width:min(52dvh,320px);}
+}
 @media (prefers-reduced-motion:reduce){
   .fc-token,.fc-token-arc{transition:none;}
   .fc-token-pick{animation:none;}

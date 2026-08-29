@@ -361,7 +361,7 @@ const VERSUS_CSS = `
 .rbr-overflag svg { width: 100%; height: 100%; display: block; }
 .rbv-foes { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
 .rbv-foes::-webkit-scrollbar { display: none; }
-.rbv-foe { flex: 0 0 auto; border: none; border-radius: 14px; padding: 9px 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffc4; color: #43435C; box-shadow: 0 2px 5px rgba(120,120,160,.2); white-space: nowrap; min-height: 40px; }
+.rbv-foe { flex: 0 0 auto; border: none; border-radius: 14px; padding: 9px 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffc4; color: #43435C; box-shadow: 0 2px 5px rgba(120,120,160,.2); white-space: nowrap; min-height: 44px; }
 .rbv-foe-on { background: #FFDFDF; color: #86333A; outline: 3px solid #fff; }
 .rbv-foe:focus-visible { outline: 3px solid #1F2A22; outline-offset: 3px; }
 .rbv-foe-note { font-size: 13px; font-weight: 700; color: #4F4F66; text-align: center; margin-bottom: 6px; min-height: 18px; }

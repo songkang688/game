@@ -163,7 +163,8 @@ const CSS = `
 .fk-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 @media (max-width:420px){.fk-modes{grid-template-columns:1fr;}}
 .fk-mode{border:none;border-radius:18px;padding:14px;text-align:left;cursor:pointer;font-family:inherit;
-  background:#fff;box-shadow:0 4px 0 rgba(130,105,180,.22);display:flex;gap:10px;align-items:flex-start;}
+  background:#fff;box-shadow:0 4px 0 rgba(130,105,180,.22);display:flex;gap:10px;align-items:flex-start;
+  min-height:44px;}
 .fk-mode:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(130,105,180,.22);}
 .fk-mode-emoji{font-size:26px;line-height:1;flex:0 0 auto;}
 .fk-mode-emoji svg{display:block;}
@@ -201,7 +202,8 @@ const CSS = `
 .fk-pick-t{font-size:14px;font-weight:900;margin-bottom:6px;}
 .fk-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
 .fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
-  display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
+  display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);
+  min-height:44px;}
 .fk-ch:active{transform:translateY(1px);}
 .fk-ch-a{width:28px;height:28px;flex:0 0 auto;}
 .fk-ch-n{font-size:14px;font-weight:900;color:#5b4890;}

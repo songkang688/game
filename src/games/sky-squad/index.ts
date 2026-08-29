@@ -142,11 +142,11 @@ export const CSS = `
 .sks-legend{align-self:center;font-size:14px;font-weight:700;color:#63799C;white-space:nowrap;
   flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
 /* 方向盘排成一横条:纵版飞行最缺的就是竖着的地方,九宫格那一坨会把飞机顶出屏幕 */
-.sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:42px;flex-wrap:wrap;}
+.sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:44px;flex-wrap:wrap;}
 .sks-pads[data-players="2"]{--k:44px;}
 .sks-pad{display:flex;align-items:center;gap:4px;}
 .sks-pad-name{font-size:14px;font-weight:800;white-space:nowrap;}
-.sks-key{width:var(--k);height:var(--k);flex:none;}
+.sks-key{width:var(--k);height:var(--k);flex:none;min-width:44px;min-height:44px;}
 .sks-key{border:none;border-radius:13px;font-size:17px;font-weight:900;cursor:pointer;font-family:inherit;
   background:#ffffffe0;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.34);touch-action:none;padding:0;}
 .sks-key:active,.sks-key.sks-down{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,150,200,.34);background:#E3EFFF;}
@@ -172,7 +172,7 @@ export const CSS = `
   font-family:inherit;background:#ffffffdd;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.3);min-height:44px;}
 .sks-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#35608F;}
 @media (max-width:420px){
-  .sks-pads{--k:38px;gap:6px;}
+  .sks-pads{--k:44px;gap:6px;}
   .sks-pads[data-players="2"]{--k:44px;}
   /* 手机上是拖着飞的,键盘说明先让位给天空 */
   .sks-legend{display:none;}
