@@ -30,11 +30,13 @@ describe("r27–r30 B 热区票 CSS ≥44", () => {
     expect(bump).toMatch(/\.bc-pick\{[^}]*min-height:44px/s);
   });
 
-  it("N-147 snake / puzzle 回选关（不碰 N-108 画廊）", () => {
+  /* 回填 1.3 时 A 侧的 N-108 无尽画廊钳盘已经进了同一个文件,原来的「不碰 N-108」范围锁
+     改成两边都守:B 的回选关 44 在,A 的 N-108 钳盘也不许被挤掉。 */
+  it("N-147 snake / puzzle 回选关（N-108 画廊钳盘并存）", () => {
     expect(read("snake-snack/index.ts")).toMatch(/\.sn-back \{[^}]*min-height: 44px/);
     const pz = read("puzzle-tiles/index.ts");
     expect(pz).toMatch(/\.pz-back \{[^}]*min-height: 44px/);
-    expect(pz).not.toMatch(/N-108/);
+    expect(pz).toContain("N-108");
   });
 
   it("N-148 hue-hand 抓牌、duo-vs-star 选角（.dvs-pad 42 保留）", () => {

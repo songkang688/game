@@ -19,7 +19,8 @@ describe("r46 B · 只做 N-199 .bl-btn", () => {
 
   it("不碰 .l99-*；N-195 返回仍 44；toggle 仍 N-134", () => {
     const l99 = read("level99.ts");
-    expect(l99).not.toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
+    // 回填 1.3:A 侧 N-196/N-198 已把壳层 CTA 抬到 44,本闸跟着守 44 而不是守「没动过」
+    expect(l99).toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
     const shr = read("shoot-range/index.ts");
     expect(shr).toMatch(/\.shr-back\{[^}]*min-height:44px/s);
     expect(shr).toContain(".shr-toggle{border:none;border-radius:999px;min-height:44px");

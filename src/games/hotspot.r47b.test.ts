@@ -36,7 +36,8 @@ describe("r47 B · N-201 .oa-back / N-202 钓鱼 .fs-back", () => {
     expect(read("gomoku/view.ts")).toContain(
       "@media (max-height:820px) and (min-width:640px) and (pointer:coarse)",
     );
-    expect(read("level99.ts")).not.toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
+    // 回填 1.3:A 侧 N-196/N-198 已把壳层 CTA 抬到 44,本闸跟着守 44
+    expect(read("level99.ts")).toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
     expect(read("combo-clash/index.ts")).not.toContain("max-height:820px) and (pointer:coarse)");
   });
 });

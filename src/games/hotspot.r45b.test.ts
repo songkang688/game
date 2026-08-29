@@ -16,12 +16,14 @@ describe("r45 B · 只做 N-195 .shr-back", () => {
     expect(s).toContain(".shr-toggle,.shr-back,.shr-veil-btn,.shr-mode{min-height:44px;}");
   });
 
-  it("N-196 壳层 .l99-continue 本拍零改", () => {
+  /* 回填 1.3 时本闸的「零改」范围锁与 A 侧 N-196/N-198（壳层 CTA 抬 44）直接对撞。
+     A 侧的 44 是产品要求且有 level99.r26/r29/r31/r35/r38 多道闸守着,这里改成守 A 侧口径。 */
+  it("N-196 壳层 .l99-continue 声明不变，只多一条 44", () => {
     const s = read("level99.ts");
     expect(s).toContain(
       ".l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;",
     );
-    expect(s).not.toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
+    expect(s).toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
   });
 
   it("N-105 禁第四版；不回退中间档", () => {

@@ -204,7 +204,7 @@ export const CSS = `
   .gmk-panel{gap:6px;min-height:0;}
   .gmk-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
   .gmk-panel .gmk-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
-  .gmk-start{position:sticky;bottom:0;z-index:5;margin-top:6px;}
+  .gmk-start{position:sticky;bottom:0;z-index:5;margin-top:6px;min-height:48px;}
 }
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}

@@ -307,8 +307,7 @@ function leafTint(region: number): string {
 
 export const SP_CSS = `
 .sp-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FBF3DF,#EDF6E6);
-  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow-x:hidden;overflow-y:auto;
-  -webkit-overflow-scrolling:touch;}
+  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow:hidden;}
 .sp-corner{position:absolute;bottom:2px;width:58px;height:44px;pointer-events:none;opacity:.9;}
 .sp-corner-l{left:4px;}
 .sp-corner-r{right:4px;transform:scaleX(-1);}

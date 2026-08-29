@@ -38,7 +38,8 @@ describe("r47 B 抽验 · 大厅/设置开始钮 820", () => {
     expect(read("tap-tiles/index.ts")).toContain(".tt-over .tt-open{position:sticky;bottom:0;z-index:5;}");
     expect(read("orb-arena/index.ts")).toMatch(/\.oa-back\{[^}]*min-height:44px/s);
     expect(read("fishing-star/index.ts")).toMatch(/\.fs-back\{[^}]*min-height:44px/s);
-    expect(read("level99.ts")).not.toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
+    // 回填 1.3:A 侧 N-196/N-198 已把壳层 CTA 抬到 44,本闸跟着守 44
+    expect(read("level99.ts")).toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
     expect(read("combo-clash/index.ts")).not.toContain("max-height:820px) and (pointer:coarse)");
   });
 });

@@ -105,11 +105,13 @@ describe("N-205 大厅 *-back（排除 l99 / fs-back / oa-back）", () => {
     expect(hits, hits.join("\n")).toEqual([]);
   });
 
-  it("B 的钓鱼 / 光球文件仍在，本闸不改它们", () => {
+  /* 回填 1.3 时 B 侧的 N-201/N-202 已经把光球 / 钓鱼的返回钮抬到 44(r47 B 闸在守),
+     本闸原本只是「这两个文件归 B、我没动」的范围锁,改成一起守 44。 */
+  it("B 的钓鱼 / 光球返回钮也已 ≥44", () => {
     expect(FS_FISH).toMatch(/\.fs-back\{/);
     expect(OA).toMatch(/\.oa-back\{/);
-    expect(FS_FISH).not.toMatch(/\.fs-back\{[^}]*min-height:44px/);
-    expect(OA).not.toMatch(/\.oa-back\{[^}]*min-height:44px/);
+    expect(FS_FISH).toMatch(/\.fs-back\{[^}]*min-height:44px/);
+    expect(OA).toMatch(/\.oa-back\{[^}]*min-height:44px/);
   });
 
   it("棋类/擂台色条与弹弓选关也声明 ≥44，水果叠叠 .fs-back 仍扫", () => {

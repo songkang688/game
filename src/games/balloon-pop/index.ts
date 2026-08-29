@@ -198,7 +198,8 @@ const CSS = `
 }
 ${touchUpliftCss([".blp-open", ".blp-back"])}
 /* N-121:模式键抬到 44;window6 守门仍消费 touchUpliftCss(=40),本条叠在后面 */
-.blp-open,.blp-back{min-height:44px;box-sizing:border-box;}
+.blp-open,.blp-back{min-height:44px;}
+.blp-open,.blp-back{box-sizing:border-box;}
 `;
 
 function reducedMotion(): boolean {

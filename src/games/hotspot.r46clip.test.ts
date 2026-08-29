@@ -20,7 +20,8 @@ describe("r46 B 抽验 · 915×412 CTA 中间档", () => {
   });
 
   it("不改 level99；N-105 禁第四版；果盆中间档不回退", () => {
-    expect(read("level99.ts")).not.toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
+    // 回填 1.3:A 侧 N-196/N-198 已把壳层 CTA 抬到 44,本闸跟着守 44
+    expect(read("level99.ts")).toMatch(/\.l99-continue\{[^}]*min-height:44px/s);
     expect(read("combo-clash/index.ts")).not.toContain("max-height:820px) and (pointer:coarse)");
     expect(read("fruit-stack/index.ts")).toContain("@media (max-height:820px) and (pointer:coarse)");
   });
