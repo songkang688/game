@@ -198,6 +198,7 @@ const CSS = `
 .dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:13.5px;font-weight:900;cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
+.dvs-back{min-height:44px;box-sizing:border-box;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
 .dvs-arena{border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
@@ -300,6 +301,18 @@ const CSS = `
   .dvs-menu:has(.dvs-go) .dvs-sub{max-height:2.2em;overflow:hidden;}
   .dvs-menu:has(.dvs-go) .dvs-pickrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
   .dvs-go{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,#c84483,#ad3a72);}
+}
+@media (max-height:840px) and (min-height:521px) and (orientation:landscape){
+  .dvs-arena{
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:8px;
+  }
+  .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
+  .dvs-canvas{grid-column:2;max-width:100%;}
+  .dvs-pads{
+    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
+    pointer-events:none;padding:0 4px 8px;background:transparent;
+  }
+  .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:64px;gap:6px;}
 }
 `;
 

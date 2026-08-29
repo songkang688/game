@@ -147,7 +147,7 @@ const CSS = `
 .bc-bar[hidden],.bc-picks[hidden]{display:none;}
 .bc-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
   /* N-102:模式入口 34px → 44px 热区线 */
-  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#e07aa8,#c8558a);box-shadow:0 4px 0 #a03f6d;}
 .bc-open:active{transform:translateY(2px);box-shadow:0 2px 0 #a03f6d;}
 .bc-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -156,7 +156,7 @@ const CSS = `
 .bc-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
 .bc-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
   /* N-102:对手档位芯片 32px → 44px 热区线 */
-  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffe0;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.35);}
 .bc-pick[aria-pressed="true"]{background:linear-gradient(180deg,#e07aa8,#c8558a);color:#fff;box-shadow:0 3px 0 #a03f6d;}
 .bc-pick:active{transform:translateY(2px);}
@@ -180,6 +180,10 @@ const CSS = `
   .bc-knob{width:36px;height:36px;margin:-18px 0 0 -18px;}
   .bc-acts button{height:44px;width:52px;font-size:11.5px;}
 }
+@media (max-height:840px) and (min-height:721px){
+  .bc-wrap{gap:6px;}
+  .bc-stick{width:92px;height:92px;}
+}
 @media (max-height:500px) and (min-width:640px){
   .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
   /* N-102:矮横屏画布 140×140 太小——提示/图例让位,双人摇杆列挪到场地两侧,
@@ -194,6 +198,9 @@ const CSS = `
   .bc-padwrap:last-child{grid-area:padr;}
   .bc-padwrap:only-child{grid-area:padr;}
   .bc-padwrap{flex-direction:column;gap:6px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
 }
 @media (prefers-reduced-motion:reduce){
   .bc-btn:active,.bc-acts button:active,.bc-pick:active{transform:none;}

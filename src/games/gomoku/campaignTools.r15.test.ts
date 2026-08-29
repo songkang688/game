@@ -6,5 +6,7 @@ describe("N-83 gomoku 闯关工具行", () => {
     expect(CSS).toContain(".gmk-panel .gmk-start{position:sticky;bottom:0");
     expect(CSS).toContain(".gmk-btns,.gmk-claimbar{position:sticky;bottom:0");
     expect(CSS).toContain(".gmk-canvas{max-height:min(168px,42dvh)");
+    expect(CSS).toContain("@media (max-height:900px) and (min-height:841px)");
+    expect(CSS).toContain(".gmk-canvas{max-height:min(360px,52dvh);}");
   });
 });

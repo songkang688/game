@@ -303,6 +303,16 @@ const CSS = `
   .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
 }
+/* U-x(#107):501–840 中间档双栏排布,写在 N-124 之前让 915×412 仍走已验收版本 */
+@media (max-height:840px) and (min-height:501px){
+  .dua-start{position:sticky;bottom:0;z-index:5;background:#FFB37E;}
+  .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
+  .dua-wrap{max-width:min(960px,100%);}
+  .dua-game{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;row-gap:6px;}
+  .dua-top,.dua-tags,.dua-btns,.dua-msg{grid-column:1 / -1;}
+  .dua-court{height:min(240px,52dvh);margin-bottom:0;}
+}
 /* N-124 模式:915×412 开擂钮,500 档原文不动 */
 @media (max-height:820px) and (min-width:640px) and (pointer:coarse){
   .dua-wrap{max-width:min(920px,100%);max-height:calc(100dvh - 108px);overflow:auto;box-sizing:border-box;}

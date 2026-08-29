@@ -249,6 +249,13 @@ describe("档B R1 · 拼图乐园 · 360px 窄屏", () => {
     expect(respectsReducedMotion(CSS)).toBe(true);
   });
 
+  it("C-5 同族:500 预算 220 原文保留,840 平板与窄竖屏另钳", () => {
+    expect(CSS).toContain("max-width: min(100%, calc(100dvh - 220px))");
+    expect(CSS).toContain("@media (min-width: 700px) and (max-height: 840px)");
+    expect(CSS).toContain("max-width: min(100%, calc(100dvh - 380px))");
+    expect(CSS).toContain("@media (max-width: 699px) and (max-height: 840px) and (min-height: 501px)");
+  });
+
   it("360px 上最大的一关也吸得住:吸附半径不小于 12px", () => {
     const widest = LEVELS.reduce((a, b) => (b.cols > a.cols ? b : a));
     const cell = Math.floor((360 - 16) / widest.cols);

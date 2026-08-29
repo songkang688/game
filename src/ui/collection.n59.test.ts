@@ -23,4 +23,13 @@ describe("N-59 收藏册矮横屏布局", () => {
     expect(short).toMatch(/\.collection-canvas\{[^}]*height:84px/);
     expect(short.slice(0, 900)).not.toContain("flex-direction:column");
   });
+
+  it("平板横屏 840 撑满 overlay,不盲拷 500 档 72×84 预览", () => {
+    expect(SRC).toContain("@media (max-height:840px) and (min-height:501px) and (min-width:641px)");
+    const at = SRC.indexOf("@media (max-height:840px) and (min-height:501px) and (min-width:641px)");
+    const block = SRC.slice(at);
+    expect(block).toContain(".collection-panel{max-height:100%;height:100%}");
+    expect(block).not.toContain("width:72px");
+    expect(block).not.toContain("height:84px");
+  });
 });

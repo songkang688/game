@@ -346,6 +346,11 @@ export const WQ_CSS = `
   .wq-wrap>.wq-hud{position:absolute;top:0;left:0;width:auto;z-index:6;margin:0;}
   .wq-scroll{max-height:min(280px, calc(100dvh - 128px));}
 }
+/* U-x(#107):平板 501–840 中间档放开棋盘可视高并钉工具行 */
+@media (min-width:700px) and (max-height:840px) and (min-height:501px){
+  .wq-scroll{max-height:min(420px, calc(100dvh - 180px));}
+  .wq-tools{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(251,247,238,.45),#FBF7EE);}
+}
 /* N-124 模式:915×412 钉开始钮,500 盘钳原文不动 */
 @media (max-height:820px) and (min-width:640px) and (pointer:coarse){
   .wq-setup{max-height:calc(100dvh - 108px);overflow:auto;gap:6px;box-sizing:border-box;}

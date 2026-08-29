@@ -279,6 +279,10 @@ export const CSS = `
   .pcp-pads{--k:44px;margin-top:4px;}
   .pcp-pads[data-players="2"]{--k:44px;}
 }
+@media (max-height:840px) and (min-height:621px){
+  .pcp-cv{height:220px;}
+  .pcp-wrap[data-players="2"] .pcp-cv{height:252px;}
+}
 /* N-79:两人一起闯关 D-pad 540/578。无尽城堡塔画布本轮已在屏,此档只压双人闯关画布 */
 @media (max-height:500px){
   .pcp-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
@@ -290,6 +294,11 @@ export const CSS = `
     background:linear-gradient(180deg,rgba(255,245,250,0),#FFF5FA 16px);padding-top:4px;}
   .pcp-pads[data-players="2"]{--k:44px;}
   .pcp-tip{max-height:1.2em;overflow:hidden;margin-top:2px;}
+}
+/* U-20:平板横屏键排不命中 500 档,同款 sticky 扩到 840 */
+@media (max-height:840px) and (min-height:501px){
+  .pcp-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,245,250,0),#FFF5FA 16px);padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .pcp-bar-fill,.pcp-toast{transition:none;}

@@ -305,6 +305,10 @@ ${RBR_TOKENS_CSS}
   .rbr-beat { animation: none; }
   .rbr-confetti { display: none; }
 }
+@media (max-height:840px) and (min-height:501px) {
+  .rbr-pads { position: sticky; bottom: 0; z-index: 5; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(232,244,224,0), #E8F4E0 42%); }
+}
 `;
 
 const ENDLESS_CSS = `
@@ -319,7 +323,7 @@ const ENDLESS_CSS = `
 .rbe-open-versus:active { box-shadow: 0 2px 0 #953336; }
 .rbe-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E7F4FF, #FFF1E6); border-radius: 20px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; overflow: hidden; }
 .rbe-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.rbe-back { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #2C6349; box-shadow: 0 3px 0 rgba(60,120,90,.3); min-height: 44px; }
+.rbe-back { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #2C6349; box-shadow: 0 3px 0 rgba(60,120,90,.3); min-height: 44px; box-sizing: border-box; }
 .rbe-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(60,120,90,.3); }
 .rbe-back:focus-visible { outline: 3px solid #21402F; outline-offset: 3px; }
 .rbe-chip { background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 800; color: #2C6349; box-shadow: 0 2px 6px rgba(110,160,130,.24); }
@@ -361,7 +365,7 @@ const VERSUS_CSS = `
 .rbr-overflag svg { width: 100%; height: 100%; display: block; }
 .rbv-foes { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
 .rbv-foes::-webkit-scrollbar { display: none; }
-.rbv-foe { flex: 0 0 auto; border: none; border-radius: 14px; padding: 9px 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffc4; color: #43435C; box-shadow: 0 2px 5px rgba(120,120,160,.2); white-space: nowrap; min-height: 44px; }
+.rbv-foe { flex: 0 0 auto; border: none; border-radius: 14px; padding: 9px 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffc4; color: #43435C; box-shadow: 0 2px 5px rgba(120,120,160,.2); white-space: nowrap; min-height: 44px; box-sizing: border-box; }
 .rbv-foe-on { background: #FFDFDF; color: #86333A; outline: 3px solid #fff; }
 .rbv-foe:focus-visible { outline: 3px solid #1F2A22; outline-offset: 3px; }
 .rbv-foe-note { font-size: 13px; font-weight: 700; color: #4F4F66; text-align: center; margin-bottom: 6px; min-height: 18px; }

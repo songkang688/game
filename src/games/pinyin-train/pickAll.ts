@@ -86,9 +86,23 @@ const CSS = `
   .pk-title{font-size:17px;}
   .pk-go{position:sticky;bottom:0;z-index:2;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .pk-go{position:sticky;bottom:0;z-index:2;}
+}
 @media (max-height:500px) and (min-width:640px){
   .pk-wrap{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
     grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pk-top{grid-column:1/-1;grid-row:1;}
+  .pk-title{grid-column:2;grid-row:2;}
+  .pk-hint{grid-column:2;grid-row:3;}
+  .pk-say-row{grid-column:2;grid-row:4;position:static;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pk-chips{grid-column:2;grid-row:5;}
+  .pk-bottom{grid-column:2;grid-row:6;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pk-wrap{display:grid;grid-template-columns:minmax(200px,36%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:8px 12px;align-items:start;}
   .pk-top{grid-column:1/-1;grid-row:1;}
   .pk-title{grid-column:2;grid-row:2;}
   .pk-hint{grid-column:2;grid-row:3;}

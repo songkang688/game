@@ -2172,6 +2172,57 @@ html {
   }
 }
 
+/* U-4:平板横屏(1024×768) hero 偏肥,首卡只露半行;480/500 档零回退 */
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
+  .home-screen .home-hero {
+    margin: 4px 0 2px;
+    gap: 0;
+  }
+
+  .home-screen .hero-figure {
+    display: none;
+  }
+
+  .home-screen .hero-bubble {
+    padding: 6px 14px;
+    margin-bottom: 4px;
+  }
+
+  .home-screen .hero-bubble span {
+    display: none;
+  }
+
+  .home-screen .tabs {
+    margin-top: 4px;
+    padding: 2px 4px 4px;
+  }
+
+  .home-screen .tabs.mode-chips,
+  .home-screen .tabs.platform-chips {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+    vertical-align: top;
+    gap: 6px;
+  }
+
+  .home-screen .home-toolbar {
+    margin: 4px 0 8px;
+  }
+
+  .home-screen .home-count {
+    display: none;
+  }
+
+  .home-screen .recent-section {
+    margin: 4px 0 2px;
+  }
+
+  .home-screen .section-title {
+    margin-bottom: 6px;
+  }
+}
+
 /* ---------- 弱化动效:位移、抖动、闪烁一律停掉 ---------- */
 @media (prefers-reduced-motion: reduce) {
   /* 悬停位移与旋转:全局那条只压时长,元素还是会「跳」到新位置 */
@@ -3473,5 +3524,20 @@ html {
   .cg-wrap .cg-log {
     max-height: 2.4em;
     overflow: hidden;
+  }
+}
+
+/* U-9:平板横屏「重摆题面」扩 N-66 档,500 档原文不动 */
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
+  .cg-wrap .cg-board {
+    max-width: min(360px, 62dvh);
+    margin-inline: auto;
+  }
+  .cg-wrap .cg-tools {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: 4px 0 2px;
+    background: linear-gradient(180deg, rgba(242, 247, 234, 0.35), #eaf3e4);
   }
 }

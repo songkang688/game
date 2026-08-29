@@ -401,6 +401,68 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 
 同族打包提示：U-16/U-17/U-18/U-21 与 C-5 全走第十四节「高度反推钳」，B 可一口气按同一配方连修五款（每款独立提交 + 独立回归数字）。
 
+## 十七、本机监督对账（云端额度耗尽后的续修，PR #107）
+
+已推进、待合入 `game-1.3`：U-1/U-2(部分)/U-3/U-4/U-7/U-9/U-10/U-11/U-13(摘合)/U-14(摘合)/U-15/U-16(模式键+棋盘限宽)/U-17(钳盘+工具 44)/U-18/U-19/U-20/U-21/C-5；N-105 主干已绿。
+
+本机续修增量：N-100 选关头/工具 sticky 扩到 `840 && min-height:501`（不覆盖 500 档）；仓鼠/围棋/翻翻乐/扫雷双人/勇者大厅平板钉底或钳盘；保龄暂停/回选、射击预览、红蓝竞速返回、对数对决返回、数独键 后盖 44；贪吃蛇 840 加 `min-height:501` 以免盖掉 N-81 的 fixed。
+
+再推：保龄/碰碰车/钓鱼 720 收档扩到 `840 && min-height:721`；点点迷宫/对数对决横屏分栏；选关 wrap 820→960。噗噗/王子 840 加 min-height:501；便便超人垫 sticky；格斗王训练垫+塔选人扩到 840&&min-height:641；金钩商店关内底栏 sticky、平板竖屏首页居中填空。
+
+军规落地：全库遗留 `@media (max-height:840px)` 补 `min-height:501px`，避免盖掉 915×412 的 500 档；飞行棋补平板 sticky；星地产 900 档同样加 min-height:501。冰火/噗噗/外星/炸弹/简谱/调色/小屋相册/雪仗双垫/擂台半场把 500 档横屏分栏扩到平板（min-height:501）。下一轮优先：U-5 画布封顶守门、云端 A/B 四视口实测。
+
+## 十八、本机监督续修（PR #107 · 云端 A/B/C 额度仍尽）
+
+父进程继续本机修，不改 500 档原文、不改 `SHORT_LANDSCAPE_PX` / `MIN_FACE_PX` / 世界常量。
+
+| 项 | 改法 | 视口 |
+| --- | --- | --- |
+| l99 舞台条 740 漏 768 高 | **加** `840 && min-height:741`（740 原文不动） | 1024×768 |
+| word-garden 第二处 500 | 840 档花园钳 `12vh`，**不盲拷** `10vh` | 768 竖屏平板 |
+| clock-house | 840 横屏钟面 `min(42vh,220px)`，守 `MIN_FACE_PX` | 平板横屏 |
+| bubble-aim / candy-swing | 独立 840：键 44、提示 sticky | 四视口 |
+| red-blue-tap | 独立 840 sticky 提示行；**常量 420 不动** | 平板横屏 |
+| red-blue-tug | 840 sticky `.rbg-ctrl` | 平板横屏 |
+| landlord-cards | 840 sticky 出牌/副钮排 | 横屏手牌 |
+
+**禁止盲拷 500 清单**：`math-farm/runner.ts`、`pinyin-train/scene.ts`、`pinyin-train/timed.ts`、`tap-tiles` 隐藏键盘、`word-garden/tracing.ts` 第二处花园 `10vh`、`red-blue-tap` `SHORT_LANDSCAPE_PX=420`。
+
+学习员 C 红线仍是零改 `src/**`；本机因额度耗尽代写本节，不替代云端 C 对账。
+
+续修：`styles.css` / 地鼠 / 拼图 的 `min-width:700 && max-height:840` **补 `min-height:501`**（守门 `toContain` 旧串仍成立）；拼音选票/拼写横屏分栏扩到平板（不拷 scene 72px / runner 16px）；冲刺赛道 840 补菜单 CTA sticky，**不隐藏**键盘提示。
+
+| 项 | 改法 | 视口 |
+| --- | --- | --- |
+| prince / poop 仅 620 收画布 | **加** `840 && min-height:621` 轻钳 220/256，**不盲拷** 620 的 142/138 | 1024×768 |
+| puff-bros | 已有 JS `fitCanvas` 按舞台余高等比缩放，**不要**再叠 230px CSS（会先闪矮再被 JS 撑开） | 平板横屏 |
+| duo-rush `.dr-canvas` | 840 档 `max-height:min(52dvh,320px)`；默认 `.dr-canvas` 规则仍无 max-height；**不隐藏** `.dr-keys` | 平板横屏 |
+| 收藏册 | 840&&501&&min-width:641 撑满 overlay；**不盲拷** 500 的 72×84 预览 | 1024×768 |
+| rootGate / farm runner / 拼音 scene·timed | **不要**扩 840（N-109 明文平板零变化；禁止盲拷清单） | — |
+| hue-hand | 840 暗牌区 `min-height:64px`，**不盲拷** 500 的 48px | 1024×768 |
+| mine-garden | 840 钉 `.mn-tools` sticky，**不拷** 500 的 `mn-msg min-height:0` | 1024×768 |
+| flight-chess | 去掉 840 档后多余 `}`，避免后续 `prefers-reduced-motion` 解析漂移 | 全视口 |
+| tap-tiles | 守门：840 **不得**拷 `.tt-keys{display:none}` | 平板横屏 |
+| word-garden / landlord | 840 `@media` 块内注释外移（clock-house/shell.test 会把注释当选择器） | — |
+| bowling-lane | 840&&min-height:501 钉停键；**不拷** 720 的 `bwl-legend{display:none}`；721 档原文仍在 | 667–768 高 |
+
+## 十九、本机监督续修（PR #107 · 390×844 漏 840 + 平板钳宽预算）
+
+云端 A/B/C 额度仍尽。本机无头 Chrome 五视口抽测后修（不改 500 原文）：
+
+| 项 | 实测 | 改法 |
+| --- | --- | --- |
+| mole-pop 1024×768 | 第三排切舞台 58px；840 仍用 500 的 `100dvh-240` 不够 | **只改** 700&&840 预算为 `100dvh-320`；500 的 240 原文不动 |
+| puzzle-tiles 1024×768 | 盘底切 156px | 700&&840 预算 `100dvh-380`；**另加** `max-width:699 && 840 && 501` 预算 400 救 390×667 |
+| hero-cards 390×844 | 高 844>840，手牌/回合键 HARD-OUT 且 sh==ch | **加** `900 && min-height:841` 钉底 + wrap 可滚；不拷 500 的 log 限高 |
+| xiangqi 390×667/844 | 宽<700 吃不到 380 钳，键排切 140px | **加** `max-width:699 && 840 && 501` 与 `900 && 841` 高度反推棋盘盒；不拷 248px |
+| gomoku 390×844 | 高>840 吃不到 840 sticky | **加** `900 && 841` 钉工具行，画布轻钳 360，不拷 500 的 168px |
+| pool-stars 390×844 | 竖桌默认 `MAX_VERTICAL_PX=560` 把击球/暂停顶出 90px+ | resize 在 `ih>500 && 宽<560` 按舞台余高 −210 钳台面；**不改** `ih≤500 && 宽≥560` 的 915 分支 |
+| match-stars 1024×768 | 840 仍用 220 chrome，末行切 111px | **加** `700&&840` 预算 360；220 原文留给 toContain |
+| chess-garden 闯关 | 「重摆题面」在 `.cg-row` 不在 `.cg-tools`，1024 切 16px | 840&&501 钉 `.cg-row` |
+| 首页 1024×768 | U-4 只藏插图,首卡仍 663–935 切出首屏 | U-4 加收副标题/共N款/筛选并排,不改 480/500 原文 |
+
+**新军规**：`max-height:840` 救不了 390×844；钉底/钳盘要补 `max-height:900px and (min-height:841px)`，或确认默认布局已进屏。700&&840 的高度反推预算不要盲拷 500 的 chrome 数字——平板舞台顶栏更肥。窄屏不要钳 `.wrap{max-width}`（等于 100% 屏宽时无效），要钳 **棋盘盒/画布** 按余高反推。
+
 ## 附：第 3 轮环境水位
 
 - 环境再次重置后 `npm ci` + `npm run build` 全绿；零改 src，未重跑全量 vitest（水位沿用：19484 绿 + N-105 的 5 红）。

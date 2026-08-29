@@ -217,6 +217,19 @@ export const CLF_CSS = `
   .clf-wrap .clf-mixer{max-width:100%;}
   .clf-wrap .clf-palette{max-width:100%;justify-content:center;}
 }
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);
+    grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
+    align-items:stretch;gap:8px 12px;}
+  .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
+  .clf-wrap>.clf-top{grid-area:top;}
+  .clf-wrap>.clf-preview{grid-area:preview;}
+  .clf-wrap>.clf-legend{grid-area:legend;}
+  .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
+    max-height:min(360px,calc(100dvh - 120px));align-self:stretch;}
+  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:6px;
+    width:100%;max-width:100%;}
+}
 `;
 
 /**

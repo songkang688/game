@@ -195,6 +195,7 @@ export const CSS = `
 .shr-toggle{border:none;border-radius:999px;min-height:44px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#FFF0F6;color:#A2557C;box-shadow:0 2px 0 rgba(190,140,170,.3);white-space:nowrap;
   flex:0 0 auto;}
+.shr-toggle,.shr-back{min-height:44px;box-sizing:border-box;}
 .shr-toggle[aria-pressed="false"]{background:#F0EDF2;color:#8B8291;}
 .shr-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#8F4E71;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这几块要单独写一条,
@@ -215,6 +216,12 @@ export const CSS = `
   .shr-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
     background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
   .shr-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:2px;}
+}
+/* U-x(#107):501–840 中间档钉开火排并放开画布高 */
+@media (max-height:840px) and (min-height:501px){
+  .shr-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
+  .shr-cv{height:min(220px,48dvh);}
 }
 /* N-124:1024×768 粗指针中间档;抬 toggle/回关/开火格,不改 500 档画布 140 钳 */
 @media (max-height:820px) and (pointer:coarse){

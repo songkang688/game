@@ -216,6 +216,12 @@ ${BVP_LOBBY_CSS}
 @media (max-height:520px){
   .bvp-endless-fight .bvp-log{max-height:72px;}
 }
+@media (max-height:840px) and (min-height:521px){
+  .bvp-endless-fight .bvp-log{max-height:110px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .bvp-maze{max-width:min(320px, calc(100dvh - 280px));}
+}
 .bvp-act{border:none;border-radius:14px;padding:11px 8px;font-family:inherit;cursor:pointer;text-align:center;
   background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);position:relative;overflow:hidden;
   transition:transform .15s ease,box-shadow .15s ease;}

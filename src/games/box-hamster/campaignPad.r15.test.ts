@@ -12,4 +12,9 @@ describe("N-80 box-hamster 闯关方向键", () => {
     expect(SRC).toContain(".bh-pad{position:sticky;bottom:0");
     expect(SRC).toContain(".bh-wrap{height:100%;max-height:calc(100dvh - 108px)");
   });
+
+  it("U-10 矮屏 D-pad 行高至少 44", () => {
+    expect(SRC).toContain("grid-auto-rows:44px");
+    expect(SRC).toContain(".bh-key{min-height:44px;}");
+  });
 });

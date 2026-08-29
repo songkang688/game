@@ -123,6 +123,10 @@ const CSS = `
 /* 砖塔的节奏牌：压得快的时候换个底色，色觉之外还有「快」字兜着 */
 .brk-badge.brk-pace-hot { color: #B4432B; background: #FFEDE6; }
 .brk-canvas { width: 100%; height: auto; max-height: calc(100dvh - 168px); object-fit: contain; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDEFF5, #F3E4F0); touch-action: none; }
+/* U-11:平板横屏/矮横屏壳层更高,168 预算会切掉挡板;默认句留给 C-2 守门 */
+@media (max-height: 840px) and (min-height:501px) {
+  .brk-canvas { max-height: calc(100dvh - 248px); }
+}
 .brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; position: sticky; bottom: 0; z-index: 3; padding: 6px 0 2px; background: linear-gradient(180deg, rgba(255,239,228,.2), #FFEFE4); }
 .brk-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9AE; color: #8A4A20; cursor: pointer; box-shadow: 0 4px 0 #EBA987; touch-action: none; }
 .brk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBA987; }
@@ -141,6 +145,7 @@ const CSS = `
   .brk-btn:active, .brk-open:active { transform: none; }
 }
 ${touchUpliftCss([".brk-open", ".brk-back"])}
+.brk-open,.brk-back{min-height:44px;box-sizing:border-box;}
 /* N-124 模式:915×412 钉回关。写在 uiTouch 40 后面,才能盖过 min-height:40 */
 @media (max-height:820px) and (pointer:coarse){
   .brk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;

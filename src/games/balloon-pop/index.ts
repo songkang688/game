@@ -184,6 +184,10 @@ const CSS = `
   .l99-stage-wrap .blp-sky { max-height: max(96px, calc(100dvh - 300px)); }
   .blp-msg { margin-top: 4px; }
 }
+@media (max-height:840px) and (min-height:501px) {
+  .blp-sky { max-height: max(120px, calc(100dvh - 240px)); }
+  .l99-stage-wrap .blp-sky { max-height: max(120px, calc(100dvh - 320px)); }
+}
 @media (prefers-reduced-motion: reduce) {
   .blp-pop, .blp-shake { animation-duration: .01s; }
   .blp-open:active, .blp-balloon:active { transform: none; }
@@ -194,7 +198,7 @@ const CSS = `
 }
 ${touchUpliftCss([".blp-open", ".blp-back"])}
 /* N-121:模式键抬到 44;window6 守门仍消费 touchUpliftCss(=40),本条叠在后面 */
-.blp-open,.blp-back{min-height:44px;}
+.blp-open,.blp-back{min-height:44px;box-sizing:border-box;}
 `;
 
 function reducedMotion(): boolean {

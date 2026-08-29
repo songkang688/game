@@ -638,10 +638,15 @@ describe("PA-JQ · 360px 宽", () => {
     const css = dom.root.find((e) => e.tagName === "style")?.textContent ?? "";
     // 外壳左右各 10px padding，能用的净宽是 340
     const usable = 360 - 10 * 2;
+    // 420 那两处是「够宽就长到 420」的上限，窄屏下由 width:100% 兜着，不算溢出；
+    // 430 / 560 只活在 min-width:900px 的平板横屏媒体块里（r18 B 首屏居中放宽），
+    // 360 宽根本命中不了那扇门，同样不算溢出。
+    const wideOnly = new Set([420, 430, 560]);
     for (const m of css.matchAll(/max-width:(\d+)px/g)) {
       const w = Number(m[1]);
-      // 420 那两处是「够宽就长到 420」的上限，窄屏下由 width:100% 兜着，不算溢出
-      if (w > usable) expect(w, `max-width:${w}px 需要 width:100% 兜底`).toBe(420);
+      if (w > usable) {
+        expect(wideOnly.has(w), `max-width:${w}px 需要 width:100% 兜底或 min-width 媒体门槛`).toBe(true);
+      }
     }
     expect(css).toContain("minmax(140px,1fr)");
     // 340 的净宽正好排得下两列 140，不会被挤成横向滚动

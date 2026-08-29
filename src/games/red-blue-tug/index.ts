@@ -181,6 +181,10 @@ export const RBG_CSS = `
   .rbg-beat, .rbg-team, .rbg-rope, .rbg-flag { transition: none !important; }
   .rbg-bunting, .rbg-flower-a, .rbg-flower-b, .rbg-squad, .rbg-confetti, .rbg-dust, .rbg-hat, .rbg-beat-ring, .rbg-rope.rbg-sway { animation: none !important; }
 }
+@media (max-height:840px) and (min-height:501px) {
+  .rbg-ctrl { position: sticky; bottom: 0; z-index: 5; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(255,240,228,0), #FFF0E4 45%); }
+}
 `;
 
 const SHELL_CSS = `

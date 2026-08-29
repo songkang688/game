@@ -148,7 +148,14 @@ const CSS = `
   .bh-pad{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
     grid-auto-rows:44px;gap:4px;
     background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .bh-key{min-height:44px;}
   .bh-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:4px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .bh-pad{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    grid-auto-rows:44px;gap:4px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .bh-key{min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
 ${bhVisualCss()}`;

@@ -70,6 +70,10 @@ const SHELL_CSS = `
 .cg-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #97682c;}
 .cg-over-art{width:min(230px,72vw);margin:0 auto;}
 .cg-over-art svg{width:100%;height:auto;display:block;}
+@media (max-height:840px) and (min-height:501px){
+  .cg-row{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(242,247,234,0.35),#eaf3e4);}
+}
 ` + DUO_SHORT_CSS;
 
 const SHELL_STYLE_ID = "cg-shell-style";

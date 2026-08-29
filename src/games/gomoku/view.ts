@@ -184,6 +184,19 @@ export const CSS = `
   .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;flex:0 0 auto;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
 }
+/* U-x(#107):501–840 与 841–900 两档钉开始/按钮行并按余高钳画布 */
+@media (max-height:840px) and (min-height:501px){
+  .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
+  .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
+  .gmk-canvas{max-height:min(280px,52dvh);}
+}
+@media (max-height:900px) and (min-height:841px){
+  .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
+  .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
+  .gmk-canvas{max-height:min(360px,52dvh);}
+}
 /* N-124 模式:915×412 设置页分段钮,500 档 248 钳盘原文不动 */
 @media (max-height:820px) and (min-width:640px) and (pointer:coarse){
   .gmk-wrap:has(.gmk-start){max-width:min(720px,96%);max-height:calc(100dvh - 108px);overflow:auto;

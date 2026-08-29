@@ -263,6 +263,14 @@ const CSS = `
   .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
   .ps-tip{max-width:340px;}
 }
+/* U-x(#107):501–840 中间档同样把控制列挪到台面右侧,写在 N-124 之前 */
+@media (min-width:560px) and (max-height:840px) and (min-height:501px){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+}
 /* N-124 模式:768 不命中 500;粗指针中间档把控制列挪到台面右侧。N-12 500 原文不动 */
 @media (min-width:560px) and (max-height:820px) and (pointer:coarse){
   .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
@@ -588,6 +596,14 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
         st && tb && st.height > 0 && tb.top > st.top
           ? Math.max(120, Math.round(st.bottom - tb.top - 12))
           : Math.max(120, room.h - 96);
+      // U-x(#107):窄屏竖排时控制排还在台面下方,得多留 210px 预算
+    } else if (ih > 500 && viewportWidth() < 560) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(160, Math.round(st.bottom - tb.top - 210))
+          : Math.max(160, room.h - 210);
     }
     lay = tableLayout(viewportWidth(), availH);
     canvas.width = Math.round(lay.cssW);

@@ -670,6 +670,15 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
 }
+/* 平板横屏 1024×768 高 768，不命中 740。500 原文与 740 原文一字不改。 */
+@media (max-height:840px) and (min-height:741px){
+  .l99-stagebar{padding:6px 8px;gap:6px;}
+  .l99-stagetitle{font-size:14px;}
+  .l99-stage{padding:6px;}
+  .l99-jump-note{font-size:16px;margin:0;}
+  .l99-map{padding:10px;}
+  .l99-head{margin-bottom:6px;}
+}
 /* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
@@ -703,6 +712,15 @@ const L99_CSS = `
   .l99-ov-title{font-size:18px;}
   .l99-ov-sub{margin:0;font-size:16px;}
   .l99-ov-btns{margin-top:auto;padding-bottom:4px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .l99-map>.l99-head{position:sticky;top:0;z-index:5;margin-bottom:0;padding-bottom:6px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.2);}
+  .l99-map>.l99-tools{position:sticky;top:50px;z-index:4;margin-bottom:0;padding-bottom:8px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.16);}
+}
+@media (min-width:1000px){
+  .l99-wrap{max-width:min(960px, 94vw);}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}

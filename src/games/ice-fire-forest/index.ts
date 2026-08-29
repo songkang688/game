@@ -272,6 +272,13 @@ const CSS = `
   .iff-tip{grid-column:1;}
   .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
 }
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .iff-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:10px;justify-items:stretch;}
+  .iff-hud,.iff-swapbar{grid-column:1/-1;}
+  .iff-board{grid-column:1;min-width:0;}
+  .iff-tip{grid-column:1;}
+  .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .iff-btn:active,.iff-pad button:active,.iff-swap:active{transform:none;}
 }

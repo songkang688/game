@@ -225,9 +225,24 @@ const CSS = `
   .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
   .pyt-go{position:sticky;bottom:0;z-index:2;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
 @media (max-height:500px) and (min-width:640px){
   .pyt-spell{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
     grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pyt-top{grid-column:1/-1;grid-row:1;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-loco{grid-column:2;grid-row:2;}
+  .pyt-slots{grid-column:2;grid-row:3;}
+  .pyt-view{grid-column:2;grid-row:4;}
+  .pyt-say-row{grid-column:2;grid-row:5;position:static;}
+  .pyt-yard{grid-column:2;grid-row:6;}
+  .pyt-bottom{grid-column:2;grid-row:7;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(200px,36%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:8px 12px;align-items:start;}
   .pyt-top{grid-column:1/-1;grid-row:1;}
   .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
   .pyt-loco{grid-column:2;grid-row:2;}

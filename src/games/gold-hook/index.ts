@@ -1211,7 +1211,8 @@ export function mount(api: GameApi): GoldHookHandle {
     modeHost.hidden = true;
     home.hidden = false;
     home.innerHTML = "";
-    const box = el("div", "gdh-modes");
+    // gdh-home 只挂在首页这块上:结算面板同样用 gdh-modes,宽屏居中样式不能扫到它
+    const box = el("div", "gdh-modes gdh-home");
     box.append(
       el("div", "gdh-modes-title", "⛏️ 金矿钩钩"),
       el(

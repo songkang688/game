@@ -324,6 +324,20 @@ export const CSS = `
   .bmb-padwrap:last-child{grid-area:padr;}
   .bmb-padwrap:only-child{grid-area:padr;}
 }
+@media (max-height:840px) and (min-height:501px) and (min-width:700px){
+  .bmb-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+    grid-template-areas:"hud hud hud" "padl board padr" "tip tip tip";}
+  .bmb-hud{grid-area:hud;}
+  .bmb-board{grid-area:board;justify-self:center;}
+  .bmb-tip{grid-area:tip;}
+  .bmb-pads{display:contents;position:static;background:none;padding:0;}
+  .bmb-padwrap:first-child{grid-area:padl;}
+  .bmb-padwrap:last-child{grid-area:padr;}
+  .bmb-padwrap:only-child{grid-area:padr;}
+}
+@media (max-height:840px) and (min-height:501px) and (max-width:699px){
+  .bmb-pads{position:sticky;bottom:0;z-index:4;}
+}
 @media (prefers-reduced-motion:reduce){
   .bmb-btn:active,.bmb-act:active,.bmb-pick:active{transform:none;}
   .bmb-knob{transition:none;}

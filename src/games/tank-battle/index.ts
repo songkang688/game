@@ -219,6 +219,18 @@ const CSS = `
   .tkb-pad{gap:2px;}
   .tkb-pads-two .tkb-sticks{gap:3px;}
 }
+@media (max-height:840px) and (min-height:701px){
+  .tkb-pads-two{flex-wrap:nowrap;}
+  .tkb-wrap{gap:5px;}
+}
+/* U-7:平板横屏/高竖屏同样钉双垫。500 档原句一字不改,守门测试还咬它 */
+@media (max-height:840px) and (min-height:501px){
+  .tkb-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
+  .tkb-pads-two{flex-wrap:nowrap;position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
+  .tkb-acts{position:sticky;bottom:0;z-index:6;}
+}
 /* N-53:矮横屏双垫并排钉底,画布高度在 JS 里再减去这一截预留 */
 @media (max-height:500px){
   .tkb-root{overflow:hidden;max-height:100%;}
@@ -973,7 +985,10 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const key = opts.players === 2 ? TOUCH_MIN_TWO : TOUCH_MIN;
     const extra = opts.players === 1 ? 72 : 0;
     const chrome = 36 + 22 + 48 + key * 2 + 18 + 28 + extra;
-    return Math.max(150, Math.min(430, measured - chrome));
+    // U-7:双人两套 D-pad 比单人高一截,l99-host 又把 .tkb-root 的 overflow 打死,
+    // 必须从画布再抠出垫高,sticky 才能落在视口里。
+    const duoPad = opts.players === 2 ? 96 : 0;
+    return Math.max(150, Math.min(430, measured - chrome - duoPad));
   }
 
   function layout(): void {

@@ -269,6 +269,10 @@ const CSS = `
   .fs-act{padding:11px 20px;font-size:15.5px;min-height:${TOUCH_MIN_PX}px;}
   .fs-track{height:14px;}
 }
+@media (max-height:840px) and (min-height:721px){
+  .fs-wrap{gap:6px;}
+  .fs-act{min-height:44px;}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-act:active,.fs-open:active{transform:none;}
 }
@@ -357,6 +361,10 @@ const CSS = `
   .fs-act{padding:10px 18px;min-height:44px;box-sizing:border-box;}
   .fss-wind{font-size:11px;padding:2px 7px;}
   .fss-row{gap:4px;}
+}
+@media (max-height:840px) and (min-height:661px){
+  .fs-wrap{max-height:100%;overflow-y:auto;}
+  .fs-act{min-height:44px;box-sizing:border-box;}
 }
 @media (prefers-reduced-motion:reduce){
   .fss-shake{animation:none;}

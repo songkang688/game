@@ -172,6 +172,11 @@ const QUIZ_CSS = `
   .qz-jump-go { min-height: 44px; padding: 8px 16px; }
   .qz-badge { padding: 3px 10px; }
 }
+/* U-x(#107):501–840 中间档把选项行钉底 */
+@media (max-height: 840px) and (min-height: 501px) {
+  .qz-choices { position: sticky; bottom: 0; z-index: 3; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,0), #fff 42%); }
+}
 /* N-131:平板横屏 1024×768 落在 500–820,500 档不生效。粗指针中间档只收展示空隙,热区不降。 */
 @media (max-height: 820px) and (pointer: coarse) {
   .qz-wrap { min-height: 0; padding: 10px 12px; gap: 8px; }

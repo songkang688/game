@@ -163,7 +163,7 @@ export const CSS = `
 .sks-modebar[hidden]{display:none;}
 .sks-mode{border:none;border-radius:999px;padding:8px 13px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;
-  white-space:nowrap;flex:none;min-height:44px;display:inline-flex;align-items:center;}
+  white-space:nowrap;flex:none;min-height:44px;box-sizing:border-box;display:inline-flex;align-items:center;}
 .sks-mode.sks-mode-duo{background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
 .sks-mode.sks-mode-vs{background:linear-gradient(180deg,#FFC46B,#E79B36);box-shadow:0 4px 0 #C07C1F;}
 .sks-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #4570B8;}
@@ -180,6 +180,11 @@ export const CSS = `
      换来「暂停」「判定点」这些按钮永远看得见 —— 藏在横滑里孩子根本发现不了 */
   .sks-hud{flex-wrap:wrap;overflow-x:visible;justify-content:center;}
   .sks-modebar{flex-wrap:wrap;overflow-x:visible;}
+}
+/* U-19:中高视口钉方向盘,避免 915/平板切底 */
+@media (max-height:840px) and (min-height:501px){
+  .sks-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(240,246,255,0),#F0F6FF 14px);}
 }
 @media (prefers-reduced-motion:reduce){
   .sks-toast{transition:none;}

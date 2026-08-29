@@ -46,6 +46,14 @@ const SHELL_CSS = `
 .dc-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#7a5a34;box-shadow:0 3px 0 rgba(160,130,90,.3);}
 .dc-pick[aria-pressed="true"]{background:linear-gradient(180deg,#d99a4e,#bd7f37);color:#fff;}
+/* r18 B:平板横屏/桌面首屏 —— 菜单只有 328px 高,贴在 662px 白卡顶上,下面近六成全是空。
+   竖直居中 + 模式块放宽一档(420→560),按钮加大,信息密度立起来;手机窄屏/矮横屏原样。 */
+@media (min-width:900px) and (min-height:620px){
+  .dc-menu{min-height:calc(100dvh - 180px);justify-content:center;gap:14px;}
+  .dc-sub{max-width:430px;}
+  .dc-modes{max-width:560px;gap:12px;grid-template-columns:repeat(2,1fr);}
+  .dc-mode{padding:18px 12px;font-size:18px;}
+}
 `;
 
 const AI_DELAY_MS = 520;

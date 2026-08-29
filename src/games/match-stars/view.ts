@@ -275,16 +275,25 @@ export const CSS = `
   .mst-wrap{padding:6px;--mst-bleed:16px;}
   .mst-seats{flex-direction:column;}
 }
+/* U-18:方格盘宽驱动高,矮屏/平板横屏按余高反推钳宽,末行不再顶穿 l99 舞台 */
+@media (max-height:840px) and (min-height:501px){
+  .mst-boardwrap{max-width:min(100%, calc(100dvh - 220px));margin-inline:auto;}
+}
+@media (min-width:700px) and (max-height:840px) and (min-height:501px){
+  .mst-boardwrap{max-width:min(100%, calc(100dvh - 360px));margin-inline:auto;}
+}
 @media (max-height:820px) and (pointer:coarse){
   .mst-btn{min-height:44px;}
   .mst-wrap{padding:8px;}
 }
 /* 915×412：8×8 盘按宽度长出 ~648px，.l99-stage overflow:hidden 裁掉下半盘且不能滚。
-   矮屏只钳棋盘盒、盒内 pan-y，不缩小格子（格高会掉到 44 以下）。390 盘 ~351 不触顶。 */
+   矮屏只钳棋盘盒、盒内 pan-y，不缩小格子（格高会掉到 44 以下）。390 盘 ~351 不触顶。
+   U-18 的按余高钳宽同档合并在这里,两条互补不冲突。 */
 @media (max-height:500px){
   .mst-wrap{min-height:0;}
   .mst-boardwrap{max-height:min(240px, calc(100dvh - 196px));overflow-y:auto;
-    -webkit-overflow-scrolling:touch;touch-action:pan-y;}
+    -webkit-overflow-scrolling:touch;touch-action:pan-y;
+    max-width:min(100%, calc(100dvh - 168px));margin-inline:auto;}
 }
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}

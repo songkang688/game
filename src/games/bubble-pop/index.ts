@@ -88,6 +88,9 @@ const CSS = `
   .bp-cell { min-width: 0; min-height: 0; }
   .bp-msg { flex: 0 0 auto; max-height: 1.4em; overflow: hidden; margin-top: 6px; }
 }
+@media (max-height: 840px) and (min-height:501px) {
+  .bp-board { width: min(100%, calc((100dvh - 180px) * 8 / 12)); max-height: min(360px, calc(100dvh - 180px)); margin: 0 auto; }
+}
 @media (prefers-reduced-motion: reduce) {
   .bbp-pop { animation-duration: 16ms; }
   .bbp-ripple { animation: none; }

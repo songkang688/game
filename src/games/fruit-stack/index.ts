@@ -144,6 +144,11 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+/* U-x(#107):501–840 中间档 sticky 兜底,写在前面不抢下面已验收档位 */
+@media (max-height:840px) and (min-height:501px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,250,0),#fff7fa 16px);}
+}
 /* N-107:双人同屏六键 .fs-key 522~566 整排被 .l99-host(overflow:hidden)排线下。
    矮横屏键排 fixed 钉视口底(44px 底线),提示条让位,双盆画布在 layout() 里按实测余量让高。
    合成判定/先赢局数零触碰。 */

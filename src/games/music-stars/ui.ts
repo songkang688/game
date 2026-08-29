@@ -423,6 +423,14 @@ export const MST_CSS = `
   .mst-wrap.mst-scoreplay .mst-tools{position:sticky;bottom:0;z-index:4;}
   .mst-wrap.mst-scoreplay .mst-beat{display:none;}
 }
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .mst-wrap.mst-scoreplay{max-height:calc(100dvh - 88px);overflow:hidden;min-height:0;
+    display:flex;flex-direction:column;}
+  .mst-wrap.mst-scoreplay .mst-keys{position:sticky;bottom:0;z-index:5;flex:0 0 auto;
+    min-height:64px;padding-top:2px;
+    background:linear-gradient(180deg,rgba(18,28,64,0),#162044 28%);}
+  .mst-wrap.mst-scoreplay .mst-tools{position:sticky;bottom:0;z-index:4;}
+}
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}
   .mst-badge-listen{animation:none;}

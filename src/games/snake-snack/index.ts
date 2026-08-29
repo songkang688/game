@@ -147,6 +147,11 @@ const CSS = `
   .sn-mode .sn-pad { position: fixed; left: 10px; right: 10px; bottom: 6px;
     background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 12px); }
 }
+@media (max-height: 840px) and (min-height: 501px) {
+  .sn-pad { position: sticky; bottom: 0; z-index: 5; flex: 0 0 auto; margin-top: 6px;
+    background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 14px); padding-top: 4px; }
+  .sn-canvas { max-height: min(240px, 48dvh); }
+}
 `;
 
 interface Worm {

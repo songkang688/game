@@ -185,6 +185,11 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+/* U-x(#107):501–840 中间档把操控排 sticky 钉底 */
+@media (max-height:840px) and (min-height:501px){
+  .mcr-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,253,250,0),#fffdfa 16px);}
+}
 /* N-124 模式:915×412 摇杆/甩弹并排钉在画布旁,不改 ARENA 尺寸与 arenaCanvasSize。
    写在 N-106 之前:≤500 两档同时命中,让 1.3 已验收的 fixed 钉底方案最终生效;
    501~820 的粗指针中间档只命中本档,拿到并排栅格。 */

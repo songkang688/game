@@ -425,6 +425,13 @@ export const MN_CSS = `
   .mn-duo>div{flex:1 1 0;min-width:0;}
   .mn-msg{min-height:0;margin-top:4px;}
 }
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .mn-duo{flex-wrap:nowrap;gap:8px;}
+  .mn-duo>div{flex:1 1 0;min-width:0;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .mn-tools{position:sticky;bottom:0;z-index:5;margin-top:6px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,251,236,.2),#F4FBEC 36%);}
 }
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}
@@ -656,7 +663,10 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     // N-71:双人 9×9 按宽取 35px 后第 7 行切底。矮横屏再按余高钳格,MIN_CELL 28 不破
     const vh = (globalThis as { innerHeight?: number }).innerHeight;
     if (typeof vh === "number" && vh > 0 && vh <= 500) {
-      const budget = Math.floor((vh - 168) / Math.max(1, run.opts.h));
+      const budget = Math.floor((vh - 168 - 60) / Math.max(1, run.opts.h));
+      if (budget > 0) size = Math.max(MIN_CELL, Math.min(size, budget));
+    } else if (typeof vh === "number" && vh > 500 && vh <= 840) {
+      const budget = Math.floor((vh - 220) / Math.max(1, run.opts.h));
       if (budget > 0) size = Math.max(MIN_CELL, Math.min(size, budget));
     }
     grid.style.gridTemplateColumns = `repeat(${run.opts.w}, ${size}px)`;
