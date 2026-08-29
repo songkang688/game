@@ -33,9 +33,10 @@ describe("N-128 .l99-host 溢出契约", () => {
 });
 
 describe("N-99 数独盘可滚到键排", () => {
-  it(".sp-wrap 改为 overflow-y:auto，矮屏数字键 ≥44", () => {
-    expect(SP).toMatch(/\.sp-wrap\{[^}]*overflow-y:auto/);
-    expect(SP).not.toMatch(/\.sp-wrap\{[^}]*overflow:hidden;\}/);
+  /* 回填 1.3:1.3 的 wrapScroll.n99 闸锁死「竖屏基线 .sp-wrap 仍 overflow:hidden」,
+     可滚是由 ≤500 的媒体查询叠上去的,不改基础态。本闸改成守这条更窄的实现口径。 */
+  it("矮屏 .sp-wrap 由媒体查询给可滚（基础态仍 hidden），矮屏数字键 ≥44", () => {
+    expect(SP).toMatch(/@media \(max-height:500px\)\{[\s\S]*?\.sp-wrap\{[^}]*overflow-y:auto/);
     expect(SP).toMatch(/\.sp-key\{min-height:44px/);
   });
 });
