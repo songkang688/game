@@ -69,11 +69,11 @@ const CSS = `
 .bbp-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .bbp-bar[hidden] { display: none; }
-.bbp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FBEE0, #4E97BD); box-shadow: 0 4px 0 #3B7794; }
+.bbp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FBEE0, #4E97BD); box-shadow: 0 4px 0 #3B7794; min-height: 44px; }
 .bbp-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3B7794; }
 .bbp-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .bbp-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.bbp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #3F8FBF; box-shadow: 0 3px 0 rgba(80,150,190,.3); }
+.bbp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #3F8FBF; box-shadow: 0 3px 0 rgba(80,150,190,.3); min-height: 44px; }
 .bbp-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #3F8FBF; box-shadow: 0 2px 6px rgba(100,170,210,.25); }
 .bbp-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(120,170,200,.25); }
 .bbp-over-t { font-size: 22px; font-weight: 900; color: #3F8FBF; margin-bottom: 8px; }

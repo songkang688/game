@@ -220,6 +220,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       /* 按钮热区 ≥48px,一年级手指点得准 */
       .slb-btn { border: none; border-radius: 16px; font-size: 16px; font-weight: 800; padding: 12px 22px; min-height: 48px; background: #BFE0FB; color: #2F5D8A; cursor: pointer; box-shadow: 0 4px 0 #97C4EC; touch-action: manipulation; font-family: inherit; }
       .slb-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #97C4EC; }
+      .slb-back { min-height: 44px; }
       /* 教练卡:当前小鸟是谁、技能怎么用,大字 + 可朗读(识字量 300–800 字的孩子靠听) */
       .slb-coach { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 16px; padding: 9px 12px; box-shadow: 0 2px 8px rgba(120,160,220,.22); }
       .slb-coach-dot { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.9); box-shadow: 0 2px 5px rgba(0,0,0,.18); }

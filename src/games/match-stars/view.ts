@@ -123,6 +123,12 @@ export function boardWidthAt(viewportWidth: number): number {
   return viewportWidth - 2 * 10 - 2 * pad + 2 * boardBleed(viewportWidth);
 }
 
+/** 棋盘盒该不该钳高：装得下返回 null，装不下返回剩余像素。 */
+export function boardBoxMaxPx(room: number, scrollH: number): number | null {
+  if (!(room > 24) || !(scrollH > room + 1)) return null;
+  return Math.floor(room);
+}
+
 export const CSS = `
 .mst-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF0F7,#F3F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
@@ -247,7 +253,7 @@ export const CSS = `
 .mst-reduced .mst-spin,.mst-reduced .mst-cell.mst-belt::after,.mst-reduced .mst-chainpop,
 .mst-wrap.mst-reduced .mst-cheer-star{animation:none;}
 .mst-reduced .mst-cheer-star{animation:none;transform:none;opacity:1;}
-.mst-msg{text-align:center;min-height:22px;color:#B06BC0;font-weight:800;margin-top:6px;font-size:15px;line-height:1.4;}
+.mst-msg{text-align:center;min-height:22px;color:#B06BC0;font-weight:800;margin-top:6px;font-size:16px;line-height:1.4;}
 .mst-btn{border:none;border-radius:16px;min-height:44px;padding:10px 16px;font-size:16px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#D882B6,#BD6497);box-shadow:0 4px 0 #994B79;}
 .mst-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #994B79;}
@@ -268,6 +274,17 @@ export const CSS = `
 @media (max-width:420px){
   .mst-wrap{padding:6px;--mst-bleed:16px;}
   .mst-seats{flex-direction:column;}
+}
+@media (max-height:820px) and (pointer:coarse){
+  .mst-btn{min-height:44px;}
+  .mst-wrap{padding:8px;}
+}
+/* 915×412：8×8 盘按宽度长出 ~648px，.l99-stage overflow:hidden 裁掉下半盘且不能滚。
+   矮屏只钳棋盘盒、盒内 pan-y，不缩小格子（格高会掉到 44 以下）。390 盘 ~351 不触顶。 */
+@media (max-height:500px){
+  .mst-wrap{min-height:0;}
+  .mst-boardwrap{max-height:min(240px, calc(100dvh - 196px));overflow-y:auto;
+    -webkit-overflow-scrolling:touch;touch-action:pan-y;}
 }
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}
@@ -877,6 +894,43 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   raf = requestAnimationFrame(loop);
   paint();
 
+  const fitBoardBox = (): void => {
+    try {
+      const win = root.ownerDocument?.defaultView;
+      if (!win || typeof root.getBoundingClientRect !== "function") return;
+      root.style.maxHeight = "";
+      const bottoms: number[] = [];
+      for (let p = root.parentElement; p; p = p.parentElement) {
+        const cs = win.getComputedStyle(p);
+        const oy = cs.overflowY;
+        if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+          const r = p.getBoundingClientRect();
+          const bh = Number.parseFloat(cs.borderBottomWidth);
+          const clip =
+            Number.isFinite(p.clientHeight) && p.clientHeight > 0
+              ? r.top + p.clientTop + p.clientHeight
+              : r.bottom - (Number.isFinite(bh) ? bh : 0);
+          bottoms.push(clip);
+        }
+      }
+      if (!bottoms.length) return;
+      const room = Math.min(...bottoms) - root.getBoundingClientRect().top;
+      const cap = boardBoxMaxPx(room, root.scrollHeight);
+      if (cap === null) {
+        root.style.overflowY = "";
+        return;
+      }
+      root.style.maxHeight = `${cap}px`;
+      root.style.overflowY = "auto";
+      root.style.touchAction = "pan-y";
+    } catch {
+      // 单测桩没有布局盒
+    }
+  };
+  const onWinResize = (): void => fitBoardBox();
+  root.ownerDocument?.defaultView?.addEventListener?.("resize", onWinResize);
+  requestAnimationFrame(fitBoardBox);
+
   return {
     root,
     board,
@@ -909,6 +963,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       runner.clear();
       for (const t of fxTimers) clearTimeout(t);
       fxTimers.clear();
+      root.ownerDocument?.defaultView?.removeEventListener?.("resize", onWinResize);
       root.remove();
     },
   };

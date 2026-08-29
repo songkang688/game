@@ -490,6 +490,13 @@ export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewp
     && viewportH > 0 && rect.bottom > rect.top && rect.top >= 0 && rect.bottom <= viewportH;
 }
 
+/** N-100 续：scrollIntoView(center) 后若「继续」在滚动盒上方，把 scrollTop 拉回到 CTA 贴顶。 */
+export function scrollAdjustToRevealCta(viewTop: number, ctaTop: number, scrollTop: number): number {
+  if (!Number.isFinite(viewTop) || !Number.isFinite(ctaTop) || !Number.isFinite(scrollTop)) return scrollTop;
+  if (ctaTop >= viewTop) return scrollTop;
+  return Math.max(0, scrollTop + (ctaTop - viewTop));
+}
+
 /**
  * N-100：矮横屏进场锚定的目标滚距。
  * scrollIntoView({block:"center"}) 把「开始冒险 ▶」头行与工具行卷出 915×412 视口
@@ -549,8 +556,11 @@ const L99_CSS = `
 .l99-wrap{max-width:680px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   user-select:none;-webkit-user-select:none;position:relative;width:100%;height:100%;min-height:0;
   display:flex;flex-direction:column;box-sizing:border-box;}
+/* 平板 768/1024：卡略拉宽、格约 100px；760 仍走 7 列。矮横屏(<600h)保持 680，不抬高格子。 */
+@media (min-width:760px) and (min-height:600px){.l99-wrap{max-width:760px;}}
 .l99-view{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;
-  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  touch-action:pan-y;overscroll-behavior:contain;}
 .l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);
   flex:0 0 auto;box-sizing:border-box;max-width:100%;}
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
@@ -559,18 +569,26 @@ const L99_CSS = `
   line-height:1.4;color:#7a5da8;box-shadow:0 2px 6px rgba(150,130,200,.2);}
 .l99-chip-skip{color:#6d6580;background:#efedf5;}
 .l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
+  min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
 .l99-continue:active{transform:translateY(2px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin:0 0 8px;}
 .l99-tool{border:none;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
+  min-height:44px;font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
 .l99-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .l99-tool-skip{background:#efe9fb;color:#665390;}
-.l99-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px 2px 8px;max-width:100%;}
-.l99-tab{flex:0 0 auto;border:none;border-radius:14px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
+.l99-tabs{display:flex;gap:3px;flex-wrap:wrap;padding:2px 0 6px;max-width:100%;align-items:center;}
+.l99-wrap .l99-tabs{padding-inline:0;}
+.l99-tab{flex:0 0 auto;border:none;border-radius:12px;padding:0;min-width:36px;min-height:44px;
+  display:inline-flex;align-items:center;justify-content:center;gap:3px;font-size:14px;font-weight:800;cursor:pointer;
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
-.l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
+.l99-tab:not(.l99-tab-on){width:36px;overflow:hidden;}
+/* N-119：当前章页签加厚（行内仍刷章节色；只加重描边与投影，不改徽章收纳） */
+.l99-tab.l99-tab-on{padding:0 8px;color:#4a3480;outline:3px solid #ffffff;
+  box-shadow:0 4px 0 rgba(120,80,180,.32),0 8px 16px rgba(140,120,200,.32);}
 .l99-tab.l99-tab-lock{opacity:.55;}
+.l99-tab-emoji{font-size:18px;line-height:1;}
+.l99-tab-name{font-size:13px;font-weight:800;max-width:4.6em;overflow:hidden;text-overflow:ellipsis;}
+.l99-tab-lockmark{font-size:11px;line-height:1;flex:0 0 auto;}
 /* 下面几行都是讲给孩子听的说明文字,按 mobileText.MIN_BODY_PX 走 16px:
    360px 手机上量过,13px / 12px 的小字在选关地图里根本看不清。 */
 .l99-chapdesc{font-size:16px;line-height:1.45;font-weight:700;color:#77619b;text-align:center;
@@ -588,6 +606,11 @@ const L99_CSS = `
 .l99-star{color:#e3ddef;display:inline-flex;}
 .l99-star svg{display:block;}
 .l99-star-on{color:#ffb937;filter:drop-shadow(0 1px 1px rgba(200,120,0,.35));}
+/* N-119：章节色走节点行内 background；CSS 叠高光。三星用 :has 金边，不改 DOM */
+.l99-node:not(.l99-node-lock):not(.l99-node-skip){
+  box-shadow:inset 0 10px 14px rgba(255,255,255,.46),inset 0 -8px 12px rgba(80,40,120,.08),0 3px 8px rgba(140,130,190,.18);}
+.l99-node:not(.l99-node-lock):not(.l99-node-skip):has(.l99-star:nth-child(3).l99-star-on){
+  box-shadow:inset 0 8px 12px rgba(255,255,255,.4),0 0 0 3px #F2C14A,0 4px 12px rgba(196,140,20,.32);}
 .l99-node-cur{outline:3px solid #ff8fc0;animation:l99pulse 1.4s ease infinite;}
 .l99-node-cur .l99-node-num{color:#b52e72;}
 @keyframes l99pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -610,13 +633,14 @@ const L99_CSS = `
   flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;}
 .l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;flex:0 0 auto;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
-  background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
+  min-height:44px;background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
 .l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}
 .l99-ov-big{font-size:56px;line-height:1;}
 .l99-ov-buddy{width:104px;height:104px;object-fit:contain;pointer-events:none;
   filter:drop-shadow(0 6px 10px rgba(180,120,180,.28));animation:l99buddy .5s cubic-bezier(.34,1.56,.64,1);}
@@ -626,9 +650,9 @@ const L99_CSS = `
 .l99-ov-stars{font-size:34px;display:flex;justify-content:center;gap:6px;}
 .l99-ov-title{font-size:23px;font-weight:900;color:#8a5aa8;}
 .l99-ov-sub{font-size:16px;font-weight:700;color:#77619b;line-height:1.6;max-width:320px;}
-.l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex:0 0 auto;}
 .l99-ov-btn{border:none;border-radius:18px;padding:12px 26px;font-size:17px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
+  min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
 .l99-ov-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-ov-btn.l99-ov-ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 5px 0 #34498a;}
 .l99-ov-btn.l99-ov-ghost:active{box-shadow:0 2px 0 #34498a;}
@@ -650,15 +674,16 @@ const L99_CSS = `
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
   /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
-     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
-  .l99-wrap{max-height:calc(100dvh - 136px);}
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。
+     N-118:不再用 100dvh-136px 硬钳——那 136px 在 915×412 留下底部盲区,
+     触摸滚不到最后一行。高度交给 .l99-host>.l99-wrap 的 flex 吃满壳卡余高。 */
   .l99-view{overscroll-behavior:contain;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
   .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
-  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;}
+  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;min-height:44px;}
   /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
   .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
   .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
@@ -669,6 +694,15 @@ const L99_CSS = `
     background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.2);}
   .l99-map>.l99-tools{position:sticky;top:50px;z-index:4;margin-bottom:0;padding-bottom:8px;
     background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.16);}
+  /* N-204：915×412 过关 overlay 内容略高于 320，钮贴底。收 padding/头像，钮列钉底，
+     仍 overflow-y:auto + pan-y。不改 ov-btn 44/48、showOverlay、冷静期。 */
+  .l99-overlay{padding:10px 12px;gap:8px;justify-content:flex-start;}
+  .l99-ov-buddy{width:72px;height:72px;}
+  .l99-ov-buddy-round{width:64px;height:64px;}
+  .l99-ov-stars{font-size:26px;}
+  .l99-ov-title{font-size:18px;}
+  .l99-ov-sub{margin:0;font-size:16px;}
+  .l99-ov-btns{margin-top:auto;padding-bottom:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
@@ -736,10 +770,18 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     return typeof w === "number" && w > 0 ? w : 480;
   }
 
+  /** N-118:列数按地图容器宽,不按 innerWidth——max-width 680/760 的格子不该用 915 视口去排 8 列。 */
+  function mapLayoutWidth(): number {
+    const map = view.querySelector(".l99-map") as { clientWidth?: number } | null;
+    const cw = map?.clientWidth || wrap.clientWidth;
+    if (typeof cw === "number" && cw > 0) return cw;
+    return viewportWidth();
+  }
+
   const onResize = (): void => {
     const grid = view.querySelector(".l99-grid");
     if (grid && typeof (grid as HTMLElement).style !== "undefined") {
-      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(mapLayoutWidth())},1fr)`;
     }
   };
   (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", onResize);
@@ -917,18 +959,38 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     desc.className = "l99-chapdesc";
     const grid = document.createElement("div");
     grid.className = "l99-grid";
-    grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${mapColumns(mapLayoutWidth())},1fr)`;
     const furthestChapter = chapterOf(opts.chapters, furthest);
 
     opts.chapters.forEach((ch, ci) => {
       const tab = document.createElement("button");
       tab.type = "button";
       const locked = ci > furthestChapter;
-      tab.className = `l99-tab${ci === viewChapter ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
-      tab.style.background = ci === viewChapter ? ch.color : "";
-      tab.textContent = `${ch.emoji} ${ch.name}${locked ? " 🔒" : ""}`;
+      const on = ci === viewChapter;
+      tab.className = `l99-tab${on ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
+      tab.style.background = on ? ch.color : "";
+      // N-117:非当前章只露 emoji,当前章 emoji+名;锁标独立节点给 rootUnlock 摘。
+      const emojiEl = document.createElement("span");
+      emojiEl.className = "l99-tab-emoji";
+      emojiEl.setAttribute("aria-hidden", "true");
+      emojiEl.textContent = ch.emoji;
+      tab.appendChild(emojiEl);
+      if (on) {
+        const nameEl = document.createElement("span");
+        nameEl.className = "l99-tab-name";
+        nameEl.textContent = ch.name;
+        tab.appendChild(nameEl);
+      }
+      if (locked) {
+        const lockEl = document.createElement("span");
+        lockEl.className = "l99-tab-lockmark";
+        lockEl.setAttribute("aria-hidden", "true");
+        lockEl.textContent = "🔒";
+        tab.appendChild(lockEl);
+      }
       tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", ci === viewChapter ? "true" : "false");
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+      tab.setAttribute("aria-label", `${ch.emoji} ${ch.name}${locked ? "，未解锁" : ""}`);
       tab.addEventListener("click", () => {
         api.play("tap");
         viewChapter = ci;
@@ -1044,6 +1106,16 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         const nodeContentTop = curEl.getBoundingClientRect().top - view.getBoundingClientRect().top + view.scrollTop;
         const pinnedH = (head.offsetHeight || 0) + (tools.offsetHeight || 0);
         view.scrollTop = Math.min(view.scrollTop, entryAnchorTop(nodeContentTop, pinnedH));
+      }
+      // N-100 续：钉顶后「继续」仍可能落在 .l99-view 裁切线以上（915×412 实测 top=-27）。
+      // 不改 block:center / 四处 showMap(true)；只把滚动盒再拉到 CTA 贴顶，同样只减不增。
+      const ctaBox = view.querySelector(".l99-continue") as {
+        getBoundingClientRect?: () => { top: number };
+      } | null;
+      const vr = view.getBoundingClientRect?.();
+      const cr = ctaBox?.getBoundingClientRect?.();
+      if (vr && cr && typeof view.scrollTop === "number") {
+        view.scrollTop = scrollAdjustToRevealCta(vr.top, cr.top, view.scrollTop);
       }
     }
   }

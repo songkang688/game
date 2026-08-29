@@ -37,7 +37,8 @@ const SHELL_CSS = `
 .jq-sub{font-size:14px;font-weight:700;color:#6f7c59;text-align:center;line-height:1.6;max-width:330px;}
 .jq-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .jq-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8FBF63,#71A248);box-shadow:0 4px 0 #5c8639;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8FBF63,#71A248);box-shadow:0 4px 0 #5c8639;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .jq-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #5c8639;}
 .jq-mode.jq-b{background:linear-gradient(180deg,#5F8FD0,#4B76B4);box-shadow:0 4px 0 #3b5e92;}
 .jq-mode.jq-c{background:linear-gradient(180deg,#D89A54,#BC7F3C);box-shadow:0 4px 0 #9a662d;}

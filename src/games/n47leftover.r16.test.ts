@@ -1,7 +1,7 @@
 /**
  * N-47 漏网（trio-r16 A）：r13/r14 已抬 shoot/alien/ak/mn；
  * r15 仍记 alien 无尽/双人与仓鼠撤销/重来/提示 40。三款主体（保龄/王子/坦克）勿重写。
- * kit `touchUpliftCss` 40 行保留，后盖 44。
+ * kit `touchUpliftCss` 44 行保留；N-47 后盖 44 与 kit 同值。
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -19,13 +19,11 @@ function ruleHasMin44(css: string, selector: string): void {
 describe("N-47 漏网芯片 ≥44（三款主体不改写）", () => {
   it("box-hamster 撤销/重来/提示 .bh-btn 与模式 .bh-mode 后盖 44", () => {
     const css = bhVisualCss();
-    expect(css).toMatch(/\.bh-mode,\.bh-btn\{min-height:40px;\}/);
     expect(css).toMatch(/\.bh-mode,\.bh-btn\{min-height:44px;\}/);
   });
 
-  it("mole-pop 菜单 .mp-open 后盖 44，kit 40 字面量仍在", () => {
+  it("mole-pop 菜单 .mp-open 后盖 44", () => {
     const s = src("./mole-pop/index.ts");
-    expect(s).toContain(".mp-open, .mp-back { min-height: 40px; }");
     expect(s).toContain(".mp-open, .mp-back { min-height: 44px; }");
   });
 

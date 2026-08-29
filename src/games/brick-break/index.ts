@@ -132,7 +132,7 @@ const CSS = `
 .brk-bar[hidden] { display: none; }
 .brk-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFD9C4; color: #8A4A20; cursor: pointer; box-shadow: 0 3px 0 #F0B594; }
 .brk-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #F0B594; }
-.brk-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
+.brk-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; min-height: 44px; }
 .brk-over { text-align: center; padding: 14px 8px; }
 .brk-over h3 { margin: 0 0 6px; font-size: 19px; color: #7A5AA8; }
 .brk-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }

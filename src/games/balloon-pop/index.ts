@@ -168,7 +168,7 @@ const CSS = `
 .blp-bar[hidden] { display: none; }
 .blp-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFD6E6; color: #A8386A; cursor: pointer; box-shadow: 0 3px 0 #F0AFC8; }
 .blp-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #F0AFC8; }
-.blp-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
+.blp-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; min-height: 44px; }
 .blp-over { text-align: center; padding: 14px 8px; }
 .blp-over h3 { margin: 0 0 6px; font-size: 19px; color: #A8386A; }
 .blp-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }

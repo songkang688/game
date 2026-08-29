@@ -1,6 +1,7 @@
 import "./styles.css";
 import { loadGames } from "./engine/loader";
 import { createApp } from "./ui/app";
+import { bindVisualViewportHeight } from "./ui/viewportHeight";
 
 /** 底部小吐司:提示有新版本,点一下就更新 */
 function showUpdateToast(onUpdate: () => void): void {
@@ -55,6 +56,7 @@ function setupPWA(): void {
 
 const appEl = document.getElementById("app");
 if (appEl) {
+  bindVisualViewportHeight();
   createApp(appEl, loadGames());
 }
 setupPWA();

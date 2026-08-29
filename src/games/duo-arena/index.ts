@@ -262,7 +262,7 @@ const CSS = `
   box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;min-height:44px;}
 .dua-pause{background:#DCE6FF;color:#3A5AA0;}
 .dua-help{background:#D9F2C4;color:#3F6B22;}
-.dua-back{background:#FFE0C2;color:#8A4A14;}
+.dua-back{background:#FFE0C2;color:#8A4A14;min-height:44px;}
 .dua-msg{text-align:center;min-height:20px;color:#8A5AA8;font-weight:700;margin-top:6px;font-size:14px;line-height:1.5;}
 .dua-splash{position:absolute;left:8px;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,250,244,.97);
   border-radius:18px;z-index:5;font-weight:900;color:#B06AB3;font-size:19px;text-align:center;padding:14px 12px;

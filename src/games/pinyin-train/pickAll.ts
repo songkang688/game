@@ -68,7 +68,7 @@ const CSS = `
 @keyframes pkShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 .pk-bottom{display:flex;flex-direction:column;align-items:center;gap:8px;}
 .pk-go{border:none;border-radius:18px;padding:12px 30px;font-size:18px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
+  font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;min-height:44px;}
 .pk-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .pk-msg{min-height:24px;font-size:15px;font-weight:800;text-align:center;}
 .pk-say-row{display:flex;justify-content:center;position:sticky;top:4px;z-index:3;}

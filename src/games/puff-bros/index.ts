@@ -207,7 +207,8 @@ const CSS = `
 .pfb-veil-sub{font-size:14px;font-weight:700;color:#4E7295;line-height:1.6;max-width:340px;}
 .pfb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .pfb-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;
+  min-height:44px;display:inline-flex;align-items:center;}
 .pfb-veil-btn.pfb-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .pfb-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #B95278;}
 .pfb-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;

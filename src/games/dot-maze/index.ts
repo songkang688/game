@@ -108,7 +108,8 @@ const CSS = `
 .dmz-sub{font-size:14px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
 .dmz-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .dmz-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#c88a43,#ad6f2f);box-shadow:0 4px 0 #8d581f;}
+  font-family:inherit;background:linear-gradient(180deg,#c88a43,#ad6f2f);box-shadow:0 4px 0 #8d581f;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .dmz-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #8d581f;}
 .dmz-mode.dmz-mode-b{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
 .dmz-mode.dmz-mode-c{background:linear-gradient(180deg,#4fa77c,#3d8c66);box-shadow:0 4px 0 #2e6d4f;}
