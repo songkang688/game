@@ -52,6 +52,13 @@ export const DUO_SHORT_CSS = `
 }
 `;
 
+/** N-112:闯关盘末排 915 初见折下。.l99-host hidden,让 wrap 自滚,格子尺寸不砍(N-66 双人档不动)。 */
+export const SHORT_LAND_CSS = `
+@media (max-height:500px) and (min-width:640px){
+  .cg-wrap:not(.cg-duoplay){max-height:calc(100dvh - 88px);overflow-y:auto;}
+}
+`;
+
 export interface SeatPlan {
   name: string;
   emoji: string;

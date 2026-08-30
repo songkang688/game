@@ -32,7 +32,7 @@ import {
 import { makeMove, toSan, type Move } from "./moves";
 import { insufficientMaterial, status, type Game, type Status } from "./rules";
 import { AI_BLURB, AI_LABEL, AI_TIERS, TIER_PLAN, chooseMove, forcesMate, type AiTier } from "./search";
-import { createBoard, DUO_SHORT_CSS, type BoardHandle, type Judgement, type SeatPlan } from "./view";
+import { createBoard, DUO_SHORT_CSS, SHORT_LAND_CSS, type BoardHandle, type Judgement, type SeatPlan } from "./view";
 
 const DUO: SeatPlan = { name: "朵朵", emoji: "🌸", color: "#F7DCE8", ai: null };
 const XING: SeatPlan = { name: "星星", emoji: "⭐", color: "#DCE6F7", ai: null };
@@ -74,7 +74,7 @@ const SHELL_CSS = `
   .cg-row{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(242,247,234,0.35),#eaf3e4);}
 }
-` + DUO_SHORT_CSS;
+` + DUO_SHORT_CSS + SHORT_LAND_CSS;
 
 const SHELL_STYLE_ID = "cg-shell-style";
 /** 现在有几处正用着这份样式:进出多少次都只注一份,最后一个走的人负责带走 */
