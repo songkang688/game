@@ -186,6 +186,13 @@ export const CSS = `
   .sks-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(240,246,255,0),#F0F6FF 14px);}
 }
+/* N-110:U-19 漏了 max-height:500px(915×412=412)。.l99-host hidden 里 sticky 失效,改钉视口底。
+   390 竖屏不吃 min-width:640px。padding-bottom 把键排高度留在 wrap 里,resize() 的 chromeBelow 仍扣得到。 */
+@media (max-height:500px) and (min-width:640px){
+  .sks-wrap{padding-bottom:56px;}
+  .sks-pads{position:fixed;left:10px;right:10px;bottom:4px;z-index:25;margin-top:0;
+    background:linear-gradient(180deg,rgba(240,246,255,0),#F0F6FF 10px);padding:6px 0 2px;}
+}
 @media (prefers-reduced-motion:reduce){
   .sks-toast{transition:none;}
 }

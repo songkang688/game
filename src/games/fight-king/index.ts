@@ -171,6 +171,13 @@ const CSS = `
 .fk-h svg{vertical-align:-4px;}
 .fk-mode-t{font-size:16px;font-weight:900;color:#5b4890;}
 .fk-mode-d{font-size:14px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
+/* N-111:915×412 首页末张模式卡 348~421 切 9px,键位卡更靠下。.l99-host hidden,
+   让 .fk-root 自己成为矮横屏滚动层。390 竖屏不吃。N-88 选人开打档不动。 */
+@media (max-height:500px) and (min-width:640px){
+  .fk-root{max-height:calc(100dvh - 88px);overflow-y:auto;}
+  .fk-card{padding:10px;margin-bottom:8px;}
+  .fk-mode{padding:8px 10px;}
+}
 .fk-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;
   min-height:44px;}
