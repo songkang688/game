@@ -128,7 +128,7 @@ const CSS = `
 @media (min-width: 640px) and (max-height: 500px) {
   .mmc-wrap { padding: 6px 8px; }
   .mmc-bar { margin-bottom: 6px; }
-  .mmc-board { gap: 4px; max-height: min(280px, 68dvh); }
+  .mmc-board { gap: 4px; max-height: min(280px, 68dvh); overflow-y: auto; }
   .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(48px, 16dvh, 72px); }
   .mmc-msg { min-height: 0; margin-top: 4px; }
 }
