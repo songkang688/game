@@ -422,6 +422,9 @@ export const MST_CSS = `
   .mst-wrap.mst-scoreplay .mst-star{margin-bottom:0 !important;}
   .mst-wrap.mst-scoreplay .mst-tools{position:sticky;bottom:0;z-index:4;}
   .mst-wrap.mst-scoreplay .mst-beat{display:none;}
+  /* N-113:闯关听音壳没有视奏 class,声音开关几乎出屏。不把芯片选择器写进视奏档。 */
+  .mst-wrap:not(.mst-scoreplay) .mst-tools{position:fixed;left:10px;right:10px;bottom:4px;z-index:25;
+    background:linear-gradient(180deg,rgba(18,28,64,0),#162044 40%);padding:6px 0 2px;}
 }
 @media (max-height:840px) and (min-height:501px) and (min-width:640px){
   .mst-wrap.mst-scoreplay{max-height:calc(100dvh - 88px);overflow:hidden;min-height:0;
