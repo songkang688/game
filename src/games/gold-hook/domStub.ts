@@ -41,6 +41,7 @@ export class FakeCtx {
   ellipse(): void {}
   roundRect(): void {}
   rect(): void {}
+  clip(): void {}
   fill(): void {}
   stroke(): void {}
   fillText(): void {}

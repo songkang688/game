@@ -14,6 +14,15 @@
  * 力度条与击球钮都不小于 44px，字号不小于 13px。
  */
 import type { SoundName } from "../level99";
+import { stagePlayRoom } from "../../engine/stageRoom";
+import {
+  GOLD,
+  ballIconSvg,
+  ballSprite,
+  ballStampSprite,
+  paintCueStick,
+  paintSparkle,
+} from "./art";
 import {
   FIXED_DT,
   POCKETS,
@@ -26,6 +35,8 @@ import {
   cloneBalls,
   clamp,
   dist,
+  speedOf,
+  spotFree,
   stepWorld,
   strike,
   summarizeShot,
@@ -57,17 +68,26 @@ export const MIN_BALL_PX = 14;
 /** 力度条与击球钮的最小热区 */
 export const MIN_TOUCH_PX = 44;
 
-export function tableLayout(viewportWidth: number): Layout {
+export function tableLayout(viewportWidth: number, availHeight: number = MAX_VERTICAL_PX): Layout {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 480;
   const avail = clamp(w - 16, 260, 760);
+  const capH =
+    Number.isFinite(availHeight) && availHeight > 0
+      ? Math.min(MAX_VERTICAL_PX, availHeight)
+      : MAX_VERTICAL_PX;
   const vertical = w < 560;
   let scale: number;
   if (vertical) {
-    scale = Math.min(avail / TABLE.h, MAX_VERTICAL_PX / TABLE.w);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+    const fit = Math.min(avail / TABLE.h, capH / TABLE.w);
+    const minScale = MIN_BALL_PX / (2 * TABLE.r);
+    // 剩余高度不够时优先整桌进屏，不靠 MIN_BALL 把桌子再撑出舞台
+    scale = fit < minScale ? Math.max(fit, 0.01) : fit;
   } else {
-    scale = Math.min(avail / TABLE.w, 3.4);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+    // r18 · N-12:横版一样要看剩余高——915×412 上 340 高的台面把力度/击球全排到线下。
+    // 高度紧张时和竖版同一取舍:整桌进屏优先,不靠 MIN_BALL 把台面撑出舞台。
+    const fit = Math.min(avail / TABLE.w, 3.4, capH / TABLE.h);
+    const minScale = MIN_BALL_PX / (2 * TABLE.r);
+    scale = fit < minScale ? Math.max(fit, 0.01) : Math.max(fit, minScale);
   }
   const cssW = vertical ? TABLE.h * scale : TABLE.w * scale;
   const cssH = vertical ? TABLE.w * scale : TABLE.h * scale;
@@ -77,7 +97,9 @@ export function tableLayout(viewportWidth: number): Layout {
     cssH: Math.round(cssH),
     scale,
     ballPx: 2 * TABLE.r * scale,
-    fontPx: w < 380 ? 13 : 14,
+    // r2-3：这一路是 .ps-tip 的运行时内联来源，窄屏 13px 的老分支会把 CSS 的 14px 提级
+    // 整个架空——正文下限统一 14px，不再按视口回降
+    fontPx: 14,
   };
 }
 
@@ -179,22 +201,28 @@ export function aimPreview(cue: Vec, angle: number, balls: readonly Ball[], maxL
 const CSS = `
 .ps-wrap{--ps-ink:#2f4a3c;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ps-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;width:100%;position:relative;
-  user-select:none;-webkit-user-select:none;touch-action:none;}
+  /* 1.3 手机端修复:壳只留 pan-y——舞台竖着能滚,手指落在壳上得划得动;
+     真正吃拖动手势的两处(台面 canvas、蓄力键)各自挂 touch-action:none */
+  user-select:none;-webkit-user-select:none;touch-action:pan-y;
+  /* B 档 r2 一致性①:淡草绿壳卡(与台呢同色相、高明度),深台面被浅卡包住——家族卡片语汇归队。
+     侧内衬 6px 是 320px 实测值:竖版台面 cssW 封顶 280px,恰好放进 320-2×14(屏)-2×6(卡) */
+  background:linear-gradient(180deg,#EFF7F0,#E7F1EA);border-radius:16px;padding:10px 6px;box-sizing:border-box;}
 .ps-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.ps-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;white-space:nowrap;
+.ps-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(90,130,110,.18);}
 .ps-chip-p0{color:#a8306a;background:#ffeaf3;}
 .ps-chip-p1{color:#28568f;background:#e6f0ff;}
 .ps-chip-now{outline:2px solid #ffb43c;}
 .ps-table{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(70,110,90,.24);line-height:0;}
-.ps-table canvas{display:block;}
+.ps-table canvas{display:block;touch-action:none;}
 .ps-bars{display:flex;flex-direction:column;gap:5px;width:100%;max-width:520px;}
 .ps-power{position:relative;height:${MIN_TOUCH_PX}px;border-radius:999px;background:#eaf3ec;overflow:hidden;
   box-shadow:inset 0 2px 4px rgba(90,120,100,.2);}
-.ps-power-fill{position:absolute;left:0;top:0;bottom:0;width:0%;
-  background:linear-gradient(90deg,#a8e0bd,#ffd98a,#ff9aa6);}
-.ps-power-tag{position:absolute;left:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:13px;font-weight:900;color:#3d6152;}
-.ps-power-val{position:absolute;right:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:13px;font-weight:900;color:#3d6152;}
+.ps-power-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:0 999px 999px 0;
+  background:linear-gradient(90deg,#5c3a22 0%,#8a5a34 18%,#a06a3c 46%,#dcae72 82%,#f6f2e8 93%,#4a76a8 100%);
+  box-shadow:inset 0 3px 0 rgba(255,255,255,.28),inset 0 -3px 0 rgba(60,30,10,.3);}
+.ps-power-tag{position:absolute;left:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:14px;font-weight:900;color:#3d6152;}
+.ps-power-val{position:absolute;right:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:14px;font-weight:900;color:#3d6152;}
 .ps-row{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;align-items:center;}
 .ps-btn{border:none;border-radius:14px;min-height:${MIN_TOUCH_PX}px;padding:10px 16px;font-size:14px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#2f4a3c;background:#ffffffe0;box-shadow:0 3px 0 rgba(110,150,130,.35);}
@@ -203,25 +231,64 @@ const CSS = `
 .ps-btn[aria-pressed="true"]{background:linear-gradient(180deg,#8fd6ae,#5fb98c);color:#fff;box-shadow:0 3px 0 #3f8f68;}
 .ps-shoot{border:none;border-radius:18px;min-height:${MIN_TOUCH_PX + 6}px;padding:12px 30px;font-size:17px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#fff;background:linear-gradient(180deg,#f79ac0,#e8558f);
-  box-shadow:0 4px 0 #bf3a70;min-width:180px;}
+  box-shadow:0 4px 0 #bf3a70;min-width:180px;touch-action:none;}
 .ps-shoot:active{transform:translateY(2px);box-shadow:0 2px 0 #bf3a70;}
 .ps-shoot:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .ps-shoot[disabled]{opacity:.5;cursor:default;transform:none;}
-.ps-tip{font-size:13px;font-weight:700;line-height:1.55;text-align:center;max-width:620px;color:#43604f;
+.ps-tip{font-size:14px;font-weight:700;line-height:1.55;text-align:center;max-width:620px;color:#43604f;
   background:#ffffffcc;border-radius:12px;padding:6px 11px;word-break:break-word;}
+.ps-tip-foul{background:#ffe1e1;color:#a03030;animation:psTipShake .3s ease 1;}
+@keyframes psTipShake{0%{transform:translateX(0)}30%{transform:translateX(-4px)}60%{transform:translateX(4px)}100%{transform:translateX(0)}}
+.ps-ballrow{display:inline-flex;gap:2px;align-items:center;line-height:0;min-height:21px;}
+.ps-ballrow svg{display:block;}
 .ps-pockets{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;}
+/* display:flex 压过 UA 的 [hidden]{display:none},不选袋时这排要真的藏住 */
+.ps-pockets[hidden]{display:none;}
 .ps-veil{position:absolute;inset:0;background:rgba(250,255,252,.95);border-radius:16px;z-index:6;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:16px;}
 .ps-veil-t{font-size:20px;font-weight:900;color:#3f8f68;}
-.ps-veil-s{font-size:13.5px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
+.ps-veil-s{font-size:14px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
 @media (max-width:420px){
-  .ps-chip{font-size:13px;padding:4px 8px;}
+  .ps-chip{font-size:14px;padding:4px 8px;}
   .ps-shoot{min-width:150px;padding:12px 20px;font-size:16px;}
-  .ps-tip{font-size:13px;}
+  .ps-tip{font-size:14px;}
+}
+/* r18 · N-12:矮横屏此前无任何高度媒体,台面 340 高把力度 519/击球 570/暂停 627 全排线下。
+   台面按余高缩(resize 里钳),控制排整列挪到台面右侧,一屏全进 412。台面碰撞零触碰。 */
+@media (min-width:560px) and (max-height:500px){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+  .ps-tip{max-width:340px;}
+}
+/* U-x(#107):501–840 中间档同样把控制列挪到台面右侧,写在 N-124 之前 */
+@media (min-width:560px) and (max-height:840px) and (min-height:501px){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+}
+/* N-124 模式:768 不命中 500;粗指针中间档把控制列挪到台面右侧。N-12 500 原文不动 */
+@media (min-width:560px) and (max-height:820px) and (pointer:coarse){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+  .ps-tip{max-width:340px;}
+}
+/* N-122 模式:390×844 钉击球/暂停行 */
+@media (max-width:430px) and (min-height:700px){
+  .ps-row{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(250,255,252,.35),#FAFFFC 40%);}
 }
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}
   .ps-table{transform:none !important;}
+  .ps-tip-foul{animation:none;}
 }
 `;
 
@@ -334,14 +401,38 @@ export interface TableHandle {
   update: (patch: TablePatch) => void;
   /** 当前是不是正在滚球（单测与外部控制用） */
   rolling: () => boolean;
+  /** 现存的进袋星光粒子数（单测断言「动画结束粒子回收」用） */
+  fx: () => number;
 }
 
-const KIND_FILL: Record<BallKind, string> = {
-  cue: "#fdfdf7",
-  warm: "#f4845f",
-  cool: "#5aa9e6",
-  black: "#3b3b52",
-};
+/** 木框上的六颗菱形定位钉（长边四分点 + 短边中点，行业通用制式） */
+const SIGHTS: readonly Vec[] = [
+  { x: 50, y: 0 },
+  { x: 150, y: 0 },
+  { x: 50, y: 100 },
+  { x: 150, y: 100 },
+  { x: 0, y: 50 },
+  { x: 200, y: 50 },
+];
+
+/** 击球瞬间母球出发点的小白闪持续多久（毫秒） */
+const FLASH_MS = 160;
+/** 犯规（母球落袋）时屏幕边缘红光持续多久（毫秒） */
+const FOUL_MS = 300;
+
+/** 进袋星光粒子 */
+interface PotFx {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  ttl: number;
+  size: number;
+  color: string;
+  rot: number;
+  vr: number;
+}
 
 const KIND_NAME: Record<BallKind, string> = {
   cue: "母球",
@@ -392,6 +483,17 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   let dragFrom: Vec | null = null;
   let placePos: Vec | null = null;
   const sinking = new Map<number, number>();
+  /** 每颗球的视觉滚动角（只影响压印层的旋转，不碰物理） */
+  const rollAngle = new Map<number, number>();
+  /** 滚动残影：每颗球最近两帧的画布坐标 */
+  const trails = new Map<number, Vec[]>();
+  /** 进袋星光粒子（reduced-motion 下不生成） */
+  let fx: PotFx[] = [];
+  /** 击球瞬间的小白闪：出发点（台面坐标）与结束时刻 */
+  let flashAt: Vec | null = null;
+  let flashUntil = 0;
+  /** 犯规红光结束时刻 */
+  let foulUntil = 0;
   const shotEvents: StepEvent[] = [];
   let shotSteps = 0;
   let crossed = false;
@@ -466,7 +568,44 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   }
 
   function resize(): void {
-    lay = tableLayout(viewportWidth());
+    const room = stagePlayRoom(wrap, {
+      w: viewportWidth(),
+      h: MAX_VERTICAL_PX,
+    });
+    // r18 · N-12:矮横屏(宽 ≥560、高 ≤500)按「舞台底 − 台面顶」的真实余高钳台面,
+    // 控制排由 CSS 挪到台面右侧一列;竖版/高屏路径原样。
+    let availH = room.h;
+    const ih = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 0;
+    if (ih > 0 && ih <= 500 && viewportWidth() >= 560) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(120, Math.round(st.bottom - tb.top - 12))
+          : Math.max(120, room.h - 96);
+    } else if (
+      ih > 0 &&
+      ih <= 820 &&
+      viewportWidth() >= 560 &&
+      typeof globalThis.matchMedia === "function" &&
+      globalThis.matchMedia("(pointer:coarse)").matches
+    ) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(120, Math.round(st.bottom - tb.top - 12))
+          : Math.max(120, room.h - 96);
+      // U-x(#107):窄屏竖排时控制排还在台面下方,得多留 210px 预算
+    } else if (ih > 500 && viewportWidth() < 560) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(160, Math.round(st.bottom - tb.top - 210))
+          : Math.max(160, room.h - 210);
+    }
+    lay = tableLayout(viewportWidth(), availH);
     canvas.width = Math.round(lay.cssW);
     canvas.height = Math.round(lay.cssH);
     canvas.style.width = `${lay.cssW}px`;
@@ -482,40 +621,119 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const s = lay.scale;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const W = canvas.width;
+    const H = canvas.height;
+    const t = now();
+    const ballR = TABLE.r * s;
+    ctx.clearRect(0, 0, W, H);
 
-    // 台呢
-    ctx.fillStyle = "#cde8d0";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#bfe0c4";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 库边
-    ctx.strokeStyle = "#9c7b5a";
-    ctx.lineWidth = Math.max(6, s * 2.4);
-    ctx.strokeRect(
-      ctx.lineWidth / 2,
-      ctx.lineWidth / 2,
-      canvas.width - ctx.lineWidth,
-      canvas.height - ctx.lineWidth
+    // 台呢：径向渐变绒布（中心亮、角落深），一次填充（旧版双 fillRect 的冗余已删）
+    const cloth = ctx.createRadialGradient(
+      W / 2,
+      H / 2,
+      Math.min(W, H) * 0.18,
+      W / 2,
+      H / 2,
+      Math.max(W, H) * 0.72
     );
+    cloth.addColorStop(0, "#7bbf8e");
+    cloth.addColorStop(1, "#5da574");
+    ctx.fillStyle = cloth;
+    ctx.fillRect(0, 0, W, H);
 
-    // 袋口
-    for (const p of POCKETS) {
-      const sp = toScreen(p, lay);
+    // 开球线（白色细点线，点画出来的，免得和瞄准线的 setLineDash 混在一起）
+    ctx.fillStyle = "rgba(255,255,255,.32)";
+    const baulkA = toScreen({ x: 50, y: TABLE.r }, lay);
+    const baulkB = toScreen({ x: 50, y: TABLE.h - TABLE.r }, lay);
+    const baulkLen = Math.hypot(baulkB.x - baulkA.x, baulkB.y - baulkA.y);
+    const nDots = Math.max(4, Math.floor(baulkLen / 9));
+    for (let i = 0; i <= nDots; i++) {
+      const k = i / nDots;
       ctx.beginPath();
-      ctx.fillStyle = "#4a4a55";
-      ctx.arc(sp.x, sp.y, TABLE.pocketR * s * 0.9, 0, Math.PI * 2);
+      ctx.arc(
+        baulkA.x + (baulkB.x - baulkA.x) * k,
+        baulkA.y + (baulkB.y - baulkA.y) * k,
+        Math.max(1, s * 0.3),
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
+    // 置球点（摆球堆的脚点）与中心点
+    ctx.fillStyle = "rgba(255,255,255,.5)";
+    for (const spot of [{ x: 150, y: 50 }, { x: 100, y: 50 }]) {
+      const sp = toScreen(spot, lay);
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, Math.max(1.6, s * 0.55), 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 指定袋高亮
+    // 库边三层：深木外框（渐变）→ 库垫深绿条 → 1px 高光线
+    const wood = Math.max(7, s * 2.6);
+    const woodG = ctx.createLinearGradient(0, 0, W, H);
+    woodG.addColorStop(0, "#a87848");
+    woodG.addColorStop(0.5, "#8a5a34");
+    woodG.addColorStop(1, "#6b4226");
+    ctx.strokeStyle = woodG;
+    ctx.lineWidth = wood;
+    ctx.strokeRect(wood / 2, wood / 2, W - wood, H - wood);
+    const padW = Math.max(3, s * 1.1);
+    ctx.strokeStyle = "#3e8a5f";
+    ctx.lineWidth = padW;
+    ctx.strokeRect(wood + padW / 2, wood + padW / 2, W - 2 * wood - padW, H - 2 * wood - padW);
+    ctx.strokeStyle = "rgba(255,255,255,.28)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(wood + padW + 0.5, wood + padW + 0.5, W - 2 * (wood + padW) - 1, H - 2 * (wood + padW) - 1);
+
+    // 木框上的六颗菱形定位钉
+    const sightR = Math.max(2.2, s * 0.8);
+    ctx.fillStyle = "#f3e2bd";
+    for (const q of SIGHTS) {
+      const sp = toScreen(q, lay);
+      const px = sp.x <= 1 ? wood / 2 : sp.x >= W - 1 ? W - wood / 2 : sp.x;
+      const py = sp.y <= 1 ? wood / 2 : sp.y >= H - 1 ? H - wood / 2 : sp.y;
+      ctx.beginPath();
+      ctx.moveTo(px, py - sightR);
+      ctx.lineTo(px + sightR, py);
+      ctx.lineTo(px, py + sightR);
+      ctx.lineTo(px - sightR, py);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 袋口：内阴影渐变（外浅内黑）+ 朝台心的金色护口弧
+    for (const p of POCKETS) {
+      const sp = toScreen(p, lay);
+      const pr = TABLE.pocketR * s * 0.95;
+      const hole = ctx.createRadialGradient(sp.x, sp.y, pr * 0.15, sp.x, sp.y, pr);
+      hole.addColorStop(0, "#101614");
+      hole.addColorStop(0.72, "#26302a");
+      hole.addColorStop(1, "#55645a");
+      ctx.fillStyle = hole;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, pr, 0, Math.PI * 2);
+      ctx.fill();
+      const toCenter = Math.atan2(H / 2 - sp.y, W / 2 - sp.x);
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = Math.max(2, s * 0.7);
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, pr * 0.96, toCenter - Math.PI / 2, toCenter + Math.PI / 2);
+      ctx.stroke();
+    }
+
+    // 指定袋：袋口金光脉动（reduced-motion 是一圈静态金圈）
     if (calledPocket !== null && calledPocket >= 0) {
       const sp = toScreen(POCKETS[calledPocket], lay);
+      const pulse = soft ? 1 : 0.55 + 0.45 * Math.sin(t / 170);
       ctx.beginPath();
-      ctx.strokeStyle = "#ffb43c";
+      ctx.strokeStyle = `rgba(255,196,80,${(0.5 + 0.5 * pulse).toFixed(3)})`;
       ctx.lineWidth = 3;
-      ctx.arc(sp.x, sp.y, TABLE.pocketR * s * 1.15, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y, TABLE.pocketR * s * (soft ? 1.15 : 1.08 + 0.1 * pulse), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255,214,120,.3)";
+      ctx.lineWidth = 6;
+      ctx.arc(sp.x, sp.y, TABLE.pocketR * s * 1.34, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -527,10 +745,12 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       const b = toScreen(pv.end, lay);
       ctx.strokeStyle = "rgba(255,255,255,.85)";
       ctx.lineWidth = 2;
+      ctx.setLineDash([7, 6]);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.beginPath();
       ctx.strokeStyle = pv.hitId === null ? "rgba(255,255,255,.6)" : "#ffb43c";
       ctx.arc(b.x, b.y, TABLE.r * s, 0, Math.PI * 2);
@@ -547,40 +767,106 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       ctx.stroke();
     }
 
-    // 球
+    // 球杆：只在瞄准 / 蓄力阶段画，滚球阶段绝不出现；蓄力时杆随力度后拉
+    if (cue && !cue.potted && (phase === "aim" || phase === "charge")) {
+      const a = toScreen(cue, lay);
+      const f = toScreen({ x: cue.x + Math.cos(angle), y: cue.y + Math.sin(angle) }, lay);
+      const aimAng = Math.atan2(f.y - a.y, f.x - a.x);
+      const pull = phase === "charge" ? power * ballR * 3.4 : ballR * 0.4;
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(aimAng);
+      paintCueStick(ctx, ballR * 1.5 + pull, ballR * 15, Math.max(3, ballR * 0.55));
+      ctx.restore();
+    }
+
+    // 击球瞬间：母球出发点一记小白闪（reduced-motion 不生成）
+    if (flashAt && t < flashUntil) {
+      const p0 = toScreen(flashAt, lay);
+      const k = clamp((flashUntil - t) / FLASH_MS, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = 0.85 * k;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(p0.x, p0.y, ballR * (0.7 + (1 - k) * 1.5), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 滚动残影（reduced-motion 关）：最近两帧的位置淡淡拖一下
+    if (!soft && phase === "rolling") {
+      for (const [id, pts] of trails) {
+        const b = balls.find((x) => x.id === id);
+        if (!b || b.potted) continue;
+        for (let i = 0; i < pts.length; i++) {
+          ctx.save();
+          ctx.globalAlpha = i === pts.length - 1 ? 0.2 : 0.1;
+          ctx.drawImage(ballSprite(b.kind, ballR), pts[i].x - ballR, pts[i].y - ballR, ballR * 2, ballR * 2);
+          ctx.restore();
+        }
+      }
+    }
+
+    // 球：预渲染 sprite（底层光影不转，阵营压印随滚动转）；入袋时向袋心吸入 + 缩小淡出
     for (const b of balls) {
       const sink = sinking.get(b.id);
       if (b.potted && sink === undefined) continue;
-      const p = toScreen(b, lay);
+      let p = toScreen(b, lay);
       const shrink = sink === undefined ? 1 : Math.max(0, 1 - sink);
-      const r = TABLE.r * s * shrink;
+      const r = ballR * shrink;
       if (r <= 0.3) continue;
-      ctx.globalAlpha = sink === undefined ? 1 : Math.max(0, 1 - sink * 0.9);
-      ctx.beginPath();
-      ctx.fillStyle = KIND_FILL[b.kind];
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(40,60,50,.35)";
-      ctx.stroke();
-      if (b.kind === "black") {
-        ctx.beginPath();
-        ctx.fillStyle = "#ffe9a8";
-        ctx.arc(p.x, p.y, r * 0.34, 0, Math.PI * 2);
-        ctx.fill();
+      if (sink !== undefined && b.pocket >= 0) {
+        const pk = toScreen(POCKETS[b.pocket], lay);
+        const k = Math.min(1, sink * 1.2);
+        p = { x: p.x + (pk.x - p.x) * k, y: p.y + (pk.y - p.y) * k };
       }
+      ctx.globalAlpha = sink === undefined ? 1 : Math.max(0, 1 - sink * 0.9);
+      ctx.drawImage(ballSprite(b.kind, ballR), p.x - r, p.y - r, r * 2, r * 2);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(rollAngle.get(b.id) ?? 0);
+      ctx.drawImage(ballStampSprite(b.kind, ballR), -r, -r, r * 2, r * 2);
+      ctx.restore();
       ctx.globalAlpha = 1;
     }
 
-    // 自由球预览
+    // 进袋星光（黑星球金星 ×6，其余阵营色星光）
+    for (const p of fx) {
+      ctx.save();
+      ctx.globalAlpha = clamp(p.life / p.ttl, 0, 1);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      paintSparkle(ctx, p.size * (0.6 + (0.4 * p.life) / p.ttl), p.color);
+      ctx.restore();
+    }
+
+    // 自由球预览：放得下画白球影子，放不下再罩一层红圈提示禁放
     if (phase === "place" && placePos) {
       const p = toScreen(placePos, lay);
+      const ok = spotFree(placePos, balls);
       ctx.globalAlpha = 0.65;
-      ctx.beginPath();
-      ctx.fillStyle = "#fdfdf7";
-      ctx.arc(p.x, p.y, TABLE.r * s, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(ballSprite("cue", ballR), p.x - ballR, p.y - ballR, ballR * 2, ballR * 2);
       ctx.globalAlpha = 1;
+      if (!ok) {
+        ctx.fillStyle = "rgba(230,70,70,.26)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, ballR * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(214,48,48,.9)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, ballR * 1.8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // 犯规（母球落袋）：屏幕边缘红光一闪（reduced-motion 只静态变色不闪）
+    if (t < foulUntil) {
+      const k = soft ? 0.5 : clamp((foulUntil - t) / FOUL_MS, 0, 1) * 0.85;
+      const lw = Math.max(6, s * 2);
+      ctx.strokeStyle = `rgba(226,74,74,${k.toFixed(3)})`;
+      ctx.lineWidth = lw;
+      ctx.strokeRect(lw / 2, lw / 2, W - lw, H - lw);
     }
   }
 
@@ -599,6 +885,18 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     });
     if (target !== "any") {
       hud.appendChild(el("span", "ps-chip", `目标：${KIND_NAME[target]}`));
+    }
+    // 双方剩余球：用球 sprite 缩略排出来，不再只有文字
+    for (const k of ["warm", "cool"] as const) {
+      const total = balls.filter((b) => b.kind === k).length;
+      if (total === 0) continue;
+      const left = balls.filter((b) => b.kind === k && !b.potted).length;
+      const chip = el("span", "ps-chip ps-ballrow");
+      chip.setAttribute("role", "img");
+      chip.setAttribute("aria-label", `${KIND_NAME[k]}还剩 ${left} 颗`);
+      if (left === 0) chip.textContent = `${KIND_NAME[k]}已清台`;
+      else chip.innerHTML = ballIconSvg(k, 15).repeat(left);
+      hud.appendChild(chip);
     }
 
     const pct = Math.round(power * 100);
@@ -632,6 +930,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     if (!cue || cue.potted || phase === "rolling") return;
     currentShot = shot;
     shotStartLeft = cue.x < TABLE.w / 2;
+    // 击球瞬间的小白闪（reduced-motion 不闪）
+    if (!soft) {
+      flashAt = { x: cue.x, y: cue.y };
+      flashUntil = now() + FLASH_MS;
+    }
     const next = cloneBalls(balls);
     const idx = next.findIndex((b) => b.kind === "cue");
     next[idx] = strike(next[idx], shot.angle, shot.power, shot.spin);
@@ -646,9 +949,48 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
 
   function settle(): void {
     phase = "aim";
+    trails.clear();
     const res = summarizeShot(cloneBalls(balls), shotEvents.slice(), crossed, shotSteps);
     refresh();
     opts.onSettled(res, currentShot);
+  }
+
+  /** 进袋星光：黑星球迸金星 ×6，阵营球迸阵营色星光；母球落袋走红光不走星光 */
+  function spawnPotFx(kind: BallKind, pocket: number): void {
+    if (soft || pocket < 0 || kind === "cue") return;
+    const sp = toScreen(POCKETS[pocket], lay);
+    const gold = kind === "black";
+    const n = gold ? 6 : 5;
+    const size = Math.max(3, lay.scale * (gold ? 2 : 1.5));
+    const color = gold ? "#ffd25e" : kind === "warm" ? "#ffd3e0" : "#cfe6ff";
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+      const v = 40 + Math.random() * 50;
+      fx.push({
+        x: sp.x,
+        y: sp.y,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v - 30,
+        life: 0.7,
+        ttl: 0.7,
+        size,
+        color,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 6,
+      });
+    }
+  }
+
+  /** 滚球时把上一帧的位置记进残影队列（reduced-motion 不记） */
+  function pushTrails(): void {
+    for (const b of balls) {
+      if (b.potted || (b.vx === 0 && b.vy === 0)) continue;
+      const sp = toScreen(b, lay);
+      const arr = trails.get(b.id) ?? [];
+      arr.push(sp);
+      if (arr.length > 2) arr.shift();
+      trails.set(b.id, arr);
+    }
   }
 
   function stepRolling(dt: number): void {
@@ -660,10 +1002,18 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       const out = stepWorld(balls, FIXED_DT);
       balls = out.balls;
       shotSteps++;
+      // 视觉滚动角：按每颗球这一小步走的路程折算（只转压印层，不碰物理）
+      for (const b of balls) {
+        if (b.potted) continue;
+        const sp = speedOf(b);
+        if (sp > 0) rollAngle.set(b.id, (rollAngle.get(b.id) ?? 0) + (sp * FIXED_DT) / TABLE.r);
+      }
       for (const ev of out.events) {
         shotEvents.push(ev);
         if (ev.type === "pot") {
           sinking.set(ev.id, 0);
+          spawnPotFx(ev.kind, ev.pocket ?? -1);
+          if (ev.kind === "cue") foulUntil = now() + FOUL_MS;
           opts.sfx(ev.kind === "cue" ? "oops" : "coin");
         } else if (ev.type === "cushion") {
           opts.sfx("tap");
@@ -712,7 +1062,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     const dt = Math.min(0.05, (t - last) / 1000);
     last = t;
     if (!paused) {
-      if (phase === "rolling") stepRolling(dt);
+      if (phase === "rolling") {
+        if (!soft) pushTrails();
+        stepRolling(dt);
+      }
       if (phase === "charge") {
         power = chargePower(t - chargeStart);
         const pct = Math.round(power * 100);
@@ -724,6 +1077,26 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
         const nv = v + (soft ? dt * 4 : dt * 2.4);
         if (nv >= 1) sinking.delete(id);
         else sinking.set(id, nv);
+      }
+      // 进袋星光：飘一下、转一下，寿命到了就回收
+      if (fx.length > 0) {
+        for (const p of fx) {
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 90 * dt;
+          p.rot += p.vr * dt;
+        }
+        fx = fx.filter((p) => p.life > 0);
+      }
+      // 犯规提示条：红光期间提示条跟着变色抖一下（reduced-motion 只变色）
+      if (foulUntil > 0) {
+        if (t < foulUntil) {
+          if (!tipBox.className.includes("ps-tip-foul")) tipBox.className = "ps-tip ps-tip-foul";
+        } else {
+          foulUntil = 0;
+          tipBox.className = "ps-tip";
+        }
       }
       applyShake(t);
       render();
@@ -1002,7 +1375,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   }
 
   function update(patch: TablePatch): void {
-    if (patch.balls) balls = cloneBalls(patch.balls);
+    if (patch.balls) {
+      balls = cloneBalls(patch.balls);
+      // 整桌换球（新一局 / 放回重打）：残影、滚动角、星光都从头来
+      rollAngle.clear();
+      trails.clear();
+      fx = [];
+    }
     if (patch.turn !== undefined) turn = patch.turn;
     if (patch.banner !== undefined) banner = patch.banner;
     if (patch.tip !== undefined) tip = patch.tip;
@@ -1042,6 +1421,12 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       sinking.clear();
+      rollAngle.clear();
+      trails.clear();
+      fx = [];
+      flashAt = null;
+      flashUntil = 0;
+      foulUntil = 0;
       shakeUntil = 0;
       shakeAmp = 0;
       tableBox.style.transform = "";
@@ -1051,5 +1436,6 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     },
     update,
     rolling: () => phase === "rolling",
+    fx: () => fx.length,
   };
 }

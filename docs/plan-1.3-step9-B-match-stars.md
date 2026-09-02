@@ -1,0 +1,128 @@
+# 1.3 第 9 步 · B 档 —— match-stars「星星消消乐」视觉终评 + 美改方案
+
+请通过 Task 工具派生一或多个云端子代理执行本任务。
+指定模型 slug：`claude-fable-5-thinking-xhigh`。
+请在独立功能分支上进行修改，叫 game-1.2-kk。以 origin/game-1.2 为审美对照基线。不要直接修改 main。
+完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
+
+## 反套娃声明（必读）
+
+- **读到本文件的代理就是执行者**，禁止再通过 Task 派生任何子代理。
+- 只推 `game-1.2-kk`；禁止 push `main` / `game-1.2`；禁止 `--force`。
+- **只改视觉不改胜负数值**：`board.ts` 消除判定、`engine.ts`、`duel.ts`、`levels.ts` 一律不动；`anim.ts` 的时间线步骤（boom/fall/land/belt/restock）**时序不变**，只改每步的画面表现。改动集中在 `view.ts` 的 `paint()`/CSS。
+
+## 一、现状审美评测（基于 origin/game-1.2 真实代码，`src/games/match-stars/view.ts`）
+
+打分制：草稿 / 能认 / 可爱 / 精美。
+
+| 对象 | 现状代码 | 评分 | 问题点名 |
+|---|---|---|---|
+| 棋子（核心资产） | `paint()` 第 314–318 行：`tile.textContent = skin.emoji`——**系统 emoji + 纯色底** | **草稿** | 消消乐的脸面全交给系统字体：安卓/iOS 长相不同、无立体感、特殊棋子是「emoji+emoji」双字符叠加（316 行） |
+| 彩虹星 | 第 308–310 行：`🌈` emoji | 草稿 | 全消神器毫无神器感 |
+| 机关（冰/藤/霜/砖） | CSS 157–168 行：`🧊🌿🍥🧱` emoji 叠角标 | **草稿** | 四种机关全是 emoji 贴纸 |
+| 高光 | `.mst-tile::before` 左上白斑（153 行） | 能认 | 有伪立体意识，底子可用 |
+| 时间线动画 | `boomStep/fallStep/landStep/beltStep/restockStep`（373–527 行）：爆开缩放淡出、下落 tween、落地压扁 8% 回弹（341–344 行） | **可爱** | 动画骨架全仓库消除类最佳：boom/fall/land 节奏完整，只缺粒子与光效 |
+| 选中/光标 | box-shadow 双色（155–156 行） | 能认 | 可用 |
+| 读屏 | `describe()` 第 355–362 行逐格 | 可爱 | 保留 |
+| 结算 | DOM 文本 | 能认 | 无三星仪式 |
+
+结论：动画时间线是现成的高级底盘，**唯独棋子本体是 emoji**。把 6 类棋子 + 4 种机关 + 彩虹星全部换成绘制资产，即可从草稿直跳可爱以上。
+
+## 二、极高质量改进方案（可执行绘制规格）
+
+### 1. 棋子 → 星星家族（核心资产）
+
+- 6 色棋子统一为「星星家族」内联 SVG（viewBox 32×32，替换 emoji，`skin.bg` 底色保留）：
+  - 每颗 = 五角星主体（对应色渐变：顶亮 +15%）+ 描边（同色深 25%）+ 左上高光斑 + **一张脸**（闭眼微笑/圆眼/眨眼三款按色分配，增加区分度）；
+  - 六色各配微差形状（第二通道）：圆角星/尖角星/胖星/花形星/心形星/六芒星——色弱玩家靠轮廓即可分辨；
+- 特殊棋子（`SPECIAL_ICON` 叠加改造）：横向消=星星戴左右箭头腰带、纵向消=上下箭头、爆炸=星星变炸弹圆（引线+火花点）、同类清=星星戴皇冠——图案画进 SVG，不再是双 emoji 拼接；
+- 彩虹星 `🌈`：改为七彩渐变大星（conic 渐变 + 白芯 + 缓慢旋转 6s，`reduced` 静止）。
+
+### 2. 机关 → 绘制的机关
+
+- 冰 `🧊`：半透明冰晶罩（SVG 多边形 + 白色裂角高光），破冰时裂两帧再碎成 3 片；
+- 藤 `🌿`：绿藤缠绕角（两根曲线叶），解开时藤蔓缩回；
+- 霜 `🍥`：霜花纹罩两档（frost1 单层雪花纹/frost2 双层，替代现有纯色罩）；
+- 砖 `🧱`：砖块改绘制条纹保留（165 行 repeating-gradient 底子可用）+ 砖缝高光，去掉 emoji 角标。
+
+### 3. 时间线各步加特效（时序不变）
+
+- `boomStep`：现有缩放淡出之上，每颗爆点迸 3–4 颗星屑（DOM 粒子池 ≤ 30）+ 消除 ≥ 5 连时中心一圈冲击波环；
+- `fallStep`：下落棋子拖 1 帧极淡残影（`reduced` 关）；
+- `landStep`：压扁回弹保留（342 行注释口径不动），落地扬 1 粒微尘；
+- `beltStep`（传送带）：格子边缘虚线（169 行）改为流动箭头纹（CSS animation，`reduced` 静止）；
+- 连锁 chain ≥ 3：屏幕顶部弹「连锁 ×N」花体字 0.6s。
+
+### 4. 棋盘与背景
+
+- 棋盘底加圆角深色衬板（星空深蓝渐变）+ 格位淡影（凹槽感）；
+- 背景按关卡段换主题：粉黄晨光 → 青绿森林 → 星夜（查表）。
+
+### 5. 结算
+
+- 过关：目标图标逐个点亮 + 三星逐颗砸下（0.15s 间隔，easeOutBack）+ 星屑雨 ≤ 20；失败：温柔文案保留，棋盘灰化。
+
+## 三、2D / 2.5D / 3D 决策
+
+**保持 2D**（消除类规范）。立体感 = SVG 渐变星 + 高光 + 衬板凹槽；DOM 架构保留（按钮/aria/tween 全依赖）。禁止 three.js。
+
+## 四、共享 art kit
+
+- 星屑粒子、冲击波环、三星结算若 `src/art/kit/` 已建必须 `import`；未建则**服从 visual-bible**，写 `src/games/match-stars/art.ts`（`starTokenSVG(color, face, shape)`、`specialOverlaySVG(kind)` 纯函数）。
+
+## 五、学习方法
+
+- 参考 4399 消消乐类页游的棋子可辨识度（形状+颜色双通道）与连锁反馈梯度。禁止抄 Candy Crush/开心消消乐的美术素材与商标。
+
+## 六、文件边界
+
+- 只许改 `src/games/match-stars/**` + import `src/art/kit/`。
+- 禁止碰其他游戏与 `docs/plan-1.3-supervisor.md` / `index.md` / `tracker.md` / `visual-bible.md` / `step1-*` / `.cursor/skills/**`。
+
+## 七、测试要求（视觉契约）
+
+- 新增用例（追加 `view.test.ts`）：
+  1. 棋子不再是 emoji 文本：断言 tile 内含 SVG 节点；6 色 SVG 互不相同（形状差异断言）；
+  2. 特殊棋子四种 overlay 互不相同且不是双字符拼接；
+  3. 机关四种（冰/藤/霜/砖）为绘制节点，非 emoji；
+  4. boom/fall/land 时序回归（`anim.ts` 的步骤时长断言，改版前后一致）；
+  5. `describe()` 读屏文案不变（360 行 emoji 名称改为对应中文色名时须同步 tokens 数据的可读名，二选一并在测试里钉死）；
+  6. `reduced` 下粒子为 0、旋转/流动静止、压扁照走不形变（342 行口径回归）。
+- `board.test.ts` / `levels188.test.ts` / `duel.test.ts` / `anim.test.ts` 全部不动；`npm test -- match-stars` 全绿。
+
+## 八、红线
+
+- 360px：`boardWidthAt`/`cellPitch`（109–120 行）自适应保留；棋子 SVG 在最小格（约 34px）仍可辨形状。
+- 无障碍：形状+颜色双通道是本步核心交付；`reduced` 全链路；触控热区=整格不变。
+- 无商标：见上。
+- 分级：炸弹造型圆润卡通，无写实爆炸。
+
+## 九、回复格式
+
+完成后回复必须包含：`game-1.2-kk` 最新 SHA、实际模型 slug、改动清单（如 `starTokenSVG` 六形 / 机关绘制化 / boom 星屑 / 三星仪式）、测试结果、截图或关键绘制函数名供核验。
+
+## 附录一 · 开工步骤（执行者照抄）
+
+```
+git fetch origin game-1.2 game-1.2-kk
+git checkout -B game-1.2-kk origin/game-1.2-kk 2>/dev/null || git checkout -B game-1.2-kk origin/game-1.2
+npm ci                       # 以仓库锁文件为准
+npx vitest run src/games/match-stars # 开工前先确认该款旧测试全绿
+```
+
+- 开工前通读本文件全部章节；若仓库已有 `docs/plan-1.3-visual-bible.md`，其共享资产规格优先于本文件的本地实现建议；
+- 每完成一个资产（角色/金币/障碍/背景/UI）就跑一次该款测试并提交一次，小步提交，提交信息格式 `feat(match-stars): 1.3 视觉升级——<资产名>`；
+- 中途 `git fetch origin game-1.2-kk && git rebase origin/game-1.2-kk` 跟上游同步（他人只增文件，冲突概率低）；
+- 收尾 `git push -u origin game-1.2-kk`（普通推送，禁止 --force，禁止 push main / game-1.2）。
+
+## 附录二 · 验收清单（完成后逐项自查）
+
+- [ ] 本文件点名的每一处 emoji/字符占位均已替换为绘制资产
+- [ ] 核心资产（角色/金币/主体物）达到「可爱」以上，与 origin/game-1.2 基线对比有肉眼可见提升
+- [ ] 多角色/双人可分辨：形状+颜色双通道，色弱模式下仍可区分
+- [ ] 弱动效开关（prefers-reduced-motion 或该款自有 soft/calm/lessMotion 分支）接入了全部新增动画
+- [ ] 360px 宽度下所有可点目标、文字与关键状态仍清晰可读
+- [ ] 旧测试 0 删除 0 失败；本文件「测试要求」小节的新增视觉契约用例全部通过
+- [ ] 无商标、无恐怖元素，演出符合低龄分级红线
+- [ ] 改动只落在 `src/games/match-stars/**`（及允许的共享 art kit 引用），未触碰其他游戏与玩法数值
+- [ ] 回复包含：game-1.2-kk 最新 SHA、实际模型 slug、改动绘制函数清单、测试结果、截图或逐函数效果说明

@@ -10,6 +10,33 @@ export { meta };
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_NAMES, aiRun, tierLine, type AiTier } from "./ai";
+import {
+  BEAM_COUNT,
+  COMBO_SHOW_MIN,
+  LANE_COLORS,
+  LANE_OFF,
+  LANE_SOFT,
+  RING_MS,
+  STAGE_THEMES,
+  WARM_COMBO,
+  beamAngle,
+  beamTint,
+  burstSprite,
+  comboScale,
+  countdownStep,
+  gradeLabelSprite,
+  noteSprite,
+  rgbaOf,
+  shadeHex,
+  sparkSprite,
+  themeForChapter,
+  traceLaneSymbol,
+  tracePill,
+  pauseIconSVG,
+  playIconSVG,
+  traceStar,
+  type BurstGrade,
+} from "./art";
 import { createToneKit, type ToneKit } from "./audio";
 import { LANE_COUNT, type Chart } from "./chart";
 import guideBook from "./guide";
@@ -98,25 +125,52 @@ function viewportHeightPx(): number {
   return typeof h === "number" && h > 0 ? h : 0;
 }
 
-/** 往上找平台舞台(overflow:hidden 的那个盒子)的底边;找不到就退回视口底 */
+/**
+ * 往上找真正裁人的那条底边:`.game-stage` 之外,壳层的关卡包装(l99-stage-wrap)
+ * 和 wrap 自己都是 overflow:hidden,矮横屏上它们比舞台更早把画布剪掉(N-90:
+ * 915×412 实测 wrap 底 336、舞台底 404,判定线躲在 336 以下就再也看不见)。
+ * 逐层取最小的底边;一层都量不到就退回视口底。
+ */
 function clipBottomPx(el: HTMLElement | null): number {
   let node: HTMLElement | null = el;
+  let best = 0;
   for (let i = 0; node && i < 8; i++) {
-    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+    const cls = typeof node.className === "string" ? node.className : "";
+    let clips = cls.includes("game-stage");
+    if (!clips && typeof getComputedStyle === "function") {
+      try {
+        const o = getComputedStyle(node).overflowY;
+        clips = o === "hidden" || o === "clip";
+      } catch {
+        clips = false;
+      }
+    }
+    if (clips) {
       const r = node.getBoundingClientRect?.();
-      if (r && r.bottom > 0) return r.bottom;
-      break;
+      if (r && r.bottom > 0) best = best === 0 ? r.bottom : Math.min(best, r.bottom);
+      if (cls.includes("game-stage")) break;
     }
     node = node.parentElement;
   }
-  return viewportHeightPx();
+  return best > 0 ? best : viewportHeightPx();
 }
 
-const LANE_COLORS = ["#B79CF0", "#7FB6EC", "#F09BC0", "#7ED3A8"];
-const LANE_SOFT = ["#F1EAFF", "#E8F2FD", "#FDEAF2", "#E7F8EF"];
-const PERFECT_COLOR = "#FFBE4D";
-const GOOD_COLOR = "#7FC9F5";
-const NOTE_GLYPHS = ["♪", "♫", "♬", "♩"];
+/**
+ * N-90:画布高被 MIN_STAGE_PX 兜底后仍可能伸出剪裁盒(壳层矮横屏只给 ~164px)。
+ * 判定是纯时间制(approachMs 固定毫秒),把判定线的高度比例往上收不改难度,
+ * 只是音符下落的像素路径变短。收到底也不低于 0.45,画布够住时保持 0.8 不动。
+ */
+export function fitJudgeRatio(stagePx: number, canvasTop: number, clipBottom: number): number {
+  if (!Number.isFinite(stagePx) || stagePx <= 0) return JUDGE_LINE_RATIO;
+  if (!Number.isFinite(canvasTop) || !Number.isFinite(clipBottom) || clipBottom <= canvasTop) {
+    return JUDGE_LINE_RATIO;
+  }
+  // 线下留 14px 白:判定线本身不许贴着剪裁边,不然「压线」的音符看不见尾巴
+  const ratio = (clipBottom - canvasTop - 14) / stagePx;
+  return Math.max(0.45, Math.min(JUDGE_LINE_RATIO, ratio));
+}
+
+// 调色板与 sprite 都在 art.ts:index 只负责拼装,不再逐帧手绘
 
 /** 四轨键位:单人 D F J K */
 export const KEYS_SOLO = ["d", "f", "j", "k"];
@@ -167,7 +221,7 @@ const CSS = `
   touch-action:none;}
 .tt-say{font-size:14px;font-weight:800;color:#7a6aa6;text-align:center;min-height:20px;line-height:1.4;}
 .tt-say-miss{color:#8b7fae;}
-.tt-keys{font-size:13px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
+.tt-keys{font-size:14px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
 .tt-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .tt-btns:empty{display:none;}
 .tt-btn{border:none;border-radius:14px;min-height:44px;padding:8px 16px;font-size:15px;font-weight:900;
@@ -202,16 +256,47 @@ const CSS = `
   flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
 .tt-over-t{font-size:20px;font-weight:900;color:#6a4fa8;}
 .tt-over-s{font-size:15px;font-weight:700;color:#6f6390;line-height:1.6;}
+.tt-sum{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;align-items:center;}
+.tt-sum-bar{display:flex;width:100%;height:14px;border-radius:999px;overflow:hidden;background:#efeaf6;}
+.tt-seg-p{background:linear-gradient(180deg,#ffd98a,#f5b953);}
+.tt-seg-g{background:linear-gradient(180deg,#a8d8f8,#7fc9f5);}
+.tt-seg-m{background:#d9d3e6;}
+.tt-sum-legend{font-size:14px;font-weight:800;color:#7a6aa6;}
+.tt-sum-badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.tt-badge{background:#fff;border-radius:999px;padding:4px 12px;font-size:14px;font-weight:900;color:#6a4fa8;
+  box-shadow:0 2px 6px rgba(150,130,200,.2);}
+.tt-badge-star{color:#d99a1f;background:#fff6dd;}
+.tt-duo-cols{display:flex;gap:10px;width:100%;justify-content:center;}
+.tt-duo-col{flex:1 1 0;background:#f6f2ff;border-radius:12px;padding:8px;font-size:14px;font-weight:800;
+  color:#6a5892;line-height:1.7;}
 @media (max-width:420px){
   .tt-wrap{padding:8px;gap:6px;}
-  .tt-banner{font-size:13px;}
-  .tt-keys{font-size:13px;}
   .tt-stat{padding:4px 10px;}
 }
 /* 比规格下限还窄的老机器:收横向内边距把计分挤回一行,字号仍旧留在 16px */
 @media (max-width:340px){
   .tt-hud{gap:6px;}
   .tt-stat{padding:4px 7px;}
+}
+/* N-90:矮横屏壳层只给画布 ~164px。键盘提示行让位(触屏直接点轨道),
+   旁白浮到画布底角不占行高;判定线经 fitJudgeRatio 收进可视区(时间制判定,难度不变) */
+@media (max-height:500px){
+  .tt-wrap{padding:6px;gap:4px;}
+  .tt-keys{display:none;}
+  .tt-say{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);z-index:3;
+    max-width:94%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background:rgba(255,255,255,.88);border-radius:10px;padding:1px 10px;pointer-events:none;}
+}
+/* U-x(#107):501–840 中间档钉按钮行 */
+@media (max-height:840px) and (min-height:501px){
+  .tt-btns{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(246,242,255,0),#F6F2FF 14px);}
+}
+/* N-124 模式:915×412 同谱对战开始钮,500 档原文不动 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .tt-over{max-height:calc(100dvh - 108px);overflow:auto;display:flex;flex-direction:column;box-sizing:border-box;}
+  .tt-btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  .tt-over .tt-open{position:sticky;bottom:0;z-index:5;}
 }
 @media (prefers-reduced-motion:reduce){
   .tt-btn:active,.tt-open:active,.tt-goback:active{transform:none;}
@@ -243,14 +328,33 @@ interface Particle {
   vy: number;
   life: number;
   max: number;
-  glyph: string;
-  color: string;
+  /** 预渲染的小星星 / 小音符 / 判定小字贴图 */
+  sprite: CanvasImageSource;
+  w: number;
+  h: number;
+}
+
+/** 命中处的判定等级爆点:金色六芒星 / 白色四芒星 + 扩散圆环 */
+interface Burst {
+  lane: number;
+  grade: BurstGrade;
+  at: number;
+}
+
+/** 双人分轨的分侧统计(纯视觉记账,结算面板两列对比用) */
+export interface SideTally {
+  perfect: number;
+  good: number;
+  miss: number;
+  score: number;
 }
 
 export interface StageDone {
   state: RunState;
   /** 对战时假人的分数;没有假人就是 0 */
   rivalScore: number;
+  /** 双人分轨时左右两侧各自的统计;单人是 null */
+  sides: [SideTally, SideTally] | null;
 }
 
 export interface StageOpts {
@@ -262,6 +366,8 @@ export interface StageOpts {
   hint?: string;
   /** 双人分轨:左两轨给朵朵、右两轨给星星 */
   split?: boolean;
+  /** 舞台主题(STAGE_THEMES 的下标,按章节查表;纯视觉) */
+  theme?: number;
   /** 对战对手 */
   rival?: AiTier | null;
   sfx: (name: SoundName) => void;
@@ -284,11 +390,22 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   let pausedTotal = 0;
   let lastFrame = 0;
   const particles: Particle[] = [];
+  const bursts: Burst[] = [];
+  /** 最近一次连击 +1 的时刻,连击数字按它弹跳一下 */
+  let comboPopAt = -9999;
   /** 每条轨最近一次命中 / miss 的时刻,用来画底部亮起与温柔的变暗 */
   const laneHit = new Array<number>(LANE_COUNT).fill(-9999);
   const laneDim = new Array<number>(LANE_COUNT).fill(-9999);
   const held = new Set<number>();
   const pressedKeys = new Set<string>();
+  const theme = STAGE_THEMES[opts.theme ?? 0] ?? STAGE_THEMES[0];
+  /** 双人分轨才记两侧统计,结算面板两列对比用 */
+  const sideTally: [SideTally, SideTally] | null = split
+    ? [
+        { perfect: 0, good: 0, miss: 0, score: 0 },
+        { perfect: 0, good: 0, miss: 0, score: 0 },
+      ]
+    : null;
 
   const wrap = document.createElement("div");
   wrap.className = "tt-wrap";
@@ -331,7 +448,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   const pauseBtn = document.createElement("button");
   pauseBtn.type = "button";
   pauseBtn.className = "tt-btn tt-btn-pause";
-  pauseBtn.textContent = "⏸";
+  pauseBtn.innerHTML = pauseIconSVG();
   pauseBtn.setAttribute("aria-label", "暂停");
   pauseBtn.addEventListener("click", () => togglePause());
   hud.appendChild(pauseBtn);
@@ -340,8 +457,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     ? "朵朵 A S 管左两轨(S 也可以按 D) · 星星 K L 管右两轨(也可以按 ← →) · Esc 暂停"
     : "键盘 D F J K 对四条轨 · 也能直接点 · Esc 暂停";
 
+  let judgeRatio = JUDGE_LINE_RATIO;
+
   function judgeY(): number {
-    return Math.round(height * JUDGE_LINE_RATIO);
+    return Math.round(height * judgeRatio);
   }
 
   function nowMs(): number {
@@ -369,14 +488,15 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   }
 
   // -------------------------------------------------------------------------
-  // 命中反馈:碎成往上飘的小音符,禁止瞬删
+  // 命中反馈:碎成往上飘的小星星与小音符,禁止瞬删
   // -------------------------------------------------------------------------
 
-  function spawnParticles(lane: number, color: string, strong: boolean): void {
+  function spawnParticles(lane: number, grade: BurstGrade, strong: boolean): void {
     const n = particleCount(reduceMotion(), strong);
     const cx = (lane + 0.5) * (width / LANE_COUNT);
     const cy = judgeY();
     for (let i = 0; i < n; i++) {
+      const size = 13 + Math.random() * 8;
       particles.push({
         x: cx + (Math.random() - 0.5) * (width / LANE_COUNT) * 0.7,
         y: cy,
@@ -384,19 +504,49 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
         vy: -(0.08 + Math.random() * 0.1),
         life: 0,
         max: reduceMotion() ? PARTICLE_LIFE_REDUCED_MS : PARTICLE_LIFE_MS,
-        glyph: NOTE_GLYPHS[Math.floor(Math.random() * NOTE_GLYPHS.length)],
-        color,
+        sprite: sparkSprite(i % 3 === 0 ? "note" : "star", grade),
+        w: size,
+        h: size,
       });
     }
+  }
+
+  /** 完美命中多一枚「完美」小字往上飘(预渲染贴图,不逐帧写字) */
+  function spawnGradeLabel(lane: number): void {
+    particles.push({
+      x: (lane + 0.5) * (width / LANE_COUNT),
+      y: judgeY() - 30,
+      vx: 0,
+      vy: -0.045,
+      life: 0,
+      max: reduceMotion() ? PARTICLE_LIFE_REDUCED_MS : PARTICLE_LIFE_MS,
+      sprite: gradeLabelSprite("perfect"),
+      w: 64,
+      h: 24,
+    });
+  }
+
+  /** 双人分轨记一笔:左两轨算朵朵,右两轨算星星 */
+  function tallySide(ev: RunEvent): void {
+    if (!sideTally) return;
+    const side = sideTally[ev.lane < LANE_COUNT / 2 ? 0 : 1];
+    if (ev.kind === "perfect") side.perfect++;
+    else if (ev.kind === "good") side.good++;
+    else if (ev.kind === "miss") side.miss++;
+    side.score += ev.gain;
   }
 
   function handleEvents(): void {
     if (state.events.length === 0) return;
     for (const ev of state.events as RunEvent[]) {
+      tallySide(ev);
       if (ev.kind === "perfect" || ev.kind === "good") {
         const perfect = ev.kind === "perfect";
         laneHit[ev.lane] = state.timeMs;
-        spawnParticles(ev.lane, perfect ? PERFECT_COLOR : GOOD_COLOR, perfect);
+        bursts.push({ lane: ev.lane, grade: ev.kind, at: state.timeMs });
+        comboPopAt = state.timeMs;
+        spawnParticles(ev.lane, ev.kind, perfect);
+        if (perfect) spawnGradeLabel(ev.lane);
         opts.tones.hit(ev.kind, ev.lane, state.combo);
         if (state.combo > 0 && state.combo % 10 === 0) opts.sfx("coin");
         tell(perfect ? `完美!${state.combo} 连` : `良好 · ${state.combo} 连`);
@@ -504,11 +654,16 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     paused = !paused;
     if (paused) {
       pauseWall = wall;
-      pauseBtn.textContent = "▶️ 继续";
-      showCover("⏸ 先歇一会儿", "谱面停在这里等你,回来接着弹。", "▶️ 继续玩", () => togglePause());
+      pauseBtn.innerHTML = `${playIconSVG()}<span> 继续</span>`;
+      showCover(
+        `${pauseIconSVG(17)}<span> 先歇一会儿</span>`,
+        "谱面停在这里等你,回来接着弹。",
+        `${playIconSVG()}<span> 继续玩</span>`,
+        () => togglePause()
+      );
     } else {
       pausedTotal += wall - pauseWall;
-      pauseBtn.textContent = "⏸ 暂停";
+      pauseBtn.innerHTML = `${pauseIconSVG()}<span> 暂停</span>`;
       hideCover();
     }
     opts.sfx("tap");
@@ -522,7 +677,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "tt-btn tt-btn-go";
-    btn.textContent = label;
+    // 标题与按钮文案都可能带内联 SVG 小图标(暂停/继续),所以走 innerHTML
+    btn.innerHTML = label;
     btn.addEventListener("click", onClick);
     cover.appendChild(btn);
     wrap.appendChild(cover);
@@ -538,27 +694,84 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     renderHud();
     opts.sfx(state.cleared ? "win" : "oops");
     if (!state.cleared) tell(state.ended === "empty" ? state.message : MISS_LINE, true);
-    opts.onDone({ state, rivalScore });
+    opts.onDone({ state, rivalScore, sides: sideTally });
   }
 
   // -------------------------------------------------------------------------
-  // 绘制
+  // 绘制:静态背景预渲染一张,每帧 drawImage 拼装 + 动态层
   // -------------------------------------------------------------------------
 
-  function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-    const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-    c.beginPath();
-    c.moveTo(x + rr, y);
-    c.lineTo(x + w - rr, y);
-    c.quadraticCurveTo(x + w, y, x + w, y + rr);
-    c.lineTo(x + w, y + h - rr);
-    c.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-    c.lineTo(x + rr, y + h);
-    c.quadraticCurveTo(x, y + h, x, y + h - rr);
-    c.lineTo(x, y + rr);
-    c.quadraticCurveTo(x, y, x, y + rr);
-    c.closePath();
-    c.fill();
+  /** 轨道渐变、分隔线微光、列首符号都是静态的,resize 时重画一张离屏图 */
+  let bgLayer: HTMLCanvasElement | null = null;
+
+  function buildBackground(): void {
+    const cv = document.createElement("canvas");
+    cv.width = width;
+    cv.height = height;
+    bgLayer = cv;
+    const c = (cv.getContext("2d") ?? null) as CanvasRenderingContext2D | null;
+    if (!c) return;
+    const lane = width / LANE_COUNT;
+    const line = judgeY();
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const on = opts.chart.lanes.includes(i);
+      const base = on ? LANE_SOFT[i] : LANE_OFF;
+      // 极淡纵向渐变:顶暗底亮,视线被引向判定线
+      const g = c.createLinearGradient(0, 0, 0, height);
+      g.addColorStop(0, shadeHex(base, -0.05));
+      g.addColorStop(Math.max(0.05, Math.min(0.95, line / height)), shadeHex(base, 0.5));
+      g.addColorStop(1, base);
+      c.fillStyle = g;
+      c.fillRect(i * lane, 0, lane, height);
+      // 分隔线加微光
+      c.fillStyle = rgbaOf(theme.glow, 0.08);
+      c.fillRect(i * lane - 1.5, 0, 3, height);
+      c.fillStyle = "rgba(150,135,190,.2)";
+      c.fillRect(i * lane - 0.5, 0, 1, height);
+      // 列首小符号(圆/菱/三角/星):除颜色外多一条形状通道
+      c.fillStyle = on ? rgbaOf(LANE_COLORS[i], 0.55) : "rgba(160,150,180,.25)";
+      traceLaneSymbol(c, i, i * lane + lane / 2, 16, 7);
+      c.fill();
+    }
+  }
+
+  /**
+   * 上半屏主题饰层(visual-r1 · B 档 TOP10 之 8):5 枚列首同款符号极淡上飘,
+   * 补齐「音游基准 3 层背景」缺的主题饰层。只在判定线上方 60% 区间活动、
+   * globalAlpha 0.07,不遮判定线不抢音符;reduced 时静止定格。
+   */
+  function drawDriftSymbols(c: CanvasRenderingContext2D, t: number): void {
+    const reduced = reduceMotion();
+    const line = judgeY();
+    const top = 30;
+    const span = Math.max(60, line * 0.6 - top);
+    for (let k = 0; k < 5; k++) {
+      const fx = (0.5 + k * 0.83) % 1; // 黄金比错开,不成排
+      const phase = reduced ? k / 5 : (t / (14000 + k * 1600) + k / 5) % 1;
+      const y = top + span * (1 - phase);
+      const x = width * (0.08 + fx * 0.84);
+      c.save();
+      c.globalAlpha = 0.07;
+      c.fillStyle = LANE_COLORS[k % LANE_COUNT];
+      traceLaneSymbol(c, k % LANE_COUNT, x, y, 6 + (k % 3) * 2);
+      c.fill();
+      c.restore();
+    }
+  }
+
+  /** 舞台灯:2–3 道极淡斜向光束,随曲目进度缓慢摆动;reduced 静止,连击 ≥ 20 转暖 */
+  function drawBeams(c: CanvasRenderingContext2D, t: number): void {
+    const reduced = reduceMotion();
+    const tint = rgbaOf(beamTint(theme, state.combo), 0.1);
+    for (let i = 0; i < BEAM_COUNT; i++) {
+      const rad = (beamAngle(t, i, reduced) * Math.PI) / 180;
+      c.save();
+      c.translate(width * (0.22 + 0.28 * i), -8);
+      c.rotate(rad);
+      c.fillStyle = tint;
+      c.fillRect(-width * 0.07, 0, width * 0.14, height * 1.5);
+      c.restore();
+    }
   }
 
   function draw(t: number): void {
@@ -569,22 +782,20 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     const pxPerMs = line / approach;
 
     c.clearRect(0, 0, width, height);
-    // 四列底色 + 分隔线
+    // 静态背景(轨道渐变 + 分隔线 + 列首符号)一次 drawImage
+    if (bgLayer) c.drawImage(bgLayer, 0, 0);
+    drawBeams(c, t);
+    drawDriftSymbols(c, t);
     for (let i = 0; i < LANE_COUNT; i++) {
-      const on = opts.chart.lanes.includes(i);
-      c.fillStyle = on ? LANE_SOFT[i] : "#F4F1F8";
-      c.fillRect(i * lane, 0, lane, height);
       const dim = t - laneDim[i];
       if (dim >= 0 && dim < 700) {
         // miss 的温柔提示:轨道整体轻微变暗,不闪红
         c.fillStyle = `rgba(120,108,150,${0.16 * (1 - dim / 700)})`;
         c.fillRect(i * lane, 0, lane, height);
       }
-      c.fillStyle = "rgba(150,135,190,.18)";
-      c.fillRect(i * lane - 0.5, 0, 1, height);
     }
 
-    // 音符
+    // 音符:预渲染 sprite 拼装(尺寸与位置公式不动 = 判定手感不动)
     for (const ns of state.notes) {
       if (ns.status === "done" || ns.status === "missed") continue;
       const note = ns.note;
@@ -593,24 +804,51 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
       if (headY < -80 || tailY > height + 80) continue;
       const x = note.lane * lane + lane * 0.14;
       const w = lane * 0.72;
-      c.fillStyle = LANE_COLORS[note.lane];
       if (note.hold > 0) {
         const top = Math.min(headY, tailY);
         const h = Math.max(18, Math.abs(headY - tailY));
-        roundRect(c, x, top, w, h, w * 0.45);
-        // 按住时条身有一段流动的亮块
+        // 条身:半透明渐变管 + 两侧 1px 亮边
+        const body = c.createLinearGradient(0, top, 0, top + h);
+        body.addColorStop(0, rgbaOf(LANE_COLORS[note.lane], 0.28));
+        body.addColorStop(1, rgbaOf(LANE_COLORS[note.lane], 0.45));
+        c.fillStyle = body;
+        tracePill(c, x + w * 0.16, top, w * 0.68, h, w * 0.28);
+        c.fill();
+        c.strokeStyle = rgbaOf(shadeHex(LANE_COLORS[note.lane], 0.45), 0.9);
+        c.lineWidth = 1;
+        tracePill(c, x + w * 0.16, top, w * 0.68, h, w * 0.28);
+        c.stroke();
         if (ns.status === "holding") {
-          const flow = (t / 6) % Math.max(1, h);
-          c.fillStyle = "rgba(255,255,255,.55)";
-          roundRect(c, x + w * 0.2, top + h - flow, w * 0.6, Math.min(22, h), w * 0.3);
+          // holding:条身外发光一圈
+          c.strokeStyle = "rgba(255,255,255,.8)";
+          c.lineWidth = 2;
+          tracePill(c, x + w * 0.16 - 1.5, top - 1.5, w * 0.68 + 3, h + 3, w * 0.28);
+          c.stroke();
+          // 星光流:流动亮带 + 两颗小星随流;reduced 关流光,亮带定在底部不动
+          const reduced = reduceMotion();
+          const flow = reduced ? Math.min(22, h) : (t / 6) % Math.max(1, h);
+          c.fillStyle = "rgba(255,255,255,.35)";
+          tracePill(c, x + w * 0.28, top + h - flow, w * 0.44, Math.min(22, h), w * 0.18);
+          c.fill();
+          if (!reduced) {
+            c.fillStyle = "rgba(255,255,255,.85)";
+            traceStar(c, x + w * 0.5, top + Math.max(4, h - flow + 6), 5, 2.2, 5);
+            c.fill();
+            traceStar(c, x + w * 0.36, top + Math.max(4, ((h - flow + h * 0.66) % h) + 4), 3.5, 1.6, 5);
+            c.fill();
+          }
         }
+        // 头部:星光琴键(长按款,带「按住」提示环)
+        c.drawImage(noteSprite(note.lane, "hold"), x, headY - 13, w, 26);
       } else {
-        roundRect(c, x, headY - 13, w, 26, 9);
+        c.drawImage(noteSprite(note.lane, "tap"), x, headY - 13, w, 26);
       }
     }
 
-    // 判定线 + 命中时轨道底部亮一下
+    // 命中时轨道底部亮一下(留旧口径)
+    let lastHitAt = -9999;
     for (let i = 0; i < LANE_COUNT; i++) {
+      lastHitAt = Math.max(lastHitAt, laneHit[i]);
       const since = t - laneHit[i];
       if (since >= 0 && since < 320) {
         const a = 1 - since / 320;
@@ -618,27 +856,73 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
         c.fillRect(i * lane, line - 26, lane, height - line + 26);
       }
     }
-    c.fillStyle = "#8A6AD6";
+    // 判定线:命中后 0.1s 整线增亮 + 两端小星星端点
+    const flash = t - lastHitAt >= 0 && t - lastHitAt < 100;
+    c.fillStyle = flash ? shadeHex("#8A6AD6", 0.35) : "#8A6AD6";
     c.fillRect(0, line - 2, width, 4);
-    c.fillStyle = "rgba(138,106,214,.22)";
+    c.fillStyle = rgbaOf("#8A6AD6", flash ? 0.4 : 0.22);
     c.fillRect(0, line - 9, width, 7);
+    c.fillStyle = "#FFD76A";
+    traceStar(c, 9, line, 7, 3, 5);
+    c.fill();
+    traceStar(c, width - 9, line, 7, 3, 5);
+    c.fill();
 
-    // 命中粒子:小音符往上飘着淡出
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-    for (const p of particles) {
-      const a = Math.max(0, 1 - p.life / p.max);
-      c.globalAlpha = a;
-      c.fillStyle = p.color;
-      c.font = `${Math.round(14 + 8 * a)}px "PingFang SC",system-ui,sans-serif`;
-      c.fillText(p.glyph, p.x, p.y);
+    // 判定等级爆点:扩散圆环(列色)+ 完美金色六芒星 / 良好白色四芒星
+    for (const b of bursts) {
+      const age = t - b.at;
+      if (age < 0 || age >= RING_MS) continue;
+      const k = age / RING_MS;
+      const cx = (b.lane + 0.5) * lane;
+      c.globalAlpha = 1 - k;
+      c.strokeStyle = LANE_COLORS[b.lane];
+      c.lineWidth = 3 * (1 - k) + 1;
+      c.beginPath();
+      c.arc(cx, line, 10 + k * lane * 0.55, 0, Math.PI * 2);
+      c.stroke();
+      const s = (b.grade === "perfect" ? 58 : 44) * (0.6 + 0.6 * k);
+      c.drawImage(burstSprite(b.grade), cx - s / 2, line - s / 2, s, s);
     }
     c.globalAlpha = 1;
 
-    if (t < 0) {
-      c.fillStyle = "#8A6AD6";
-      c.font = '900 22px "PingFang SC",system-ui,sans-serif';
-      c.fillText("预备…", width / 2, height * 0.4);
+    // 命中粒子:预渲染的小星星 / 小音符往上飘着淡出(不再逐帧写字)
+    for (const p of particles) {
+      const a = Math.max(0, 1 - p.life / p.max);
+      c.globalAlpha = a;
+      const grow = 0.75 + 0.45 * a;
+      c.drawImage(p.sprite, p.x - (p.w * grow) / 2, p.y - (p.h * grow) / 2, p.w * grow, p.h * grow);
+    }
+    c.globalAlpha = 1;
+
+    // 连击上屏:≥ 5 连在判定线上方亮大号数字,每 +1 弹跳一下(reduced 静态)
+    if (state.combo >= COMBO_SHOW_MIN) {
+      const pop = comboScale(t - comboPopAt, reduceMotion());
+      c.save();
+      c.translate(width / 2, line - 48);
+      c.scale(pop, pop);
+      c.font = '900 30px "PingFang SC","Microsoft YaHei",system-ui,sans-serif';
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.lineWidth = 6;
+      c.strokeStyle = "rgba(255,255,255,.9)";
+      c.strokeText(`${state.combo} 连`, 0, 0);
+      c.fillStyle = state.combo >= WARM_COMBO ? "#E8912D" : theme.glow;
+      c.fillText(`${state.combo} 连`, 0, 0);
+      c.restore();
+    }
+
+    // 预备倒数:3-2-1 节拍圆点,和第一个音符的落线时刻对齐(纯视觉)
+    const lead = state.chart.notes[0]?.time ?? 0;
+    const remain = countdownStep(t, lead);
+    if (remain > 0) {
+      for (let i = 0; i < 3; i++) {
+        const on = i < remain;
+        const pulse = !on || reduceMotion() ? 1 : 1 + 0.08 * Math.sin(t / 130);
+        c.fillStyle = on ? theme.glow : rgbaOf(theme.glow, 0.22);
+        c.beginPath();
+        c.arc(width / 2 + (i - 1) * 34, height * 0.36, 8 * pulse, 0, Math.PI * 2);
+        c.fill();
+      }
     }
   }
 
@@ -650,6 +934,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     }
     for (let i = particles.length - 1; i >= 0; i--) {
       if (particles[i].life >= particles[i].max) particles.splice(i, 1);
+    }
+    // 爆点比粒子先谢幕(250ms < 620ms),这里顺手清掉过期的
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      if (t - bursts[i].at >= RING_MS) bursts.splice(i, 1);
     }
     draw(t);
   }
@@ -680,17 +968,37 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     return (below > 0 ? below : 44) + 22;
   }
 
+  /**
+   * 画布真正能占的宽:量 wrap 的内容宽。视口宽减 24 在平台壳层里会超出
+   * (壳层四周还有 60px 左右的白边),画布左右各被裁十几像素,最边上的
+   * 轨道就点不着了;量不到(测试桩/还没上屏)退回视口口径。
+   */
+  function hostWidthPx(): number {
+    const cw = wrap.clientWidth;
+    if (typeof cw !== "number" || cw <= 0) return viewportWidth();
+    try {
+      const s = getComputedStyle(wrap);
+      const pad = (parseFloat(s.paddingLeft) || 0) + (parseFloat(s.paddingRight) || 0);
+      return Math.max(0, cw - pad) + 24;
+    } catch {
+      return cw + 24;
+    }
+  }
+
   /** 按舞台真实剩余空间收一次画布,保证判定线留在能点到的地方 */
   function resize(): void {
-    width = stageWidth(viewportWidth());
+    width = stageWidth(Math.min(viewportWidth(), hostWidthPx()));
     const roomy = stageHeight(width, viewportHeightPx());
     const top = canvas.getBoundingClientRect?.()?.top ?? 0;
     const bottom = clipBottomPx(wrap);
     height = fitStageHeight(roomy, bottom > 0 && top > 0 ? bottom - top - roomBelowCanvas() : 0);
+    // N-90:MIN_STAGE_PX 兜底后画布底仍可能被剪,把判定线收进看得见的那段
+    judgeRatio = top > 0 ? fitJudgeRatio(height, top, bottom) : JUDGE_LINE_RATIO;
     canvas.width = width;
     canvas.height = height;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
+    buildBackground();
   }
 
   const onResize = (): void => {
@@ -723,6 +1031,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
       particles.length = 0;
+      bursts.length = 0;
       wrap.remove();
     },
   };
@@ -748,6 +1057,7 @@ function playLevelWith(tones: ToneKit, modeBar: HTMLElement) {
       banner: "",
       hint: `${ch.emoji} ${levelBrief(lv)} · ${lv.hint}`,
       split: lv.split,
+      theme: themeForChapter(lv.chapter),
       sfx: ctx.sfx,
       tones,
       onDone: ({ state }) => {
@@ -810,12 +1120,14 @@ function overPanel(
   title: string,
   sub: string,
   label: string,
-  onAgain: () => void
+  onAgain: () => void,
+  detail?: HTMLElement | null
 ): void {
   host.innerHTML = "";
   const box = document.createElement("div");
   box.className = "tt-over";
   box.innerHTML = `<div class="tt-over-t">${title}</div><div class="tt-over-s">${sub}</div>`;
+  if (detail) box.appendChild(detail);
   const again = document.createElement("button");
   again.type = "button";
   again.className = "tt-open";
@@ -823,6 +1135,64 @@ function overPanel(
   again.addEventListener("click", onAgain);
   box.appendChild(again);
   host.appendChild(box);
+}
+
+/**
+ * 结算的判定统计:完美 / 良好 / 溜走三色横条 + 最高连击徽章 + 星级;
+ * 双人分轨再补两列对比。全是给孩子看的复盘,不改任何分数。
+ */
+function judgeSummary(state: RunState, sides?: [SideTally, SideTally] | null): HTMLElement {
+  const total = Math.max(1, state.perfect + state.good + state.miss);
+  const box = document.createElement("div");
+  box.className = "tt-sum";
+
+  const bar = document.createElement("div");
+  bar.className = "tt-sum-bar";
+  bar.setAttribute("aria-hidden", "true");
+  const segs: Array<[string, number]> = [
+    ["tt-seg-p", state.perfect],
+    ["tt-seg-g", state.good],
+    ["tt-seg-m", state.miss],
+  ];
+  for (const [cls, n] of segs) {
+    const seg = document.createElement("span");
+    seg.className = cls;
+    seg.style.width = `${Math.round((n / total) * 100)}%`;
+    bar.appendChild(seg);
+  }
+
+  const legend = document.createElement("div");
+  legend.className = "tt-sum-legend";
+  legend.textContent = `完美 ${state.perfect} · 良好 ${state.good} · 溜走 ${state.miss}`;
+
+  const badges = document.createElement("div");
+  badges.className = "tt-sum-badges";
+  const comboBadge = document.createElement("span");
+  comboBadge.className = "tt-badge";
+  comboBadge.textContent = `最高 ${state.maxCombo} 连`;
+  const stars = levelStars(state);
+  const starBadge = document.createElement("span");
+  starBadge.className = "tt-badge tt-badge-star";
+  starBadge.setAttribute("aria-label", `${stars} 星`);
+  starBadge.textContent = `${"★".repeat(stars)}${"☆".repeat(3 - stars)}`;
+  badges.append(comboBadge, starBadge);
+  box.append(bar, legend, badges);
+
+  if (sides) {
+    const cols = document.createElement("div");
+    cols.className = "tt-duo-cols";
+    const names = ["🌸 朵朵(左两轨)", "⭐ 星星(右两轨)"];
+    sides.forEach((side, i) => {
+      const col = document.createElement("div");
+      col.className = "tt-duo-col";
+      col.innerHTML = `<div>${names[i]}</div>
+        <div>完美 ${side.perfect} · 良好 ${side.good}</div>
+        <div>溜走 ${side.miss} · 得分 ${side.score}</div>`;
+      cols.appendChild(col);
+    });
+    box.appendChild(cols);
+  }
+  return box;
 }
 
 // ---------------------------------------------------------------------------
@@ -845,6 +1215,7 @@ function mountEndless(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: (
       chart,
       rules: ENDLESS_RULES,
       banner: `♾️ 无尽加速 · 第 ${wave + 1} 段<br>一个音符都不能漏,速度会一直往上加`,
+      theme: 0,
       sfx: (n) => api.play(n),
       tones,
       onDone: ({ state }) => {
@@ -866,7 +1237,8 @@ function mountEndless(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: (
             wave = 0;
             total = 0;
             startWave();
-          }
+          },
+          judgeSummary(state)
         );
       },
     });
@@ -943,6 +1315,7 @@ function mountVersus(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: ()
       chart: matchChart(round),
       rules: { emptyRule: "combo", maxMiss: CAMPAIGN_MAX_MISS },
       banner: `⚔️ 第 ${round} 局 · 对手「${TIER_NAMES[tier]}」<br>同一张谱,分高的那个赢`,
+      theme: 1,
       rival: tier,
       sfx: (n) => api.play(n),
       tones,
@@ -978,7 +1351,8 @@ function mountVersus(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: ()
             api.play("tap");
             round++;
             startRound();
-          }
+          },
+          judgeSummary(state)
         );
       },
     });
@@ -1014,9 +1388,10 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, tones: ToneKit, onBack:
       banner:
         "👫 一张谱两个人打<br>朵朵管左边两轨(A / S,S 也可以用 D),星星管右边两轨(K / L,也可以用 ← / →)",
       split: true,
+      theme: 2,
       sfx: (n) => api.play(n),
       tones,
-      onDone: ({ state }) => {
+      onDone: ({ state, sides }) => {
         bestTogether = Math.max(bestTogether, state.score);
         api.addStars(1);
         overPanel(
@@ -1028,7 +1403,8 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, tones: ToneKit, onBack:
             api.play("tap");
             round++;
             startRound();
-          }
+          },
+          judgeSummary(state, sides)
         );
       },
     });

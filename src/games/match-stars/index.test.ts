@@ -209,11 +209,12 @@ describe("首页四个入口", () => {
     byText("人机对战")!.dispatch("click");
     byText("开消")!.dispatch("click");
     const foe = boards()[1];
-    const before = foe.children.map((c) => c.textContent).join("");
+    // 1.3 起棋子是 SVG 不是文本,盘面指纹改读每格的读屏说明(内容一样跟着盘面变)
+    const snap = (): string => foe.children.map((c) => c.getAttribute("aria-label")).join("|");
+    const before = snap();
     // 虚拟时钟推进两秒多，够对手想一步了
     flushFrames(dom, 160, 20);
-    const after = foe.children.map((c) => c.textContent).join("");
-    expect(after).not.toBe(before);
+    expect(snap()).not.toBe(before);
     handle.destroy();
   });
 });

@@ -69,7 +69,9 @@ import {
   type PlayKind,
   type StreakState,
 } from "./session";
-import { CSS, createBoardView, type BoardView } from "./view";
+import { CSS, WIN_JUMP_GAP_MS, WIN_JUMP_MS, WIN_SWEEP_MS, createBoardView, type BoardView } from "./view";
+import { hourglassSVG, spiritAvatarSVG, stoneIconSVG } from "./art";
+import { prefersReducedMotion } from "../../engine/view25d";
 import {
   TOTAL_LEVELS,
   chapterOf,
@@ -168,6 +170,23 @@ interface Table {
   destroy: () => void;
 }
 
+/** 座位条计时的显示格式：m:ss */
+export function fmtClock(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** 座位条上黑白双方叫什么（黑先白后） */
+export function seatNames(o: Pick<TableOpts, "human" | "ai" | "puzzle">): [string, string] {
+  if (o.human === "both") return ["朵朵 · 黑棋", "星星 · 白棋"];
+  if (o.puzzle) return ["你 · 黑棋", "守方 · 白棋"];
+  const aiName = o.ai ? DIFFICULTY_NAME[o.ai] : "白棋";
+  return o.human === 2 ? [aiName, "你 · 白棋"] : ["你 · 黑棋", aiName];
+}
+
+/** 胜利结算仪式弹卡前要等的毫秒数：光带扫完 + 五连子逐颗跳完再亮相 */
+export const CEREMONY_DELAY_MS = WIN_SWEEP_MS + WIN_JUMP_GAP_MS * 4 + WIN_JUMP_MS + 80;
+
 function mountTable(host: HTMLElement, o: TableOpts): Table {
   const wrap = document.createElement("div");
   wrap.className = "gmk-wrap";
@@ -180,8 +199,49 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   modeEl.textContent = o.headline;
   top.append(turnEl, modeEl);
   wrap.appendChild(top);
+  // 座位条：黑白双方各一枚棋子小图标 + 名字 + 计时，轮到谁谁金色描边
+  const names = seatNames(o);
+  const seats = document.createElement("div");
+  seats.className = "gmk-seats";
+  const seatEls: Array<{ box: HTMLElement; time: HTMLElement }> = [];
+  // AI 落座的那一侧加一枚画制棋灵头像,名字里的 emoji 前缀改由头像承担(round2 N-01)
+  const aiSeat = o.ai && !o.puzzle ? (o.human === 2 ? 1 : 2) : 0;
+  for (const p of [1, 2] as const) {
+    const box = document.createElement("div");
+    box.className = "gmk-seat";
+    const ico = document.createElement("span");
+    ico.className = "gmk-seat-ico";
+    ico.innerHTML = stoneIconSVG(p, 22);
+    const name = document.createElement("span");
+    name.className = "gmk-seat-name";
+    name.textContent = names[p - 1];
+    const time = document.createElement("span");
+    time.className = "gmk-seat-time";
+    time.textContent = fmtClock(0);
+    if (p === aiSeat && o.ai) {
+      const spirit = document.createElement("span");
+      spirit.className = "gmk-seat-spirit";
+      spirit.setAttribute("aria-hidden", "true");
+      spirit.innerHTML = spiritAvatarSVG(o.ai, 20);
+      name.textContent = names[p - 1].replace(/^\S+\s+/, "");
+      box.append(ico, spirit, name, time);
+    } else {
+      box.append(ico, name, time);
+    }
+    seats.appendChild(box);
+    seatEls.push({ box, time });
+  }
+  wrap.appendChild(seats);
   const boardHost = document.createElement("div");
+  boardHost.className = "gmk-boardbox";
   wrap.appendChild(boardHost);
+  // AI 思考时棋盘右上角的小沙漏（DOM 元素，reduced 下静止）
+  const sand = document.createElement("div");
+  sand.className = "gmk-sand";
+  sand.hidden = true;
+  sand.setAttribute("aria-hidden", "true");
+  sand.innerHTML = hourglassSVG(20);
+  boardHost.appendChild(sand);
   const btns = document.createElement("div");
   btns.className = "gmk-btns";
   wrap.appendChild(btns);
@@ -239,7 +299,16 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   let claim: ClaimState | null = null;
   let claimTimer = 0;
   let aiTimer = 0;
+  let ceremonyTimer = 0;
   let destroyed = false;
+
+  // 双方用时（秒）：只在对局进行中给「当前轮到的一方」走表
+  const clockSec: [number, number] = [0, 0];
+  const clockTimer = window.setInterval(() => {
+    if (destroyed || over || claim) return;
+    clockSec[current - 1] += 1;
+    seatEls[current - 1].time.textContent = fmtClock(clockSec[current - 1]);
+  }, 1000);
 
   const view: BoardView = createBoardView(boardHost, {
     size: o.size,
@@ -274,6 +343,9 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
       turnEl.textContent = current === 1 ? "⚫ 该黑棋啦" : "⚪ 该白棋啦";
     }
     turnEl.className = `gmk-badge gmk-turn${thinking && !over ? " gmk-think" : ""}`;
+    seatEls[0].box.className = `gmk-seat${!over && current === 1 ? " gmk-seat-on" : ""}`;
+    seatEls[1].box.className = `gmk-seat${!over && current === 2 ? " gmk-seat-on" : ""}`;
+    sand.hidden = !thinking || over;
     undoBtn.disabled = history.length === 0 || over || thinking || claim !== null;
     hintBtn.textContent = `✨ 提示×${hints.left}`;
     hintBtn.disabled = hints.left <= 0 || !humansTurn();
@@ -299,7 +371,41 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     closeClaim();
     view.update({ interactive: false, pending: null });
     refresh();
+    if (winner !== 0 && reason === "five") scheduleCeremony(winner);
     o.onEnd({ winner, reason });
+  }
+
+  /**
+   * 胜利结算仪式：等胜利线扫光 + 五连子逐颗跳完，再弹结算卡
+   * （胜方棋子大图 + 手数用时 + 复盘按钮，只展示不改任何对局数据）。
+   * 连胜挑战那类自己会弹结算浮层的模式，检测到已有浮层就不再叠加。
+   */
+  function scheduleCeremony(winner: Player): void {
+    const delay = prefersReducedMotion() ? 300 : CEREMONY_DELAY_MS;
+    ceremonyTimer = window.setTimeout(() => {
+      if (destroyed || host.querySelector?.(".gmk-over")) return;
+      const ov = document.createElement("div");
+      ov.className = "gmk-over gmk-ceremony";
+      const img = document.createElement("span");
+      img.className = "gmk-over-stoneimg";
+      img.innerHTML = stoneIconSVG(winner, 72);
+      const title = document.createElement("div");
+      title.className = "gmk-over-title";
+      title.textContent = `${names[winner - 1]}连成五颗！`;
+      const sub = document.createElement("div");
+      sub.className = "gmk-over-sub";
+      sub.textContent = `本局共 ${history.length} 手 · 黑方用时 ${fmtClock(clockSec[0])} · 白方用时 ${fmtClock(clockSec[1])}`;
+      const replay = document.createElement("button");
+      replay.type = "button";
+      replay.className = "gmk-over-btn";
+      replay.textContent = "🔍 复盘棋盘";
+      replay.addEventListener("click", () => {
+        o.api.play("tap");
+        ov.remove();
+      });
+      ov.append(img, title, sub, replay);
+      wrap.appendChild(ov);
+    }, delay);
   }
 
   // ---------------- 禁手申告 ----------------
@@ -408,6 +514,8 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
       const line = findWinLine(board, x, y);
       view.update({ winLine: line });
       view.sweep();
+      // 谜题模式：制胜点开一朵金色小花
+      if (o.puzzle && p === 1) view.bloom(x, y);
       o.api.play("win");
       msgEl.textContent = verdict.text;
       finish(p, "five");
@@ -533,6 +641,8 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     destroy() {
       destroyed = true;
       clearTimeout(aiTimer);
+      clearTimeout(ceremonyTimer);
+      clearInterval(clockTimer);
       closeClaim();
       view.destroy();
       wrap.remove();
@@ -1024,7 +1134,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 96px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "每题都在限定步数内必胜，不用提示解开才是 3 星～",
       grandMessage: "188 道残局全部解开，你的算杀已经很有大师样子了！",
       guide: guideBook,

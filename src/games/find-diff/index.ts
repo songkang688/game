@@ -39,7 +39,13 @@ import {
   miniCellPx,
   missCooldownMs,
   panelCellPx,
+  panelCellPxRow,
   panelCellForRoom,
+  panelCellForRoomRow,
+  panelsSideBySide,
+  tripleCellPxByWidth,
+  triplePanelsRow,
+  regrowCellPx,
   stageRoomPx,
   openLevelOnMap,
   parseLevelParam,
@@ -54,6 +60,26 @@ import {
   TOOL_MIN_H,
   type CellCenter,
 } from "./runtime";
+import { BOARD_ART_CSS, glyphHTML, sceneStickersReady } from "./boardArt";
+import {
+  BUBBLE_MS,
+  CONFETTI_TINTS,
+  FDF_ART,
+  HIT_SPARK_MS,
+  MAG_MS,
+  MISS_BUBBLE_TEXT,
+  RING_MS,
+  STAGE_CSS,
+  badgeRowHTML,
+  confettiSpecs,
+  deskDoodleHTML,
+  hitRingEndRadius,
+  hitSparkSpecs,
+  hudTimeHTML,
+  magnifierFxHTML,
+  seamHTML,
+  seamMode,
+} from "./stage13";
 
 /** 主棋盘一格的边长上限：配合 22px 的命中半径下限，热区直径稳稳 ≥ 44px */
 export const PLAY_CELL_PX = 44;
@@ -116,6 +142,17 @@ const CSS = `
   overscroll-behavior:contain;}
 .fdf-zoom{transform-origin:center center;will-change:transform;}
 .fdf-panels{display:flex;flex-direction:column;gap:8px;width:100%;align-items:center;}
+/* L-1(trio-r5):真横屏(宽≥600 且宽>高)两图并排,一张图独享可视高;中缝变竖线、麻绳装饰收起。
+   seam 皮肤在 STAGE_CSS 里写着 width:96%,这里用三层选择器压过它,别让中缝把两图挤到屏幕两端 */
+.fdf-panels-row{flex-direction:row;align-items:flex-start;justify-content:center;gap:10px;}
+.fdf-panels-row .fdf-split,.fdf-panels-row .fdf-split.fdf-seam{width:3px;flex:0 0 3px;height:auto;
+  align-self:stretch;min-height:60px;background:linear-gradient(180deg,#ffd8e6,#c5b3f0,#ffd8e6);border-radius:3px;}
+.fdf-panels-row .fdf-split > *{display:none;}
+/* 标题收成一行:挂牌是 display:table 收身的,横排时让面板宽度跟着标题长,别让标题折行吃掉格子的高度 */
+.fdf-panels-row .fdf-label{white-space:nowrap;}
+.fdf-panels-triple .fdf-label{font-size:11px;}
+/* 工具行挪进顶排后不再是 .fdf-desk 的直系子节点,z-index 垫层补回来 */
+.fdf-rowmode .fdf-top .fdf-tools{position:relative;z-index:1;}
 .fdf-row{display:flex;gap:6px;flex-wrap:nowrap;justify-content:center;}
 .fdf-panel{background:#ffffffec;border-radius:14px;padding:6px;box-shadow:0 3px 10px rgba(120,120,160,.18);}
 .fdf-split{width:86%;height:3px;border-radius:3px;background:linear-gradient(90deg,#ffd8e6,#c5b3f0,#ffd8e6);}
@@ -125,7 +162,7 @@ const CSS = `
   display:block;font-family:inherit;}
 .fdf-cell-play{cursor:pointer;}
 .fdf-glyph{position:absolute;left:50%;top:50%;line-height:1;pointer-events:none;}
-.fdf-cell.fdf-found::after{content:"";position:absolute;inset:6%;border:3px solid #f06595;border-radius:50%;
+.fdf-cell.fdf-found::after{content:"";position:absolute;inset:6%;border:3px solid #f4b942;border-radius:50%;
   box-shadow:0 0 0 2px #ffffffc0 inset;}
 .fdf-cell.fdf-hintarea{background:#fff3bf;}
 .fdf-cell.fdf-hintspot{background:#ffe066;animation:fdfBlink .7s 3;}
@@ -133,11 +170,11 @@ const CSS = `
 .fdf-cell.fdf-slide{animation:fdfSlide .45s;}
 @keyframes fdfSlide{from{transform:translateX(-10px);opacity:.35}to{transform:translateX(0);opacity:1}}
 .fdf-ripple{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;pointer-events:none;
-  border:3px solid #91a7ff;animation:fdfRipple .6s ease-out forwards;}
+  border:3px solid rgba(140,140,150,.6);animation:fdfRipple .6s ease-out forwards;}
 @keyframes fdfRipple{from{transform:scale(.35);opacity:.9}to{transform:scale(1.15);opacity:0}}
 .fdf-confetti{font-size:20px;letter-spacing:6px;animation:fdfPop .6s ease-out;}
 @keyframes fdfPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
-.fdf-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;line-height:1.4;}
+.fdf-msg{min-height:20px;font-size:16px;font-weight:800;text-align:center;line-height:1.4;}
 .fdf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
 /* 两张图收到底线仍装不下时（横屏 640×360）由 fitViewport() 挂上这一档：
    整屏自己滚，翻到底不许把外面那层也带着走。两张图那一格有自己的滚动条与
@@ -145,6 +182,10 @@ const CSS = `
 .fdf-wrap.fdf-scroll{overscroll-behavior:contain;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
 .fdf-tools[hidden]{display:none;}
+@media (max-height:840px) and (min-height:501px){
+  .fdf-tools{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#fff8ec 40%);}
+}
 .fdf-btn{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;cursor:pointer;
   min-height:44px;color:#fff;background:linear-gradient(180deg,#74c0fc,#4dabf7);box-shadow:0 4px 0 #1c7ed6;
   font-family:inherit;white-space:nowrap;}
@@ -160,6 +201,10 @@ const CSS = `
 @media (max-width:380px){
   .fdf-wrap{padding:8px;}
   .fdf-zoomrow input{width:88px;}
+}
+@media (max-height:820px) and (pointer:coarse){
+  .fdf-wrap{padding:8px;gap:6px;}
+  .fdf-btn{min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .fdf-cell.fdf-slide,.fdf-cell.fdf-hintspot,.fdf-ripple,.fdf-confetti{animation:none;}
@@ -177,7 +222,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /** 把一格的外观画出来：底色 + 一到两个图案（缩放 / 左右翻 / 格内位移都在这里落地） */
-function paintCell(el: HTMLElement, view: CellView, px: number): void {
+function paintCell(el: HTMLElement, view: CellView, px: number, art: boolean): void {
   el.style.background = view.tint ?? "";
   const font = Math.max(MIN_GLYPH_PX, Math.round(px * GLYPH_RATIO));
   const parts: string[] = [];
@@ -185,11 +230,12 @@ function paintCell(el: HTMLElement, view: CellView, px: number): void {
     const spread = view.count > 1 ? (k === 0 ? -COUNT_OFFSET : COUNT_OFFSET) : 0;
     const tx = (view.dx + spread) * px;
     const ty = view.dy * px;
-    parts.push(
-      `<span class="fdf-glyph" style="font-size:${font}px;transform:translate(-50%,-50%) translate(${tx.toFixed(
-        1
-      )}px,${ty.toFixed(1)}px) scale(${view.scale.toFixed(2)}) scaleX(${view.flip ? -1 : 1})">${view.emoji}</span>`
-    );
+    // W8R1-04：贴纸与 emoji 走同一份字号 + transform，六种差异维度照样成立；
+    // 门控关闸（图集没配齐的章节）输出与 1.2 逐字节一致
+    const style = `font-size:${font}px;transform:translate(-50%,-50%) translate(${tx.toFixed(
+      1
+    )}px,${ty.toFixed(1)}px) scale(${view.scale.toFixed(2)}) scaleX(${view.flip ? -1 : 1})`;
+    parts.push(art ? glyphHTML(view.emoji, font, style) : `<span class="fdf-glyph" style="${style}">${view.emoji}</span>`);
   }
   el.innerHTML = parts.join("");
 }
@@ -228,6 +274,8 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const answers = new Set(scene.diffIdx);
   const foundSet = new Set<number>();
   const reduced = prefersReducedMotion();
+  // W8R1-04：整关门控——盘面每种图案都有贴纸才换装，绝不出半贴纸半 emoji 的混排图
+  const artOn = sceneStickersReady(scene);
 
   let frozen = false;
   let cooling = false;
@@ -241,9 +289,18 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   const view = globalThis as { innerHeight?: number; innerWidth?: number };
   const triple = scene.second !== null;
+  const sideBySide = panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640);
+  // L-1(trio-r5):真横屏两图并排;三图故意不走这条,留给 N-68 的 tripleRow
+  const rowLayout = !triple && sideBySide;
+  const tripleRow = triple && triplePanelsRow(view.innerWidth ?? 360, view.innerHeight ?? 640);
   // 竖屏上下两图各占约 40% 高度，中间留 UI 条：格子按屏高摊，两张图始终同时可见
-  let playPx = panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
-  const miniPx = triple ? miniCellPx(scene.cols, view.innerWidth ?? 360) : playPx;
+  let playPx = rowLayout || tripleRow
+    ? panelCellPxRow(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX)
+    : panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
+  if (tripleRow) {
+    playPx = Math.min(playPx, tripleCellPxByWidth(scene.cols, view.innerWidth ?? 360, PLAY_CELL_PX));
+  }
+  let miniPx = tripleRow ? playPx : triple ? miniCellPx(scene.cols, view.innerWidth ?? 360) : playPx;
 
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
   function later(fn: () => void, ms: number): void {
@@ -255,10 +312,12 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   }
 
   const root = document.createElement("div");
-  root.className = "fdf-wrap";
+  root.className = "fdf-wrap fdf-desk";
   root.innerHTML = `
+    <div class="fdf-deco">${deskDoodleHTML()}</div>
     <div class="fdf-top">
       <span class="fdf-badge fdf-count">🔍 0/${scene.diffIdx.length}</span>
+      <span class="fdf-badges" aria-hidden="true"></span>
       <span class="fdf-badge fdf-hud"></span>
     </div>
     <div class="fdf-viewport"><div class="fdf-zoom"><div class="fdf-panels"></div></div></div>
@@ -272,10 +331,18 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   `;
   host.appendChild(root);
   // 屏高只是上限，真正能用的是舞台裁切线以内那一段——两者取小的那个
-  playPx = Math.min(playPx, panelCellForRoom(scene.rows, stageRoomPx(root), PLAY_CELL_PX));
+  playPx = Math.min(
+    playPx,
+    (rowLayout || tripleRow ? panelCellForRoomRow : panelCellForRoom)(scene.rows, stageRoomPx(root), PLAY_CELL_PX)
+  );
+  if (tripleRow) {
+    playPx = Math.min(playPx, tripleCellPxByWidth(scene.cols, view.innerWidth ?? 360, PLAY_CELL_PX));
+    miniPx = playPx;
+  }
 
   const countEl = root.querySelector(".fdf-count") as HTMLElement;
   const hudEl = root.querySelector(".fdf-hud") as HTMLElement;
+  const badgesEl = root.querySelector(".fdf-badges") as HTMLElement;
   const viewport = root.querySelector(".fdf-viewport") as HTMLElement;
   const zoomBox = root.querySelector(".fdf-zoom") as HTMLElement;
   const panelsEl = root.querySelector(".fdf-panels") as HTMLElement;
@@ -285,6 +352,18 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const zoomer = root.querySelector(".fdf-zoomer") as HTMLInputElement;
   const zoomVal = root.querySelector(".fdf-zoomval") as HTMLElement;
   hudEl.hidden = true;
+
+  // 暖色滤镜层与命中动画层：都盖在两张图上方、都不吃点击（视觉层不许挡玩法）
+  const warmth = document.createElement("div");
+  warmth.className = "fdf-warmth";
+  const fxLayer = document.createElement("div");
+  fxLayer.className = "fdf-fxlayer";
+  viewport.append(warmth, fxLayer);
+
+  /** 侦探徽章排：点亮数 = 已找到数，总数 = 该关差异总数（只读题目数据） */
+  function renderBadges(flashNewest: boolean): void {
+    badgesEl.innerHTML = badgeRowHTML(foundSet.size, scene.diffIdx.length, flashNewest && !reduced);
+  }
 
   // --- 棋盘 -----------------------------------------------------------------
 
@@ -298,9 +377,10 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   function makePanel(label: string, px: number): { panel: HTMLElement; grid: HTMLElement } {
     const panel = document.createElement("div");
-    panel.className = "fdf-panel";
+    // 木质画框只是相框皮肤：格子网格的坐标与尺寸一个像素不动
+    panel.className = "fdf-panel fdf-framed";
     const cap = document.createElement("div");
-    cap.className = "fdf-label";
+    cap.className = "fdf-label fdf-plaque";
     cap.textContent = label;
     const grid = makeGrid(px);
     panel.append(cap, grid);
@@ -311,7 +391,20 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const refCells: HTMLElement[][] = [];
   let playCells: HTMLButtonElement[] = [];
 
-  if (triple) {
+  if (rowLayout || tripleRow) {
+    panelsEl.classList.add("fdf-panels-row");
+    root.classList.add("fdf-rowmode");
+    // 工具行(提示键 + 放大滑杆)挪进顶排与徽章同行:横屏矮屏寸土寸金,
+    // 省出的整行高度还给两张图;915px 宽放得下,放不下 flex-wrap 自己折行
+    (root.querySelector(".fdf-top") as HTMLElement).appendChild(toolsEl);
+  }
+  if (tripleRow) {
+    panelsEl.classList.add("fdf-panels-triple");
+    const a = makePanel("图 ①", miniPx);
+    const b = makePanel("图 ②", miniPx);
+    panelsEl.append(a.panel, b.panel);
+    refGrids.push(a.grid, b.grid);
+  } else if (triple) {
     const row = document.createElement("div");
     row.className = "fdf-row";
     const a = makePanel("图 ①", miniPx);
@@ -320,14 +413,27 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     panelsEl.appendChild(row);
     refGrids.push(a.grid, b.grid);
   } else {
-    const top = makePanel(scene.mirrored ? "原图（下面是它的镜子像）" : "原图（看这里）", playPx);
+    // 并排时两图在左右而不是上下,标题的方位词跟着换,别让孩子找不到「下图」
+    const refLabel = scene.mirrored
+      ? rowLayout
+        ? "原图（右边是它的镜子像）"
+        : "原图（下面是它的镜子像）"
+      : "原图（看这里）";
+    const top = makePanel(refLabel, playPx);
     panelsEl.appendChild(top.panel);
     refGrids.push(top.grid);
   }
   const split = document.createElement("div");
   split.className = "fdf-split";
+  // 中缝装饰：窄屏（上下排布）顶部麻绳横挂，宽屏麻绳短段 + 两个别针连框
+  const seam = seamMode(view.innerWidth ?? 360);
+  split.classList.add("fdf-seam", `fdf-seam-${seam}`);
+  split.innerHTML = seamHTML(seam);
   panelsEl.appendChild(split);
-  const play = makePanel(opts.playLabel, playPx);
+  const play = makePanel(
+    rowLayout || tripleRow ? opts.playLabel.replace(/下图/g, "右图") : opts.playLabel,
+    playPx
+  );
   panelsEl.appendChild(play.panel);
   const playGrid = play.grid;
 
@@ -337,7 +443,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     perm.forEach((src) => {
       const cell = document.createElement("div");
       cell.className = `fdf-cell${slide ? " fdf-slide" : ""}`;
-      paintCell(cell, cells[src], px);
+      paintCell(cell, cells[src], px, artOn);
       grid.appendChild(cell);
       refCells[gi][src] = cell;
     });
@@ -350,7 +456,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `fdf-cell fdf-cell-play${slide ? " fdf-slide" : ""}`;
-      paintCell(btn, scene.right[src], playPx);
+      paintCell(btn, scene.right[src], playPx, artOn);
       btn.setAttribute("aria-label", `第 ${Math.floor(pos / scene.cols) + 1} 行第 ${(pos % scene.cols) + 1} 个`);
       // 鼠标/手指走 viewport 上的几何命中判定（有容差）；这里只接键盘敲出来的 click
       btn.addEventListener("click", (ev) => {
@@ -524,14 +630,77 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   const missTimes: number[] = [];
 
-  function ripple(clientX?: number, clientY?: number): void {
-    if (reduced || clientX === undefined || clientY === undefined) return;
+  /** 视口内某个屏幕坐标换算到命中动画层里（层随内容滚动，得补上滚动量） */
+  function fxPoint(clientX: number, clientY: number): { x: number; y: number } {
     const box = viewport.getBoundingClientRect();
+    return { x: clientX - box.left + viewport.scrollLeft, y: clientY - box.top + viewport.scrollTop };
+  }
+
+  /**
+   * 命中仪式（纯装饰层）：放大镜从画框外滑到差异点（260ms）→ 虚线圈从 28px
+   * 收紧到**命中判定半径**并转一圈定格（300ms）→ 星屑 3 颗。
+   * reduced：全部跳过，靠 markFound 的金圈直接显示。
+   */
+  function hitFx(src: number): void {
+    if (reduced) return;
+    const btn = playCells[src];
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    if (!(r.width > 0)) return;
+    const { x, y } = fxPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const mag = document.createElement("div");
+    mag.className = "fdf-mag";
+    mag.style.left = `${x.toFixed(1)}px`;
+    mag.style.top = `${y.toFixed(1)}px`;
+    mag.innerHTML = `${magnifierFxHTML()}<span class="fdf-maglens"></span>`;
+    const ring = document.createElement("div");
+    ring.className = "fdf-hitring";
+    ring.style.left = `${x.toFixed(1)}px`;
+    ring.style.top = `${y.toFixed(1)}px`;
+    // 收圈终态直径 = 判定半径 × 2：画出来的圈就是判定的圈（乘上当下的实际格宽）
+    ring.style.setProperty("--fdf-ring-d", `${(hitRingEndRadius(r.width) * 2).toFixed(1)}px`);
+    const stars = document.createElement("div");
+    stars.className = "fdf-fxstar";
+    stars.style.left = `${x.toFixed(1)}px`;
+    stars.style.top = `${y.toFixed(1)}px`;
+    for (const s of hitSparkSpecs(Math.random)) {
+      const sp = document.createElement("span");
+      sp.className = "fdf-spark";
+      sp.textContent = "✦";
+      sp.style.color = FDF_ART.foundGold;
+      sp.style.fontSize = `${s.sizePx}px`;
+      sp.style.animationDelay = `${MAG_MS + s.delayMs}ms`;
+      sp.style.setProperty("--fdf-spark-dx", `${s.dx}px`);
+      sp.style.setProperty("--fdf-spark-dy", `${s.dy}px`);
+      stars.appendChild(sp);
+    }
+    fxLayer.append(mag, ring, stars);
+    later(() => ring.classList.add("fdf-hitring-done"), MAG_MS + RING_MS);
+    later(() => mag.remove(), MAG_MS + RING_MS + 160);
+    later(() => ring.remove(), MAG_MS + RING_MS + 420);
+    later(() => stars.remove(), MAG_MS + HIT_SPARK_MS + 220);
+  }
+
+  /**
+   * 点错反馈（不吓人版）：小问号气泡 + 一圈灰色涟漪。不闪红、不扣分，
+   * 冷却与文案逻辑照旧。reduced：只显一帧静态气泡，涟漪不画。
+   */
+  function missFx(clientX?: number, clientY?: number): void {
+    if (clientX === undefined || clientY === undefined) return;
+    const { x, y } = fxPoint(clientX, clientY);
+    const bubble = document.createElement("div");
+    bubble.className = "fdf-bubble";
+    bubble.textContent = MISS_BUBBLE_TEXT;
+    bubble.style.left = `${x.toFixed(1)}px`;
+    bubble.style.top = `${y.toFixed(1)}px`;
+    fxLayer.appendChild(bubble);
+    later(() => bubble.remove(), reduced ? 420 : BUBBLE_MS + 380);
+    if (reduced) return;
     const dot = document.createElement("div");
     dot.className = "fdf-ripple";
-    dot.style.left = `${clientX - box.left}px`;
-    dot.style.top = `${clientY - box.top}px`;
-    viewport.appendChild(dot);
+    dot.style.left = `${x.toFixed(1)}px`;
+    dot.style.top = `${y.toFixed(1)}px`;
+    fxLayer.appendChild(dot);
     later(() => dot.remove(), 650);
   }
 
@@ -540,6 +709,8 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     if (answers.has(index)) {
       foundSet.add(index);
       markFound(index);
+      hitFx(index);
+      renderBadges(true);
       opts.sfx("coin");
       countEl.textContent = `🔍 ${foundSet.size}/${scene.diffIdx.length}`;
       msgEl.textContent = "找到一处！👀 同一片区域常常还藏着第二处～";
@@ -561,7 +732,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       cooling = false;
     }, cool);
     opts.sfx("tap");
-    ripple(clientX, clientY);
+    missFx(clientX, clientY);
     msgEl.textContent =
       cool > 600
         ? "慢一点点～停半秒，挑一行从左往右仔细比，比乱扫快得多。"
@@ -572,13 +743,27 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
             : "这一格上下一致，换成一列一列竖着比试试～";
   }
 
+  /** 全部找到：中缝贴「完全一致!」缎带 + 彩纸 16 粒；reduced 只留静态缎带 */
   function celebrate(): void {
+    const ribbon = document.createElement("div");
+    ribbon.className = "fdf-ribbon";
+    ribbon.textContent = "完全一致!";
+    split.replaceWith(ribbon);
+    later(() => ribbon.replaceWith(split), 1500);
     if (reduced) return;
-    const party = document.createElement("div");
-    party.className = "fdf-confetti";
-    party.textContent = "🎉 ✨ 🎊";
-    split.replaceWith(party);
-    later(() => party.replaceWith(split), 1500);
+    const cx = (viewport.clientWidth || 320) / 2;
+    for (const c of confettiSpecs(Math.random)) {
+      const paper = document.createElement("span");
+      paper.className = "fdf-paper";
+      paper.style.left = `${cx.toFixed(1)}px`;
+      paper.style.background = CONFETTI_TINTS[c.tint];
+      paper.style.animationDelay = `${c.delayMs}ms`;
+      paper.style.setProperty("--fdf-paper-dx", `${c.dx}px`);
+      paper.style.setProperty("--fdf-paper-fall", `${c.fall}px`);
+      paper.style.setProperty("--fdf-paper-spin", `${c.spin}deg`);
+      fxLayer.appendChild(paper);
+      later(() => paper.remove(), c.delayMs + 900);
+    }
   }
 
   // --- 两级提示 -------------------------------------------------------------
@@ -624,6 +809,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   applyTransform();
   syncTouchAction();
   refreshHintBtn();
+  renderBadges(false);
   msgEl.textContent = shouldSuggestZoom(playPx, zoom)
     ? "格子有点小，可以两根手指放大，两张图会一起放大～"
     : "";
@@ -637,10 +823,44 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const raf = win?.requestAnimationFrame;
   if (typeof raf === "function") {
     raf.call(win, () => {
-      if (liveFit) fitViewport();
+      if (!liveFit) return;
+      // 挂载那一刻面板还空着,随内容长高的裁切祖先量出的余量偏小,格子被
+      // 冤枉地钳到 26px;真实布局出来后按同一套公式复算,只放大不缩小
+      const grown = regrowCellPx(
+        playPx,
+        scene.rows,
+        view.innerHeight ?? 640,
+        stageRoomPx(root),
+        PLAY_CELL_PX,
+        rowLayout || tripleRow
+      );
+      if (grown !== null && foundSet.size === 0) {
+        playPx = grown;
+        if (tripleRow) {
+          playPx = Math.min(playPx, tripleCellPxByWidth(scene.cols, view.innerWidth ?? 360, PLAY_CELL_PX));
+          miniPx = playPx;
+        }
+        // 格子盒子的尺寸在 grid 模板上,重填内容前得把模板一起改大
+        for (const grid of triple && !tripleRow ? [playGrid] : [playGrid, ...refGrids]) {
+          const px = grid === playGrid ? playPx : miniPx;
+          grid.style.gridTemplateColumns = `repeat(${scene.cols},${px}px)`;
+          grid.style.gridAutoRows = `${px}px`;
+        }
+        paintAll(false);
+        msgEl.textContent = shouldSuggestZoom(playPx, zoom)
+          ? "格子有点小，可以两根手指放大，两张图会一起放大～"
+          : "";
+      }
+      fitViewport();
     });
   }
   win?.addEventListener("resize", fitViewport);
+
+  /** 并排布局时把提示文案里的方位词换成左右(只改显示,MODE_HINTS 数据零触碰) */
+  function orientText(text: string): string {
+    if (!rowLayout && !tripleRow) return text;
+    return text.replace(/上图/g, "左图").replace(/下图/g, "右图").replace(/上下对照/g, "左右对照");
+  }
 
   return {
     root,
@@ -648,7 +868,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     msg: msgEl,
     misses: () => missCount,
     setMessage: (text: string) => {
-      msgEl.textContent = text;
+      msgEl.textContent = orientText(text);
     },
     shuffleTo(step: number) {
       perm = movePermutation(scene.rows, scene.cols, step);
@@ -670,6 +890,9 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       zoomer.removeEventListener("input", onZoomer);
       win?.removeEventListener("resize", fitViewport);
       pointers.clear();
+      // 放大镜、收圈、气泡、彩纸全在这一层里；它们的收尸计时也都挂在 timeouts 上，
+      // 上面已经清空，这里再把节点清干净，离场即归零
+      fxLayer.textContent = "";
       zoom = ZOOM_MIN;
       panX = 0;
       panY = 0;
@@ -724,8 +947,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (!runner) return;
     const bits: string[] = [];
     if (rounds > 1) bits.push(`🎬 第 ${roundIndex + 1}/${rounds} 轮`);
-    if (cfg.timeSec > 0) bits.push(`⏰ ${Math.max(0, timeLeft)}s`);
-    runner.hud.textContent = bits.join("　");
+    // 计时逻辑原封不动，这里只把剩余时间画成沙漏（流沙比例 = 剩余 / 总时长）
+    if (cfg.timeSec > 0) bits.push(hudTimeHTML(timeLeft, cfg.timeSec));
+    runner.hud.innerHTML = bits.join("　");
     runner.hud.hidden = bits.length === 0;
   }
 
@@ -914,12 +1138,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
       },
     });
     runner.hud.hidden = false;
-    runner.hud.textContent = `⏰ ${timeLeft}s`;
+    runner.hud.innerHTML = hudTimeHTML(timeLeft, scene.timeSec);
     runner.setMessage("每轮 3 处不同，找齐就进下一轮；网格会越来越大，双胞胎图案也会越来越多。");
     timerId = setInterval(() => {
       if (dead) return;
       timeLeft--;
-      if (runner) runner.hud.textContent = `⏰ ${Math.max(0, timeLeft)}s`;
+      if (runner) runner.hud.innerHTML = hudTimeHTML(timeLeft, scene.timeSec);
       if (timeLeft <= 0) showOver();
     }, 1000);
   }
@@ -964,7 +1188,7 @@ export function openCampaignLevel(level: number): boolean {
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = CSS + STAGE_CSS + BOARD_ART_CSS;
   const bar = document.createElement("div");
   bar.className = "fdf-tools";
   bar.style.margin = "0 0 8px";

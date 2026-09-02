@@ -1,20 +1,27 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ROOT_ADMIN_PHONE,
+  ROOT_DEFAULT_DURATION,
   ROOT_DEFAULT_PASSWORD,
+  ROOT_DURATION_CHOICES,
   ROOT_LOCK_MS,
   ROOT_MAX_WRONG,
+  ROOT_PERMANENT_EXPIRES_AT,
   ROOT_STORAGE_KEY,
   ROOT_TTL_MS,
   clampJumpTarget,
   clearRootSession,
   getRoot12Extras,
   isRootOpen,
+  isRootPermanent,
+  openRootSession,
   readRootSession,
   registerRoot12Extras,
   resetRoot12Extras,
+  rootDurationOf,
   rootRemainMinutes,
   rootRemainMs,
+  rootStatusLine,
   writeRootSession,
   type RootStorageLike
 } from "./root12Contract";
@@ -72,6 +79,27 @@ describe("root 契约常量", () => {
   it("防暴力参数是连错 3 次锁 120 秒", () => {
     expect(ROOT_MAX_WRONG).toBe(3);
     expect(ROOT_LOCK_MS).toBe(120000);
+  });
+
+  it("时长选项:默认 1 小时,能选更短、更长,最后一项是永久", () => {
+    expect(ROOT_DEFAULT_DURATION).toBe("1h");
+    const keys = ROOT_DURATION_CHOICES.map((c) => c.key);
+    expect(keys).toEqual(["30m", "1h", "4h", "forever"]);
+    expect(rootDurationOf("1h").ms).toBe(ROOT_TTL_MS);
+    expect(rootDurationOf("30m").ms).toBe(30 * 60 * 1000);
+    expect(rootDurationOf("forever").ms).toBeNull();
+    expect(rootDurationOf("forever").label).toBe("永久");
+  });
+
+  it("不认识的时长 key 一律退回默认 1 小时,不抛异常", () => {
+    expect(rootDurationOf("100y").ms).toBe(ROOT_TTL_MS);
+    expect(rootDurationOf(null).ms).toBe(ROOT_TTL_MS);
+    expect(rootDurationOf(undefined).ms).toBe(ROOT_TTL_MS);
+  });
+
+  it("永久用的远未来时间戳确实远(过了 2900 年),而且是有限数", () => {
+    expect(Number.isFinite(ROOT_PERMANENT_EXPIRES_AT)).toBe(true);
+    expect(ROOT_PERMANENT_EXPIRES_AT).toBeGreaterThan(Date.UTC(2900, 0, 1));
   });
 });
 
@@ -144,11 +172,29 @@ describe("root 会话读写", () => {
     expect(st.getItem(ROOT_STORAGE_KEY)).toBeNull();
   });
 
-  it("落盘的内容里搜不到密码", () => {
+  it("落盘的内容里搜不到密码,只有过期时间和 mode", () => {
     const st = memStorage();
     writeRootSession(1000 + ROOT_TTL_MS, st);
     expect(st.dump()).not.toContain(ROOT_DEFAULT_PASSWORD);
-    expect(st.getItem(ROOT_STORAGE_KEY)).toBe(JSON.stringify({ expiresAt: 1000 + ROOT_TTL_MS }));
+    expect(st.getItem(ROOT_STORAGE_KEY)).toBe(
+      JSON.stringify({ expiresAt: 1000 + ROOT_TTL_MS, mode: "timed" })
+    );
+  });
+
+  it("1.2 的老存档(没有 mode 字段)照样能读,按限时处理", () => {
+    const st = memStorage();
+    st.setItem(ROOT_STORAGE_KEY, JSON.stringify({ expiresAt: 1000 + ROOT_TTL_MS }));
+    expect(isRootOpen(1000, st)).toBe(true);
+    expect(isRootPermanent(1000, st)).toBe(false);
+    expect(isRootOpen(1000 + ROOT_TTL_MS, st)).toBe(false);
+  });
+
+  it("mode 是脏值时按限时处理,不误判成永久", () => {
+    const st = memStorage();
+    st.setItem(ROOT_STORAGE_KEY, JSON.stringify({ expiresAt: 1000 + ROOT_TTL_MS, mode: "有时候" }));
+    expect(isRootOpen(1000, st)).toBe(true);
+    expect(isRootPermanent(1000, st)).toBe(false);
+    expect(isRootOpen(1000 + ROOT_TTL_MS + 1, st)).toBe(false);
   });
 
   it("rootRemainMs 随时间单调递减,关掉后是 0", () => {
@@ -160,6 +206,114 @@ describe("root 会话读写", () => {
     expect(b).toBeLessThan(a);
     clearRootSession(st);
     expect(rootRemainMs(1000, st)).toBe(0);
+  });
+});
+
+describe("openRootSession:按时长开门", () => {
+  const now = 10_000_000;
+
+  it("默认(不传时长)就是 1 小时", () => {
+    const st = memStorage();
+    openRootSession(now, undefined, st);
+    expect(isRootOpen(now, st)).toBe(true);
+    expect(rootRemainMs(now, st)).toBe(ROOT_TTL_MS);
+    expect(isRootOpen(now + ROOT_TTL_MS, st)).toBe(false);
+  });
+
+  it("选 30 分钟就 30 分钟到点关", () => {
+    const st = memStorage();
+    openRootSession(now, "30m", st);
+    expect(rootRemainMs(now, st)).toBe(30 * 60 * 1000);
+    expect(isRootOpen(now + 29 * 60_000, st)).toBe(true);
+    expect(isRootOpen(now + 31 * 60_000, st)).toBe(false);
+  });
+
+  it("选 4 小时就 4 小时到点关", () => {
+    const st = memStorage();
+    openRootSession(now, "4h", st);
+    expect(isRootOpen(now + 3 * 60 * 60_000, st)).toBe(true);
+    expect(isRootOpen(now + 4 * 60 * 60_000, st)).toBe(false);
+  });
+
+  it("选永久:一年后、十年后都还开着,mode 是 permanent", () => {
+    const st = memStorage();
+    const session = openRootSession(now, "forever", st);
+    expect(session.mode).toBe("permanent");
+    expect(session.expiresAt).toBe(ROOT_PERMANENT_EXPIRES_AT);
+    expect(isRootPermanent(now, st)).toBe(true);
+    expect(isRootOpen(now + 365 * 24 * 60 * 60_000, st)).toBe(true);
+    expect(isRootOpen(now + 10 * 365 * 24 * 60 * 60_000, st)).toBe(true);
+  });
+
+  it("永久也能手动关,关掉后立刻失效、存档记录清掉", () => {
+    const st = memStorage();
+    openRootSession(now, "forever", st);
+    clearRootSession(st);
+    expect(isRootOpen(now, st)).toBe(false);
+    expect(isRootPermanent(now, st)).toBe(false);
+    expect(st.getItem(ROOT_STORAGE_KEY)).toBeNull();
+  });
+
+  it("永久落盘的也只有过期时间和 mode,没有密码", () => {
+    const st = memStorage();
+    openRootSession(now, "forever", st);
+    expect(st.dump()).not.toContain(ROOT_DEFAULT_PASSWORD);
+    expect(st.getItem(ROOT_STORAGE_KEY)).toBe(
+      JSON.stringify({ expiresAt: ROOT_PERMANENT_EXPIRES_AT, mode: "permanent" })
+    );
+  });
+
+  it("限时会话不是永久:isRootPermanent 返回 false", () => {
+    const st = memStorage();
+    openRootSession(now, "1h", st);
+    expect(isRootOpen(now, st)).toBe(true);
+    expect(isRootPermanent(now, st)).toBe(false);
+  });
+
+  it("隐私模式(storage 为 null)选永久也能开,靠内存会话", () => {
+    openRootSession(now, "forever", null);
+    expect(isRootOpen(now + 365 * 24 * 60 * 60_000, null)).toBe(true);
+    expect(isRootPermanent(now, null)).toBe(true);
+    clearRootSession(null);
+    expect(isRootOpen(now, null)).toBe(false);
+  });
+});
+
+describe("rootStatusLine:统一状态文案", () => {
+  const now = 20_000_000;
+
+  it("关着时一句话", () => {
+    const st = memStorage();
+    expect(rootStatusLine(now, st)).toBe("管理员权限已关闭");
+  });
+
+  it("限时开着时报剩余分钟", () => {
+    const st = memStorage();
+    openRootSession(now, "1h", st);
+    expect(rootStatusLine(now + 17 * 60_000, st)).toBe("管理员权限已开,还剩 43 分钟");
+  });
+
+  it("永久开着时说「永久开启」,绝不再报还剩几分钟", () => {
+    const st = memStorage();
+    openRootSession(now, "forever", st);
+    const text = rootStatusLine(now, st);
+    expect(text).toBe("管理员权限已永久开启");
+    expect(text).not.toContain("还剩");
+    expect(text).not.toContain("分钟");
+  });
+
+  it("过期后自动回到「已关闭」", () => {
+    const st = memStorage();
+    openRootSession(now, "30m", st);
+    expect(rootStatusLine(now + 31 * 60_000, st)).toBe("管理员权限已关闭");
+  });
+
+  it("状态文案里不写 root、不写高权限", () => {
+    const st = memStorage();
+    openRootSession(now, "forever", st);
+    const text = rootStatusLine(now, st);
+    expect(text.toLowerCase()).not.toContain("root");
+    expect(text).not.toContain("高权限");
   });
 });
 

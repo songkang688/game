@@ -3,17 +3,32 @@ export { meta };
 
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import {
+  WALL_THEMES,
+  drawBackdrop,
+  drawGhostFigure,
+  drawPlayerFigure,
+  drawWalls,
+  dotSprite,
+  fruitSprite,
+  lifeBadgeSVG,
+  powerSprite,
+  versusStarSprite,
+  wallThemeIndex,
+} from "./art";
 import guide from "./guide";
 import {
   GHOST_COLORS,
   GHOST_NAMES,
   TIER_LABELS,
+  frightScore,
   frightWarning,
   type Ghost,
 } from "./ghosts";
-import { MAX_CELL_PX, cellPxFor, maxCanvasWidth } from "./layout";
+import { MAX_CELL_PX, canvasDisplayCapPx, cellPxFor, maxCanvasWidth } from "./layout";
 import { CHAPTERS, configFor, endlessConfig, planFor, rateLevel } from "./levels";
 import {
+  DELTA,
   canTurn,
   cellIndex,
   stepCell,
@@ -22,7 +37,6 @@ import {
   type Maze,
 } from "./maze";
 import {
-  FRUITS,
   clearTurn,
   createRun,
   remaining,
@@ -42,6 +56,12 @@ const POP_MS = 180;
 /** 小幽灵变蓝 / 变回来的过渡时长 */
 const BLUE_FADE_MS = 220;
 
+/** 被抓之后委屈脸持续多久（纯表现，重生节奏在 logic 里没变） */
+const SAD_MS = 400;
+
+/** 连击分数飘字飘多久（纯表现） */
+const FLOAT_MS = 700;
+
 /** 惊吓时的「昏昏蓝」 */
 const FRIGHT_BLUE = "#7FA9FF";
 
@@ -58,24 +78,38 @@ export function mixColor(a: string, b: string, t: number): string {
 
 const CSS = `
 .dmz-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEA,#F4F0FF);
-  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
+  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;
+  /* 撑满壳层舞台:进门菜单只有半屏内容时,下面不再露一大块白底(1.3 UX 走查) */
+  flex:1 0 auto;display:flex;flex-direction:column;}
+.dmz-view{flex:1;display:flex;flex-direction:column;min-height:0;}
+.dmz-view>*{flex:0 0 auto;}
 .dmz-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.dmz-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#8a6a2f;
+.dmz-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#8a6a2f;
   box-shadow:0 2px 6px rgba(180,160,90,.25);white-space:nowrap;}
 .dmz-canvas{display:block;width:100%;height:auto;border-radius:14px;background:#241f3a;touch-action:none;}
-.dmz-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#7a6aa0;margin-top:8px;}
+.dmz-note{text-align:center;min-height:20px;font-size:14px;font-weight:700;color:#7a6aa0;margin-top:8px;}
 .dmz-pad{display:grid;grid-template-columns:repeat(3,minmax(48px,1fr));gap:6px;justify-content:center;margin:10px auto 0;max-width:220px;}
 .dmz-key{border:none;border-radius:14px;min-height:48px;font-size:20px;font-weight:900;color:#6b5a90;cursor:pointer;
   background:#ffffffd9;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;}
 .dmz-key:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .dmz-key-blank{visibility:hidden;}
 .dmz-pause{background:#fff3d6;color:#8a6a2f;font-size:17px;}
-.dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
+/* 双人局:朵朵、星星各一套方向键并排,没有键盘的手机/平板也能俩人一起玩(1.3 UX 走查修复) */
+.dmz-pads{display:flex;gap:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin-top:10px;}
+.dmz-pads .dmz-pad{margin:0;}
+.dmz-pad-col{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;}
+.dmz-pad-t{font-size:14px;font-weight:900;color:#8b7bb0;}
+.dmz-pad-star .dmz-key{color:#4560ab;box-shadow:0 3px 0 rgba(84,112,192,.3);}
+.dmz-pad-star .dmz-key:active{box-shadow:0 1px 0 rgba(84,112,192,.3);}
+.dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;
+  /* 菜单占满剩余高并垂直居中,别缩在舞台顶上 */
+  flex:1;justify-content:center;}
 .dmz-title{font-size:19px;font-weight:900;color:#7a5da8;text-align:center;}
-.dmz-sub{font-size:13px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
+.dmz-sub{font-size:14px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
 .dmz-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .dmz-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#c88a43,#ad6f2f);box-shadow:0 4px 0 #8d581f;}
+  font-family:inherit;background:linear-gradient(180deg,#c88a43,#ad6f2f);box-shadow:0 4px 0 #8d581f;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .dmz-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #8d581f;}
 .dmz-mode.dmz-mode-b{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
 .dmz-mode.dmz-mode-c{background:linear-gradient(180deg,#4fa77c,#3d8c66);box-shadow:0 4px 0 #2e6d4f;}
@@ -86,10 +120,38 @@ const CSS = `
   font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 3px 0 rgba(120,90,160,.22);}
 .dmz-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .dmz-btn[aria-pressed="true"]{background:#ffe6b8;color:#7a5520;}
-.dmz-tip{font-size:12px;font-weight:700;color:#9a8bb8;text-align:center;line-height:1.6;}
+.dmz-tip{font-size:14px;font-weight:700;color:#9a8bb8;text-align:center;line-height:1.6;}
 @media (max-width:420px){
-  .dmz-chip{font-size:13px;padding:4px 9px;}
+  .dmz-chip{font-size:14px;padding:4px 9px;}
   .dmz-title{font-size:17px;}
+  /* 360px 上两套键盘并排:格子收到 44px 下限、缝收窄,一排正好放得下 */
+  .dmz-pads{gap:8px;}
+  .dmz-pads .dmz-pad{grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;}
+  .dmz-pads .dmz-key{min-height:44px;font-size:17px;}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .dmz-wrap:has(> .dmz-canvas){
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;align-items:center;
+  }
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-hud{grid-column:1 / -1;margin-bottom:4px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-canvas{grid-column:2;grid-row:2;width:100%;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-note{grid-column:1 / -1;grid-row:3;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pad{grid-column:3;grid-row:2;margin:0;max-width:168px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads{display:contents;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:first-child{grid-column:1;grid-row:2;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:last-child{grid-column:3;grid-row:2;}
+}
+@media (max-height:840px) and (min-height:521px) and (orientation:landscape){
+  .dmz-wrap:has(> .dmz-canvas){
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:10px;align-items:center;
+  }
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-hud{grid-column:1 / -1;margin-bottom:6px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-canvas{grid-column:2;grid-row:2;width:100%;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-note{grid-column:1 / -1;grid-row:3;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pad{grid-column:3;grid-row:2;margin:0;max-width:180px;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads{display:contents;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:first-child{grid-column:1;grid-row:2;}
+  .dmz-wrap:has(> .dmz-canvas) > .dmz-pads > .dmz-pad-col:last-child{grid-column:3;grid-row:2;}
 }
 @media (prefers-reduced-motion:reduce){
   .dmz-key:active,.dmz-mode:active,.dmz-btn:active{transform:none;}
@@ -126,6 +188,8 @@ export interface StageOptions {
   starRole: StarRole;
   /** 顶部标题 */
   label: string;
+  /** 墙色主题下标（WALL_THEMES），闯关每 47 关换一套；省略用第一套 */
+  theme?: number;
   /** 结算回调：won 表示朵朵这边达成目标 */
   onEnd: (result: { won: boolean; score: number; livesLeft: number; starScore: number }) => void;
   /** 每帧回调（HUD 额外信息） */
@@ -150,6 +214,37 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const soft = reducedMotion();
   const wrap = document.createElement("div");
   wrap.className = "dmz-wrap";
+  const duoPad = `
+    <div class="dmz-pad">
+      <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
+      <button type="button" class="dmz-key" data-dir="up" aria-label="向上">▲</button>
+      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
+      <button type="button" class="dmz-key" data-dir="left" aria-label="向左">◀</button>
+      <button type="button" class="dmz-key" data-dir="down" aria-label="向下">▼</button>
+      <button type="button" class="dmz-key" data-dir="right" aria-label="向右">▶</button>
+    </div>`;
+  // 双人局星星没有键盘就动不了:给她单独一套触屏方向键,和朵朵的并排
+  const padSection =
+    opts.starRole === "none"
+      ? duoPad
+      : `
+    <div class="dmz-pads">
+      <div class="dmz-pad-col">
+        <div class="dmz-pad-t">🌸 朵朵</div>
+        ${duoPad}
+      </div>
+      <div class="dmz-pad-col dmz-pad-star">
+        <div class="dmz-pad-t">⭐ 星星</div>
+        <div class="dmz-pad">
+          <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
+          <button type="button" class="dmz-key" data-star-dir="up" aria-label="星星向上">▲</button>
+          <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
+          <button type="button" class="dmz-key" data-star-dir="left" aria-label="星星向左">◀</button>
+          <button type="button" class="dmz-key" data-star-dir="down" aria-label="星星向下">▼</button>
+          <button type="button" class="dmz-key" data-star-dir="right" aria-label="星星向右">▶</button>
+        </div>
+      </div>
+    </div>`;
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="dmz-hud">
@@ -160,14 +255,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     </div>
     <canvas class="dmz-canvas"></canvas>
     <div class="dmz-note"></div>
-    <div class="dmz-pad">
-      <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
-      <button type="button" class="dmz-key" data-dir="up" aria-label="向上">▲</button>
-      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
-      <button type="button" class="dmz-key" data-dir="left" aria-label="向左">◀</button>
-      <button type="button" class="dmz-key" data-dir="down" aria-label="向下">▼</button>
-      <button type="button" class="dmz-key" data-dir="right" aria-label="向右">▶</button>
-    </div>`;
+    ${padSection}`;
   host.appendChild(wrap);
 
   const canvas = wrap.querySelector(".dmz-canvas") as HTMLCanvasElement;
@@ -207,6 +295,18 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   canvas.setAttribute("data-cols", String(maze.w));
   const ctx = canvas.getContext("2d");
 
+  // 静态层：夜空底色 + 星点 + 霓虹连通墙。墙在一局里不会变，
+  // 开局预渲染一次，之后每帧只要一次 drawImage，比逐格重画便宜
+  const theme = WALL_THEMES[Math.max(0, opts.theme ?? 0) % WALL_THEMES.length];
+  const still = document.createElement("canvas") as HTMLCanvasElement;
+  still.width = canvas.width;
+  still.height = canvas.height;
+  const stillCtx = still.getContext("2d");
+  if (stillCtx) {
+    drawBackdrop(stillCtx, still.width, still.height, theme);
+    drawWalls(stillCtx, maze, cell, theme);
+  }
+
   let raf = 0;
   let last = 0;
   let paused = false;
@@ -217,6 +317,12 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const pops: Array<{ cell: Cell; leftMs: number }> = [];
   /** 每只小幽灵的「蓝度」0–1，用来把变蓝和变回来做成过渡而不是硬切 */
   const blue: number[] = state.ghosts.map(() => 0);
+  /** 被抓后的委屈脸还要摆多少毫秒（纯表现） */
+  let sadMs = 0;
+  /** 连吃小幽灵的分数飘字（200/400/800/1600 的翻倍感），减弱动效时不记 */
+  const floats: Array<{ x: number; y: number; text: string; leftMs: number }> = [];
+  /** 开局共有多少颗豆，结算进度环按它算吃豆率 */
+  const totalDots = remaining(state);
 
   function notePop(cell: Cell): void {
     if (soft) return;
@@ -283,31 +389,31 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
 
   function draw(): void {
     if (!ctx) return;
-    ctx.fillStyle = "#241f3a";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // 墙
+    // 背景 + 星点 + 墙：开局预渲染好的静态层
+    ctx.drawImage(still, 0, 0);
+    // 豆子与能量豆
     for (let y = 0; y < maze.h; y++) {
       for (let x = 0; x < maze.w; x++) {
         const i = cellIndex(maze, x, y);
         const px = x * cell;
         const py = y * cell;
-        if (maze.wall[i]) {
-          ctx.fillStyle = "#4b5ea8";
-          roundRect(ctx, px + 1.5, py + 1.5, cell - 3, cell - 3, 5);
-          ctx.fill();
-          continue;
-        }
         if (maze.dot[i]) {
-          ctx.fillStyle = "#FFE9A8";
-          ctx.beginPath();
-          ctx.arc(px + cell / 2, py + cell / 2, 2.2, 0, Math.PI * 2);
-          ctx.fill();
+          // 发光贴图整场复用；360px 最小格下 core 也还有 3px 以上，看得见
+          const s = Math.max(6, cell * 0.62);
+          ctx.drawImage(dotSprite(), px + (cell - s) / 2, py + (cell - s) / 2, s, s);
         } else if (maze.power[i]) {
+          // 脉动节奏沿用旧版（elapsed/180、±0.18），soft 下静止也不旋转
           const pulse = soft ? 1 : 1 + Math.sin(state.elapsed / 180) * 0.18;
-          ctx.fillStyle = "#FFD1E8";
-          ctx.beginPath();
-          ctx.arc(px + cell / 2, py + cell / 2, 4.6 * pulse, 0, Math.PI * 2);
-          ctx.fill();
+          const s = cell * 0.92 * pulse;
+          if (soft) {
+            ctx.drawImage(powerSprite(), px + (cell - s) / 2, py + (cell - s) / 2, s, s);
+          } else {
+            ctx.save();
+            ctx.translate(px + cell / 2, py + cell / 2);
+            ctx.rotate(((state.elapsed % 8000) / 8000) * Math.PI * 2);
+            ctx.drawImage(powerSprite(), -s / 2, -s / 2, s, s);
+            ctx.restore();
+          }
         }
       }
     }
@@ -321,35 +427,52 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    // 果子
+    // 果子：画出来的贴图（emoji 只留在 HUD 播报文案里），soft 之外轻轻上下浮
     if (state.fruit) {
-      ctx.font = `${cell - 4}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(FRUITS[state.fruit.kind].emoji, state.fruit.cell.x * cell + cell / 2, state.fruit.cell.y * cell + cell / 2);
+      const s = cell - 4;
+      const bob = soft ? 0 : Math.sin(state.elapsed / 320) * cell * 0.06;
+      ctx.drawImage(
+        fruitSprite(state.fruit.kind),
+        state.fruit.cell.x * cell + (cell - s) / 2,
+        state.fruit.cell.y * cell + (cell - s) / 2 + bob,
+        s,
+        s
+      );
     }
     // 小幽灵
     state.ghosts.forEach((g, i) => {
       drawGhost(g, i === state.controlled, blue[i] ?? 0);
     });
-    // 星星（抢豆模式）
+    // 星星（抢豆模式）：真五角星贴图，soft 之外带一点轻轻的摇摆
     if (star) {
-      ctx.fillStyle = "#8FD8FF";
-      ctx.beginPath();
-      ctx.arc(star.cell.x * cell + cell / 2, star.cell.y * cell + cell / 2, cell * 0.36, 0, Math.PI * 2);
-      ctx.fill();
+      const s = cell * 0.94;
+      const sx = star.cell.x * cell + cell / 2;
+      const sy = star.cell.y * cell + cell / 2;
+      if (soft) {
+        ctx.drawImage(versusStarSprite(), sx - s / 2, sy - s / 2, s, s);
+      } else {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(Math.sin(state.elapsed / 480) * 0.22);
+        ctx.drawImage(versusStarSprite(), -s / 2, -s / 2, s, s);
+        ctx.restore();
+      }
     }
-    // 玩家：原创小圆脸，张嘴幅度跟着步进走
+    // 玩家：原创小圆脸（一只大眼睛 + 小呆毛，和任何街机角色都不同），张嘴幅度跟着步进走。
+    // 无敌换色沿用 120ms 的闪烁节奏；soft 下不闪，只换成常亮的浅色。
     const mouth = soft ? 0.28 : 0.1 + Math.abs(Math.sin(state.elapsed / 90)) * 0.35;
     const cx = state.player.x * cell + cell / 2;
     const cy = state.player.y * cell + cell / 2;
-    const base: Record<Dir, number> = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
-    ctx.fillStyle = state.graceMs > 0 && !soft && Math.floor(state.elapsed / 120) % 2 === 0 ? "#FFF6C9" : "#FFD84D";
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, cell * 0.4, base[state.dir] + mouth, base[state.dir] - mouth + Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
+    drawPlayerFigure(ctx, {
+      x: cx,
+      y: cy,
+      r: cell * 0.4,
+      dir: state.dir,
+      mouth,
+      flash: state.graceMs > 0 && (soft || Math.floor(state.elapsed / 120) % 2 === 0),
+      shield: state.graceMs > 0 && !soft,
+      sad: sadMs > 0,
+    });
     // 迷雾
     if (opts.cfg.fog) {
       const grad = ctx.createRadialGradient(cx, cy, cell * 2.2, cx, cy, cell * 5.4);
@@ -358,57 +481,101 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    // 连击分数飘字（画在迷雾之上，soft 下根本不会入列）
+    for (const f of floats) {
+      const k = Math.max(0, f.leftMs / FLOAT_MS);
+      ctx.globalAlpha = Math.min(1, k * 1.5);
+      ctx.fillStyle = "#FFE27A";
+      ctx.font = `900 ${Math.max(11, Math.round(cell * 0.62))}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(f.text, f.x * cell + cell / 2, f.y * cell + cell / 2 - (1 - k) * cell * 0.9);
+      ctx.globalAlpha = 1;
+    }
+    // 一局收场：吃豆率进度环
+    if (state.over) drawEndRing();
+  }
+
+  /** 结算的吃豆率进度环（纯展示，画在最后一帧上） */
+  function drawEndRing(): void {
+    if (!ctx) return;
+    const eaten = Math.max(0, totalDots - remaining(state));
+    const rate = totalDots > 0 ? eaten / totalDots : 0;
+    const rx = canvas.width / 2;
+    const ry = canvas.height / 2;
+    const rr = Math.min(canvas.width, canvas.height) * 0.18;
+    ctx.fillStyle = "rgba(36,31,58,0.74)";
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr * 1.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(3, rr * 0.16);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "#FFD84D";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, -Math.PI / 2, -Math.PI / 2 + rate * Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#FFF6C9";
+    ctx.font = `900 ${Math.max(12, Math.round(rr * 0.52))}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.round(rate * 100)}%`, rx, ry);
   }
 
   function drawGhost(g: Ghost, isStar: boolean, blueness: number): void {
     if (!ctx) return;
     const gx = g.cell.x * cell + cell / 2;
     const gy = g.cell.y * cell + cell / 2;
+    // 瞳孔顺着移动方向偏 1.2px
+    const d = DELTA[g.dir];
+    const pupil = { dx: d.dx * 1.2, dy: d.dy * 1.2 };
     if (g.mood === "eyes") {
-      ctx.fillStyle = "#EAF2FF";
-      ctx.beginPath();
-      ctx.arc(gx - 3, gy - 1, 2.6, 0, Math.PI * 2);
-      ctx.arc(gx + 3, gy - 1, 2.6, 0, Math.PI * 2);
-      ctx.fill();
+      drawGhostFigure(ctx, {
+        x: gx,
+        y: gy,
+        r: cell * 0.38,
+        color: "#EAF2FF",
+        mood: "eyes",
+        pupil,
+        starMark: false,
+        warnRing: false,
+      });
       return;
     }
-    // 变蓝和变回来都走过渡，不硬切颜色
+    // 变蓝和变回来都走过渡，不硬切颜色；白闪预警沿用 150ms 节奏
     let color = mixColor(GHOST_COLORS[g.kind], FRIGHT_BLUE, blueness);
     if (g.mood === "fright" && frightWarning(g) && !soft && Math.floor(state.elapsed / 150) % 2 === 0) {
       color = "#FFFFFF";
     }
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(gx, gy - 1, cell * 0.38, Math.PI, 0);
-    ctx.lineTo(gx + cell * 0.38, gy + cell * 0.3);
-    ctx.lineTo(gx, gy + cell * 0.16);
-    ctx.lineTo(gx - cell * 0.38, gy + cell * 0.3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#2f2a45";
-    ctx.beginPath();
-    ctx.arc(gx - 3.4, gy - 2, 1.8, 0, Math.PI * 2);
-    ctx.arc(gx + 3.4, gy - 2, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    if (isStar) {
-      ctx.strokeStyle = "#FFF3B0";
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(gx, gy, cell * 0.46, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (frightWarning(g) && soft) {
-      ctx.strokeStyle = "#FFFFFF";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(gx, gy, cell * 0.44, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    drawGhostFigure(ctx, {
+      x: gx,
+      y: gy,
+      r: cell * 0.38,
+      color,
+      mood: g.mood === "fright" ? "fright" : "normal",
+      pupil,
+      starMark: isStar,
+      warnRing: frightWarning(g) && soft,
+    });
+  }
+
+  // 生命数画成一排小豆豆脸；innerHTML 只在数目变化那一帧重建
+  let livesShown = -1;
+
+  function renderLives(): void {
+    if (state.lives === livesShown) return;
+    livesShown = state.lives;
+    const n = Math.max(0, state.lives);
+    livesEl.innerHTML = `⭐ ${lifeBadgeSVG().repeat(n)}`;
+    livesEl.setAttribute("aria-label", `剩 ${n} 颗小星命`);
   }
 
   function renderHud(): void {
     scoreEl.textContent = star ? `🍬 朵朵 ${state.score} · 星星 ${star.score}` : `🍬 ${state.score}`;
-    livesEl.textContent = `⭐ ${"●".repeat(Math.max(0, state.lives))}`;
+    renderLives();
     leftEl.textContent = `🫐 剩 ${remaining(state)}`;
     extraEl.textContent = opts.extraChip ? opts.extraChip() : opts.label;
     noteEl.textContent = paused ? "已暂停，按 Esc 继续。" : state.notice;
@@ -448,8 +615,26 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       return;
     }
     const dotsBefore = remaining(state);
+    const livesBefore = state.lives;
+    const chainBefore = state.chain;
     stepRun(state, dt);
     if (remaining(state) < dotsBefore) notePop(state.player);
+    // 被抓只是委屈 0.4 秒再出发：静态表情，soft 下也照常摆
+    if (state.lives < livesBefore) sadMs = SAD_MS;
+    else if (sadMs > 0) sadMs = Math.max(0, sadMs - dt);
+    // 连吃小幽灵的分数飘字（soft 下不加新动效）
+    if (state.chain > chainBefore && !soft) {
+      floats.push({
+        x: state.player.x,
+        y: state.player.y,
+        text: `+${frightScore(state.chain - 1)}`,
+        leftMs: FLOAT_MS,
+      });
+    }
+    for (let i = floats.length - 1; i >= 0; i--) {
+      floats[i].leftMs -= dt;
+      if (floats[i].leftMs <= 0) floats.splice(i, 1);
+    }
     moveStarEater(dt);
     agePops(dt);
     easeBlue(dt);
@@ -542,6 +727,18 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     btn.addEventListener("click", handler);
     padHandlers.push(() => btn.removeEventListener("click", handler));
   }
+  // 星星那套触屏键:抢豆局转小星星,追逃局转带光圈的小幽灵(和方向键走同一条路)
+  const starPadButtons = Array.from(wrap.querySelectorAll<HTMLButtonElement>(".dmz-key[data-star-dir]"));
+  for (const btn of starPadButtons) {
+    const dir = btn.dataset.starDir as Dir;
+    const handler = (): void => {
+      if (paused) return;
+      if (star) star.next = dir;
+      else if (opts.starRole === "ghost") steerGhost(state, dir);
+    };
+    btn.addEventListener("click", handler);
+    padHandlers.push(() => btn.removeEventListener("click", handler));
+  }
 
   let touchStart: { x: number; y: number } | null = null;
   function onTouchStart(e: TouchEvent): void {
@@ -566,6 +763,51 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   canvas.addEventListener("touchend", onTouchEnd, { passive: true });
   window.addEventListener("keydown", onKey);
 
+  // ---- 画布显示高:量真实可视高再钳(见 layout.canvasDisplayCapPx 的注释) ----
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  function fitCanvasDisplay(): void {
+    if (destroyed || !canvas.style) return;
+    if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    canvas.style.maxHeight = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    // 画布下面的家当(提示行 + 虚拟方向键):高度不随画布显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    if (px !== null) canvas.style.maxHeight = `${px}px`;
+  }
+
+  fitCanvasDisplay();
+  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
+  const fitTimer = setTimeout(fitCanvasDisplay, 0);
+  window.addEventListener("resize", fitCanvasDisplay);
+
   renderPause();
   renderHud();
   raf = requestAnimationFrame(frame);
@@ -575,6 +817,8 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       destroyed = true;
       finished = true;
       stop();
+      clearTimeout(fitTimer);
+      window.removeEventListener("resize", fitCanvasDisplay);
       pauseBtn?.removeEventListener("click", onPauseClick);
       window.removeEventListener("keydown", onKey);
       canvas.removeEventListener("touchstart", onTouchStart);
@@ -585,17 +829,6 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   };
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = configFor(ctx.level);
   const plan = planFor(ctx.level);
@@ -603,6 +836,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     cfg,
     starRole: plan.duoChase ? "ghost" : "none",
     label: `${TIER_LABELS[plan.tier]}档`,
+    theme: wallThemeIndex(ctx.level),
     play: (name) => ctx.sfx(name),
     extraChip: () => `${TIER_LABELS[plan.tier]}档 · ${plan.ghostCount} 只小幽灵`,
     onEnd: ({ won, livesLeft }) => {
@@ -652,6 +886,8 @@ function mountRounds(host: HTMLElement, api: GameApi, opts: SimpleModeOptions): 
       cfg: opts.makeConfig(round),
       starRole: opts.starRole,
       label: opts.title,
+      // 无尽 / 抢豆 / 追逃：一轮换一套墙色，跑得越久风景越多
+      theme: round % WALL_THEMES.length,
       play: (name) => api.play(name),
       extraChip: () => `${opts.title} · 第 ${round + 1} 轮`,
       onEnd: ({ won, score, starScore }) => {
@@ -699,6 +935,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   style.textContent = CSS;
   wrap.appendChild(style);
   const view = document.createElement("div");
+  view.className = "dmz-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
 
@@ -806,7 +1043,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "抢豆",
-      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
+      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，手机上点各自那排按键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
       starRole: "eater",
       makeConfig: (round) => ({ ...configFor(60 + round * 9), fog: false }),
       onRoundEnd: ({ won, score, starScore }, next) => {
@@ -824,7 +1061,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "追逃",
-      hint: "朵朵用 WASD 清豆，星星用方向键操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
+      hint: "朵朵用 WASD 清豆，星星用方向键（或点她那排按键）操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
       starRole: "ghost",
       makeConfig: (round) => configFor(150 + round * 7),
       onRoundEnd: ({ won, score }, next) => {

@@ -336,7 +336,87 @@ describe("整款游戏挂载", () => {
     expect(dom.globalListenerCount()).toBe(before);
   });
 
+  // 1.3 UX 走查:手机上开局画面停在顶部模式条那里,像没反应。
+  // 模式条是 display:flex,浏览器自带的 [hidden]{display:none} 会被它顶掉,
+  // CSS 里必须自己补一条,不然 hidden 属性设了也白设
+  it("模式条的 [hidden] 在 CSS 里自己压回 display:none", () => {
+    expect(OA_CSS).toContain(".oa-modebar[hidden]{display:none;}");
+  });
+
+  it("进关先收模式条,回选关再放出来", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const handle = mount(api);
+    const bar = root.byClass("oa-modebar")[0];
+    expect(bar.hidden).not.toBe(true);
+    root.byClass("l99-node")[0].fire("click");
+    expect(bar.hidden).toBe(true);
+    root.byClass("l99-back")[0].fire("click");
+    expect(bar.hidden).toBe(false);
+    handle.destroy();
+  });
+
   it("无尽模式的波次配置一直在加码", () => {
     expect(endlessConfig(5).targetMass).toBeGreaterThan(endlessConfig(1).targetMass);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约(整帧级):drawPane 一帧画满、彩豆非纯色圆、排行榜头像、soft 降级。
+// 资产级契约(果冻球/星光糖/刺球/光环逐个函数)在 art.test.ts。
+// ---------------------------------------------------------------------------
+
+describe("1.3 视觉契约:一帧画面", () => {
+  beforeEach(() => {
+    dom = installCanvasDom();
+  });
+  afterEach(() => {
+    dom.restore();
+    vi.restoreAllMocks();
+  });
+
+  it("绘制非空:推两帧后 fill/stroke 落笔数远超旧版阈值", () => {
+    const { stage, handle } = run();
+    dom.tick(2);
+    const canvas = stage.byClass("oa-canvas")[0] as FakeCanvas;
+    const inked = canvas.ctx.ops.filter((o) => o.op === "fill" || o.op === "stroke").length;
+    expect(inked).toBeGreaterThan(60);
+    handle.destroy();
+  });
+
+  it("彩豆不是纯色圆:食物与主体走径向渐变(createRadialGradient 被调用)", () => {
+    // 把随机源钉在 0.6:6 颗彩豆全落在 (480,480),稳稳出现在玩家镜头里
+    vi.spyOn(Math, "random").mockReturnValue(0.6);
+    const { stage, handle } = run();
+    dom.tick(2);
+    const canvas = stage.byClass("oa-canvas")[0] as FakeCanvas;
+    const grads = canvas.ctx.ops.filter((o) => o.op === "createRadialGradient").length;
+    // 背景圆斑 7 + 彩豆 6 + 玩家果冻球 1,两帧起码 12 次
+    expect(grads).toBeGreaterThanOrEqual(12);
+    handle.destroy();
+  });
+
+  it("排行榜换头像小圆:每行一个 22px 果冻球画布,真的画了东西", () => {
+    const { stage, handle } = run();
+    dom.tick(2);
+    const avas = stage.byClass("oa-ava") as FakeCanvas[];
+    expect(avas).toHaveLength(2);
+    for (const a of avas) expect(a.ctx.painted).toBeGreaterThan(0);
+    expect(stage.byClass("oa-rname")[0].textContent).toContain("1.");
+    handle.destroy();
+  });
+
+  it("soft(减弱动效)下整条管线照样出画面,不炸不空", () => {
+    const g = globalThis as Record<string, unknown>;
+    g.matchMedia = () => ({ matches: true });
+    try {
+      const { stage, handle } = run({ cfg: { ...tinyLevel(), viruses: 2, shrink: 4 } });
+      dom.tick(2);
+      const canvas = stage.byClass("oa-canvas")[0] as FakeCanvas;
+      expect(canvas.ctx.painted).toBeGreaterThan(0);
+      handle.destroy();
+    } finally {
+      delete g.matchMedia;
+    }
   });
 });

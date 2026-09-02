@@ -1,8 +1,29 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GAME_MODES } from "../../engine/types";
+import { hexToRgb } from "../../art/kit";
 import { BLACK, WHITE, xy } from "./board";
 import { levelAt, levelSolutions } from "./levels";
-import { installDom, makeScheduler, type DomStub } from "./testkit";
+import {
+  CURSOR_COLOR,
+  PETAL_LIFE,
+  PETAL_POOL_MAX,
+  WQ_WOOD,
+  drawCursorBox,
+  drawDeadCross,
+  drawKoFlower,
+  drawLeafMark,
+  drawSproutHint,
+  harvestCount,
+  harvestFlowersSVG,
+  makePetalPool,
+  resetStoneSprites,
+  scoreBarParts,
+  stoneSprite,
+  trophySVG,
+  washAlpha,
+  type PetalPool
+} from "./art";
+import { FakeCtx2D, installDom, makeScheduler, type DomStub, type FakeCanvasEl } from "./testkit";
 import {
   DUO_HINT,
   MODE_LABELS,
@@ -476,5 +497,299 @@ describe("weiqi-garden · 读屏听得见盘面在变", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约:木盘 / 玉石子 sprite / 花瓣提子 / 标记形状通道 / 点击回归
+// ---------------------------------------------------------------------------
+
+/** 挂一局第 1 关(提子题),画布带记账 ctx */
+function mountFirstLevel(stub: DomStub): {
+  handle: ReturnType<typeof mountPuzzle>;
+  sched: ReturnType<typeof makeScheduler>;
+  canvas: FakeCanvasEl;
+  pressAnswer: () => void;
+} {
+  const sched = makeScheduler();
+  const level = levelAt(0);
+  const handle = mountPuzzle(stub.root as unknown as HTMLElement, {
+    level,
+    sfx: () => undefined,
+    win: () => undefined,
+    lose: () => undefined,
+    schedule: sched.schedule,
+    unschedule: sched.unschedule,
+    timed: false
+  });
+  const canvas = stub.root.byClass("wq-canvas")[0] as unknown as FakeCanvasEl;
+  const answer = levelSolutions(level)[0];
+  const pressAnswer = (): void => {
+    const from = xy(9, 4 * 9 + 4);
+    const to = xy(9, answer);
+    for (let i = 0; i < Math.abs(to.x - from.x); i++) stub.press(to.x > from.x ? "ArrowRight" : "ArrowLeft");
+    for (let i = 0; i < Math.abs(to.y - from.y); i++) stub.press(to.y > from.y ? "ArrowDown" : "ArrowUp");
+    stub.press("f");
+    sched.flush();
+  };
+  return { handle, sched, canvas, pressAnswer };
+}
+
+describe("weiqi-garden · 1.3 视觉契约:木盘与棋子", () => {
+  it("一帧 draw() 的绘制调用非空,木盘走渐变 + 木纹而不是平涂", () => {
+    resetStoneSprites();
+    dom = installDom({ canvas: true });
+    const { handle, canvas } = mountFirstLevel(dom);
+    expect(canvas).toBeDefined();
+    const ctx = canvas.ctx2d;
+    expect(ctx.ops.length).toBeGreaterThan(0);
+    expect(ctx.painted).toBeGreaterThan(0);
+    // 木色线性渐变(左上亮右下暗)真的建了,而且两端色就是规格里的木色
+    expect(ctx.count("createLinearGradient")).toBeGreaterThan(0);
+    const stops = ctx.ops.filter((o) => o.op === "addColorStop").map((o) => o.args[1]);
+    expect(stops).toContain(WQ_WOOD.top);
+    expect(stops).toContain(WQ_WOOD.bottom);
+    // 木纹曲线(quadraticCurveTo)也画了
+    expect(ctx.count("quadraticCurveTo")).toBeGreaterThan(0);
+    handle.destroy?.();
+  });
+
+  it("棋子不是纯色圆:满盘走 sprite 的 drawImage,离屏 sprite 上是径向渐变", () => {
+    resetStoneSprites();
+    dom = installDom({ canvas: true });
+    const { handle, canvas } = mountFirstLevel(dom);
+    // 第 1 关开局就有黑白子,主画布必须走 drawImage(19 路满盘 361 子的路径)
+    expect(canvas.ctx2d.count("drawImage")).toBeGreaterThan(0);
+    // 离屏 sprite 上真的画了径向渐变 + 高光,不是一笔 arc + fill
+    const sprite = stoneSprite("black", 12, 1) as unknown as FakeCanvasEl;
+    expect(sprite).not.toBeNull();
+    expect(sprite.ctx2d.count("createRadialGradient")).toBeGreaterThan(0);
+    expect(sprite.ctx2d.painted).toBeGreaterThan(1);
+    handle.destroy?.();
+  });
+
+  it("黑白子 sprite 不相同,同尺寸缓存复用、变尺寸重建", () => {
+    resetStoneSprites();
+    dom = installDom({ canvas: true });
+    const black = stoneSprite("black", 12, 1) as unknown as FakeCanvasEl;
+    const white = stoneSprite("white", 12, 1) as unknown as FakeCanvasEl;
+    expect(black).not.toBeNull();
+    expect(white).not.toBeNull();
+    expect(black).not.toBe(white);
+    // 渐变端点各是各的色
+    const stopsOf = (c: FakeCanvasEl): unknown[] => c.ctx2d.ops.filter((o) => o.op === "addColorStop").map((o) => o.args[1]);
+    expect(stopsOf(black)).toContain("#5a554c");
+    expect(stopsOf(white)).toContain("#ffffff");
+    // 白子还多了蛤碁石弧纹与描边,笔数天然更多(除颜色外自带明暗差)
+    expect(white.ctx2d.count("stroke")).toBeGreaterThan(black.ctx2d.count("stroke"));
+    // 缓存契约:同尺寸复用同一张,变尺寸重建
+    expect(stoneSprite("black", 12, 1)).toBe(black);
+    expect(stoneSprite("black", 16, 1)).not.toBe(black);
+    expect(stoneSprite("black", -1, 1)).toBeNull();
+  });
+});
+
+describe("weiqi-garden · 1.3 视觉契约:提子花瓣", () => {
+  it("提子触发花瓣粒子,0.35s 播完后对象池全部回收", () => {
+    resetStoneSprites();
+    dom = installDom({ canvas: true });
+    const { handle, canvas, pressAnswer } = mountFirstLevel(dom);
+    const pool = (canvas as unknown as { wqFx?: PetalPool }).wqFx;
+    expect(pool).toBeDefined();
+    expect(pool?.active()).toBe(0);
+    pressAnswer();
+    // 第 1 关是提子题:正解那一手必然提掉至少一颗白子 → 至少一朵花瓣
+    expect(pool?.active()).toBeGreaterThan(0);
+    // 花瓣是白子化的白瓣
+    expect(pool?.petals.some((p) => p.active && p.kind === "white")).toBe(true);
+    // 播完(寿命 0.35s,单帧限幅 0.25s → 两帧步完)全部归还池子
+    pool?.step(PETAL_LIFE / 2 + 0.01);
+    pool?.step(PETAL_LIFE / 2 + 0.01);
+    expect(pool?.active()).toBe(0);
+    expect(pool?.idle()).toBe(true);
+    handle.destroy?.();
+  });
+
+  it("reducedMotion 下提子直接消失,一朵花瓣都不喷", () => {
+    const g = globalThis as { matchMedia?: (q: string) => { matches: boolean } };
+    const prev = g.matchMedia;
+    g.matchMedia = () => ({ matches: true });
+    try {
+      resetStoneSprites();
+      dom = installDom({ canvas: true });
+      const { handle, canvas, pressAnswer } = mountFirstLevel(dom);
+      const pool = (canvas as unknown as { wqFx?: PetalPool }).wqFx;
+      pressAnswer();
+      expect(pool?.active()).toBe(0);
+      expect(pool?.idle()).toBe(true);
+      handle.destroy?.();
+    } finally {
+      if (prev === undefined) delete g.matchMedia;
+      else g.matchMedia = prev;
+    }
+  });
+
+  it("花瓣池封顶 16 个槽位,回收之后能再借", () => {
+    expect(PETAL_POOL_MAX).toBe(16);
+    const pool = makePetalPool();
+    for (let i = 0; i < 24; i++) pool.spawn(10 + i, 20, i % 2 === 0 ? "black" : "white");
+    expect(pool.active()).toBe(PETAL_POOL_MAX);
+    // reduced 一朵都不喷
+    const calm = makePetalPool();
+    expect(calm.spawn(5, 5, "black", { reduced: true })).toBe(false);
+    expect(calm.active()).toBe(0);
+    // 播完回收,槽位可以再借(单帧限幅 0.25s,多推两帧)
+    pool.step(PETAL_LIFE / 2 + 0.01);
+    pool.step(PETAL_LIFE / 2 + 0.01);
+    expect(pool.idle()).toBe(true);
+    expect(pool.spawn(1, 1, "black")).toBe(true);
+    expect(pool.active()).toBe(1);
+    // 非法输入不炸也不借
+    expect(pool.spawn(Number.NaN, 0, "white")).toBe(false);
+    pool.step(Number.NaN);
+    expect(pool.active()).toBe(1);
+    // 画一帧真的有落笔
+    const ctx = new FakeCtx2D();
+    pool.draw(ctx as never);
+    expect(ctx.painted).toBeGreaterThan(0);
+  });
+});
+
+describe("weiqi-garden · 1.3 视觉契约:标记形状通道与光标对比度", () => {
+  it("发芽提示 / 枫叶最后一手 / 劫点小红花 / 死子叉纹:都有落笔且笔迹互不相同", () => {
+    const draws: Array<[string, (ctx: FakeCtx2D) => void]> = [
+      ["sprout", (c) => drawSproutHint(c as never, 50, 50, 12)],
+      ["leaf", (c) => drawLeafMark(c as never, 50, 50, 12)],
+      ["ko", (c) => drawKoFlower(c as never, 50, 50, 12)],
+      ["cross", (c) => drawDeadCross(c as never, 50, 50, 12, "black")]
+    ];
+    const traces = new Map<string, string>();
+    for (const [name, fn] of draws) {
+      const ctx = new FakeCtx2D();
+      fn(ctx);
+      expect(ctx.painted, `${name} 没落笔`).toBeGreaterThan(0);
+      traces.set(name, JSON.stringify(ctx.ops));
+    }
+    const values = [...traces.values()];
+    expect(new Set(values).size).toBe(values.length);
+    // 死子叉纹黑白两用:黑子白叉、白子墨叉(明度通道)
+    const onWhite = new FakeCtx2D();
+    drawDeadCross(onWhite as never, 50, 50, 12, "white");
+    expect(JSON.stringify(onWhite.ops)).not.toBe(traces.get("cross"));
+    // 极端输入不抛
+    drawSproutHint(new FakeCtx2D() as never, Number.NaN, 0, 12);
+    drawLeafMark(new FakeCtx2D() as never, 0, 0, -1);
+  });
+
+  it("键盘光标是圆角方框(不再是圆),颜色对木盘两端的对比度 ≥ 3:1", () => {
+    const ctx = new FakeCtx2D();
+    drawCursorBox(ctx as never, 50, 50, 14);
+    expect(ctx.count("quadraticCurveTo")).toBeGreaterThanOrEqual(4);
+    expect(ctx.count("arc")).toBe(0);
+    expect(ctx.count("stroke")).toBeGreaterThan(0);
+
+    const lum = (hex: string): number => {
+      const [r, g, b] = hexToRgb(hex);
+      const lin = (v: number): number => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    const contrast = (a: string, b: string): number => {
+      const la = lum(a);
+      const lb = lum(b);
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    };
+    expect(contrast(CURSOR_COLOR, WQ_WOOD.top)).toBeGreaterThanOrEqual(3);
+    expect(contrast(CURSOR_COLOR, WQ_WOOD.bottom)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("数目铺色 washAlpha:波纹单调、t=1 全铺满、近处先亮、非法输入回 0", () => {
+    expect(washAlpha(3, 10, 1)).toBe(1);
+    expect(washAlpha(3, 10, 0)).toBe(0);
+    // 同一点上,进度越走透明度只升不降
+    let prev = 0;
+    for (let t = 0; t <= 1.001; t += 0.1) {
+      const a = washAlpha(5, 10, t);
+      expect(a).toBeGreaterThanOrEqual(prev);
+      prev = a;
+    }
+    // 同一时刻,离盘心近的点先被波前扫到
+    expect(washAlpha(1, 10, 0.35)).toBeGreaterThanOrEqual(washAlpha(9, 10, 0.35));
+    expect(washAlpha(Number.NaN, 10, 0.5)).toBe(0);
+    expect(washAlpha(1, 10, Number.NaN)).toBe(0);
+  });
+});
+
+describe("weiqi-garden · 1.3 视觉契约:结算可视化", () => {
+  it("花园收成 ≤ 20 朵,目数差取整,和棋 0 朵", () => {
+    expect(harvestCount(35.5)).toBe(20);
+    expect(harvestCount(3.75)).toBe(4);
+    expect(harvestCount(-6.5)).toBe(7);
+    expect(harvestCount(0)).toBe(0);
+    expect(harvestCount(Number.NaN)).toBe(0);
+    const svg = harvestFlowersSVG(50, "black");
+    expect(svg).toContain("<svg");
+    // 花芯一朵一颗,封顶 20
+    expect(svg.split('r="1.7"').length - 1).toBe(20);
+    expect(harvestFlowersSVG(0, "white")).toBe("");
+    // 黑紫瓣、白白瓣:两色收成不一样
+    expect(harvestFlowersSVG(3, "black")).not.toBe(harvestFlowersSVG(3, "white"));
+  });
+
+  it("奖杯是矢量 SVG,双色条两边加起来正好 100%", () => {
+    const svg = trophySVG();
+    expect(svg).toContain("<svg");
+    expect(svg).toContain("polygon");
+    expect(svg).not.toContain("http");
+    expect(scoreBarParts(0, 0)).toEqual({ black: 50, white: 50 });
+    const parts = scoreBarParts(43, 38);
+    expect(parts.black + parts.white).toBe(100);
+    expect(parts.black).toBeGreaterThan(parts.white);
+    expect(scoreBarParts(Number.NaN, 10)).toEqual({ black: 0, white: 100 });
+  });
+});
+
+describe("weiqi-garden · 1.3 视觉契约:点击换算回归", () => {
+  /** 1.2 基线的 hitPoint 公式,逐字照抄,谁改了换算立刻红 */
+  function hitPointBaseline(
+    size: number,
+    m: ReturnType<typeof boardMetrics>,
+    x: number,
+    y: number
+  ): number | null {
+    const gx = Math.round((x - m.pad) / m.cell);
+    const gy = Math.round((y - m.pad) / m.cell);
+    if (gx < 0 || gy < 0 || gx >= size || gy >= size) return null;
+    const dx = x - (m.pad + gx * m.cell);
+    const dy = y - (m.pad + gy * m.cell);
+    if (Math.hypot(dx, dy) > m.cell * 0.62) return null;
+    return gy * size + gx;
+  }
+
+  it("hitPoint 与改版前完全一致:9 / 13 / 19 路(含 zoom)全域扫描", () => {
+    for (const [size, width, zoom] of [
+      [9, 340, 1],
+      [13, 340, 1],
+      [19, 340, 2]
+    ] as const) {
+      const m = boardMetrics(size, width, zoom);
+      for (let x = -10; x <= m.extent + 10; x += 7) {
+        for (let y = -10; y <= m.extent + 10; y += 7) {
+          expect(hitPoint(size, m, x, y), `size=${size} (${x},${y})`).toBe(hitPointBaseline(size, m, x, y));
+        }
+      }
+    }
+  });
+
+  it("boardMetrics 的坐标换算一个数都没动", () => {
+    const m = boardMetrics(9, 340);
+    const fit = 340 / 10;
+    const cell = Math.max(28, fit);
+    expect(m.cell).toBe(cell);
+    expect(m.pad).toBe(cell * 0.7);
+    expect(m.extent).toBe(Math.round(cell * 0.7 * 2 + cell * 8));
+    expect(m.stone).toBe(cell * 0.46);
   });
 });

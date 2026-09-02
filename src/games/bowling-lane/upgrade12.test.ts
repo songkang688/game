@@ -627,6 +627,15 @@ describe("360px 版面:热区、字号与横向可滑", () => {
   it("窄屏 / 矮屏两档 @media 都还在,只是不再拿热区和字号开刀", () => {
     expect(css).toContain("@media (max-width:420px)");
     expect(css).toContain("@media (max-height:720px)");
-    expect(css).toMatch(/window\.innerHeight \|\| 700\) - 386/);
+    expect(css).toContain("stagePlayRoom");
+  });
+
+  it("840 档钉停键,不盲拷 720 档藏图例", () => {
+    expect(css).toContain("@media (max-height:840px) and (min-height:501px)");
+    const at = css.indexOf("@media (max-height:840px) and (min-height:501px)");
+    const next = css.indexOf("@media (max-height:840px) and (min-height:721px)");
+    const block = css.slice(at, next);
+    expect(block).toContain(".bl-nudge{position:sticky;bottom:0");
+    expect(block).not.toContain(".bwl-legend{display:none;}");
   });
 });

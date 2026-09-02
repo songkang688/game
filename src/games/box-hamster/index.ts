@@ -19,8 +19,7 @@ import {
   canUseHint,
   deadlockTip,
   difficultyBadge,
-  facingAngle,
-  fitCell,
+  fitCellRect,
   hintsLeft,
   makeEndlessRoom,
   moveDuration,
@@ -43,6 +42,22 @@ import {
   type Puzzle,
   type State,
 } from "./logic";
+import {
+  BH_TIMINGS,
+  bhHamsterSvg,
+  bhVisualCss,
+  boxPieceSvg,
+  classifyMove,
+  confettiHtml,
+  dustHtml,
+  poseForKind,
+  scratchHtml,
+  shouldShowDust,
+  teleportInHtml,
+  themeOf,
+  undoIconSvg,
+  type BhMoveKind,
+} from "./visual";
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -102,12 +117,14 @@ const CSS = `
 .bh-pad{display:grid;grid-template-columns:repeat(3,56px);grid-auto-rows:52px;gap:6px;justify-content:center;
   margin-top:10px;}
 .bh-key{border:none;border-radius:14px;font-size:20px;font-weight:900;cursor:pointer;font-family:inherit;
-  background:#ffffffe0;color:#7A5433;box-shadow:0 3px 0 rgba(170,140,100,.34);touch-action:none;padding:0;}
+  background:#ffffffe0;color:#7A5433;box-shadow:0 3px 0 rgba(170,140,100,.34);touch-action:none;padding:0;
+  min-width:44px;min-height:44px;}
 .bh-key:active,.bh-key.bh-down{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,100,.34);background:#FFEBD0;}
 .bh-tip{margin-top:8px;text-align:center;font-size:12px;font-weight:700;color:#957048;line-height:1.5;}
 .bh-tags{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
 .bh-tag{background:#ffffffcc;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;color:#7A5433;}
 .bh-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.bh-modebar[hidden]{display:none;}
 .bh-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E8A85E,#CE8639);box-shadow:0 4px 0 #A96A28;}
 .bh-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #A96A28;}
@@ -122,8 +139,26 @@ const CSS = `
   .bh-tip{font-size:11px;}
 }
 @media (max-width:340px){ .bh-grid{--cell:28px;} }
+/* N-80:闯关方向键 571。无尽键已在屏,只锁矮屏闯关壳,CELL_MIN 不降 */
+@media (max-height:500px){
+  .bh-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;}
+  .bh-tags,.bh-hud{flex:0 0 auto;}
+  .bh-stagebox{flex:1 1 auto;min-height:0;overflow:hidden;}
+  .bh-pad{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    grid-auto-rows:44px;gap:4px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .bh-key{min-height:44px;}
+  .bh-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:4px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .bh-pad{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    grid-auto-rows:44px;gap:4px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .bh-key{min-height:44px;}
+}
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
-`;
+${bhVisualCss()}`;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -140,18 +175,11 @@ function el<K extends keyof HTMLElementTagNameMap>(
 // 棋盘
 // ---------------------------------------------------------------------------
 
-/** 两只仓鼠的名字与配色 */
+/** 两只仓鼠的名字与选中描边(皮肤画法在 visual.ts / kit 的 hamsterSvg 里) */
 const HAMSTERS = [
-  { name: "豆豆", face: "🐹", cls: "bh-hero" },
-  { name: "团团", face: "🐹", cls: "bh-hero bh-hero-b" },
+  { name: "豆豆", cls: "bh-hero" },
+  { name: "团团", cls: "bh-hero bh-hero-b" },
 ];
-
-/** 仓鼠的转身:左右靠翻面,上下靠一点点仰头低头,看得出朝哪边又不会歪成一团 */
-function faceStyle(dir: Dir): string {
-  const angle = facingAngle(dir);
-  const tilt = angle === 0 ? -8 : angle === 180 ? 8 : 0;
-  return `rotate(${tilt}deg)${angle === 270 ? " scaleX(-1)" : ""}`;
-}
 
 /** 方向键盘映射 */
 const KEY_DIRS: Record<string, Dir> = {
@@ -186,9 +214,12 @@ interface BoardHandle {
   ) => void;
   toast: (text: string) => void;
   moves: () => number;
+  /** 还挂着几个特效计时器(视觉测试用:destroy 后必须归零) */
+  pendingFx: () => number;
 }
 
-function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
+/** 导出仅供视觉冒烟测试挂桩用;运行时入口仍是 mount */
+export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   let def = opts.def;
   let state: State = initialState(def);
   /** 无限撤销:一步一帧压进去,只有内存上限这一条保护 */
@@ -202,8 +233,19 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
   /** 每只仓鼠面朝哪边 */
   let facings: Dir[] = [2, 2];
-  /** 这一步要播的格间插值(播完就清掉,不会每帧重放) */
-  let slide: { cell: number; dx: number; dy: number; ms: number } | null = null;
+  /** 这一步要播的格间插值(仓鼠一条、被推的箱子一条;播完就清掉) */
+  let slides: Array<{ cell: number; dx: number; dy: number; ms: number }> = [];
+  /** 传送落点:这一格的棋子播「放大旋出」而不是平移 */
+  let spinCell = -1;
+  /** 上一步的移动语义(推 / 滑 / 传 / 走)与是谁走的,决定仓鼠姿态 */
+  let lastKind: BhMoveKind = "walk";
+  let lastMover = -1;
+  /** 当前格子边长(fitBoard 量出来的),28px 以下省略尘土只留姿态 */
+  let cellPx = 42;
+  /** 上一帧已经躺在目标点上的箱子格:新到位的那格才放金光脉冲 */
+  let doneCells = new Set<number>();
+  /** 尘土 / 擦痕 / 旋入这类临时特效的清场计时器 */
+  const fxTimers = new Set<ReturnType<typeof setTimeout>>();
   /** 上一次提醒过的死局局面,同一个局面不重复唠叨 */
   let stuckSaid = "";
   const softMotion = (() => {
@@ -222,8 +264,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   const hud = el("div", "bh-hud");
   const boxChip = el("span", "bh-chip");
   const moveChip = el("span", "bh-chip");
-  const undoBtn = el("button", "bh-btn", "↩️ 撤销");
+  // 撤销画成小时钟回转图标,文案保留给读屏
+  const undoBtn = el("button", "bh-btn bxh-undo");
   undoBtn.type = "button";
+  undoBtn.innerHTML = `${undoIconSvg()}<span>撤销</span>`;
+  undoBtn.setAttribute("aria-label", "撤销一步");
   const resetBtn = el("button", "bh-btn", "🔄 重来");
   resetBtn.type = "button";
   const hintBtn = el("button", "bh-btn", "💡 提示");
@@ -247,8 +292,19 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   const grid = el("div", "bh-grid");
   grid.setAttribute("role", "img");
   const toastEl = el("div", "bh-toast");
-  box.append(grid, toastEl);
+  // 章节主题角标(木屋 / 冰窖 / 花园轮换),纯装饰
+  const themeDeco = el("span", "bxh-theme");
+  themeDeco.setAttribute("aria-hidden", "true");
+  box.append(grid, themeDeco, toastEl);
   wrap.appendChild(box);
+
+  function applyTheme(): void {
+    const theme = themeOf(def.chapterIndex);
+    // 底纹是「tint 收底 + ≤8% 材质层」的整幅 background(B 档 TOP-9)
+    box.style.background = theme.mat;
+    themeDeco.innerHTML = theme.deco;
+  }
+  applyTheme();
 
   const pad = el("div", "bh-pad");
   const padDefs: Array<{ dir: Dir; label: string; col: number; row: number }> = [
@@ -276,11 +332,43 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
 
   let cells: HTMLElement[] = [];
 
+  /** 一个盒子的下沿在哪儿(测试桩的 rect 没有 bottom,用 top+height 兜底) */
+  function rectBottom(r: { top: number; bottom?: number; height: number }): number {
+    return Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+  }
+
   /**
-   * 按「这会儿还剩多宽」定格子边长。
+   * 往上找平台舞台(`.game-stage`,定高 + 会裁内容)的下沿,那是真正的裁切线。
+   * 量不到(还没上屏 / 测试桩 / 独立挂载)就返回 NaN,竖向那把尺随之失效,
+   * 边长退回「只按宽算」。
+   */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = box.parentElement ?? null;
+    for (let i = 0; node && i < 8; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        // 滚动口是 padding box:clientHeight 量得出就用它(顺手把 4px 白边扣掉)
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /**
+   * 按「这会儿还剩多宽、多高」定格子边长。
    *
-   * 以前边长是媒体查询写死的,和列数无关,13 列的双鼠宽仓在 360px 上要 466px,
+   * 宽:以前边长是媒体查询写死的,和列数无关,13 列的双鼠宽仓在 360px 上要 466px,
    * 而 `.game-stage` 是 `overflow:hidden` —— 超出去的列不是能滑出来,是直接没了。
+   * 高:只按宽算,10 行高的仓库在 360×640 竖屏上棋盘一路长到 400px 开外,
+   * 把下面的触屏方向盘(唯一的手指走法)顶出裁切线;横屏 640×360 更是整块没了。
+   * 所以竖向同样量:从棋盘顶到裁切线,扣掉棋盘下面的方向盘 + 提示行,剩多少摆多少。
    */
   function fitBoard(): void {
     const style = typeof getComputedStyle === "function" ? getComputedStyle(box) : null;
@@ -288,7 +376,22 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     const avail = (box.clientWidth || 0) - pad;
     // 还没上屏就量不出宽度;先留着 CSS 里那一档,等下一帧再量
     if (avail <= 0) return;
-    grid.style.setProperty("--cell", `${fitCell(def.w, avail)}px`);
+    let availH = Number.NaN;
+    const clipBottom = stageClipBottom();
+    if (
+      Number.isFinite(clipBottom) &&
+      typeof grid.getBoundingClientRect === "function" &&
+      typeof wrap.getBoundingClientRect === "function" &&
+      typeof box.getBoundingClientRect === "function"
+    ) {
+      const gridRect = grid.getBoundingClientRect();
+      // 棋盘下面还有多高的「家当」(方向盘 + 提示行):这些高度不随格子边长变,量一次就是稳的
+      const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(box.getBoundingClientRect()));
+      const padBottom = style ? parseFloat(style.paddingBottom) || 0 : 0;
+      if (Number.isFinite(gridRect.top)) availH = clipBottom - gridRect.top - below - padBottom - 4;
+    }
+    cellPx = fitCellRect(def.w, def.h, avail, availH);
+    grid.style.setProperty("--cell", `${cellPx}px`);
   }
 
   function buildGrid(): void {
@@ -308,56 +411,66 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   }
 
   function render(): void {
+    const nextDone = new Set<number>();
     for (let c = 0; c < cells.length; c++) {
       const cell = cells[c];
       let cls = "bh-cell";
-      let text = "";
       if (def.wall[c]) {
         cls += " bh-wall";
       } else {
         if (def.ice[c]) cls += " bh-ice";
         if (def.target[c]) cls += " bh-goal";
-        if (def.portal[c] >= 0) cls += " bh-portal";
+        if (def.portal[c] >= 0) {
+          // 传送门成对反色:下标小的算进口(紫),大的算出口(金)
+          cls += ` bh-portal${c > def.portal[c] ? " bxh-portal-out" : ""}`;
+        }
       }
 
       const bi = state.boxes.indexOf(c);
       const hi = state.hamsters.indexOf(c);
       let piece: HTMLElement | null = null;
       if (bi >= 0) {
-        text = "📦";
-        if (def.target[c]) cls += " bh-done";
+        const done = !!def.target[c];
+        if (done) {
+          cls += " bh-done";
+          nextDone.add(c);
+        }
+        // 木箱自绘;推到目标点变礼物盒,刚归位那一下放一圈金光脉冲
+        piece = el("span", "bxh-piece bxh-box");
+        piece.innerHTML = boxPieceSvg(done, done && !doneCells.has(c) && !softMotion);
       } else if (hi >= 0) {
-        // 仓鼠按朝向转身,不许瞬间换脸
-        piece = el("span", "bxh-face", HAMSTERS[hi % HAMSTERS.length].face);
-        piece.style.transform = faceStyle(facings[hi] ?? 2);
+        // 仓鼠 SVG:四朝向各自姿态,刚推完 / 滑完的那只摆对应姿态
+        const pose = hi === lastMover ? poseForKind(lastKind) : "idle";
+        piece = el("span", "bxh-piece bxh-hamster");
+        piece.innerHTML = bhHamsterSvg(hi, facings[hi] ?? 2, pose);
         if (state.hamsters.length === 1 || hi === active) cls += ` ${HAMSTERS[hi % HAMSTERS.length].cls}`;
-      } else if (def.portal[c] >= 0) {
-        text = "🌀";
-      } else if (def.target[c]) {
-        text = "🐾";
-      } else if (def.ice[c]) {
-        text = "";
       }
       if (c === hintCell) cls += " bh-hint";
       cell.className = cls;
       if (piece) {
         cell.replaceChildren(piece);
       } else {
-        cell.textContent = text;
+        cell.textContent = "";
       }
-      // 格间插值:从上一格「滑」到这一格,推箱比走路慢一点
-      const mover = piece ?? (text === "📦" ? cell : null);
-      if (slide && slide.cell === c && mover) {
-        mover.style.setProperty("--bxh-dx", `${slide.dx * 100}%`);
-        mover.style.setProperty("--bxh-dy", `${slide.dy * 100}%`);
-        mover.style.setProperty("--bxh-dur", `${slide.ms}ms`);
-        mover.classList.add("bxh-slide");
+      // 格间插值:从上一格「滑」到这一格,推箱比走路慢一点;箱子也一起滑
+      if (piece) {
+        for (const s of slides) {
+          if (s.cell !== c) continue;
+          piece.style.setProperty("--bxh-dx", `${s.dx * 100}%`);
+          piece.style.setProperty("--bxh-dy", `${s.dy * 100}%`);
+          piece.style.setProperty("--bxh-dur", `${s.ms}ms`);
+          piece.classList.add("bxh-slide");
+        }
+        // 传送落点:平移换成放大旋出(200ms;reduced 时不加类,瞬移)
+        if (spinCell === c) piece.classList.add("bxh-tp-out");
       }
     }
-    slide = null;
+    slides = [];
+    spinCell = -1;
+    doneCells = nextDone;
 
     const left = remainingBoxes(def, state);
-    boxChip.textContent = left === 0 ? "📦 全部归位!" : `📦 还差 ${left} 个`;
+    boxChip.textContent = left === 0 ? "🎁 全部归位!" : `🎁 还差 ${left} 个`;
     if (opts.moveLimit && opts.moveLimit > 0) {
       const rest = Math.max(0, opts.moveLimit - moves);
       moveChip.textContent = `👣 还剩 ${rest} 步`;
@@ -426,12 +539,33 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   /** 从 from 滑到 to 的格子偏移(动画从「上一格」的位置起步) */
   function slideFrom(from: number, to: number, kind: "walk" | "push", undoing: boolean): void {
     if (from < 0 || to < 0) return;
-    slide = {
+    slides.push({
       cell: to,
       dx: (from % def.w) - (to % def.w),
       dy: Math.floor(from / def.w) - Math.floor(to / def.w),
       ms: moveDuration(kind, softMotion, undoing),
-    };
+    });
+  }
+
+  /** 在某格上放一段临时特效(尘土 / 擦痕 / 旋入 / 彩带),到点自己收走 */
+  function spawnFx(cell: number, html: string, ms: number): void {
+    const host = cells[cell];
+    if (!host) return;
+    const node = el("span", "bxh-fxwrap");
+    node.setAttribute("aria-hidden", "true");
+    node.innerHTML = html;
+    host.appendChild(node);
+    const timer = setTimeout(() => {
+      node.remove();
+      fxTimers.delete(timer);
+    }, ms);
+    fxTimers.add(timer);
+  }
+
+  /** 过关仪式:所有礼物盒同时放彩带,仓鼠抱腮转圈(reduced 静止合影 + 静态彩带) */
+  function celebrate(): void {
+    grid.classList.add("bxh-win");
+    for (const c of state.boxes) spawnFx(c, confettiHtml(), BH_TIMINGS.winSpinMs + 400);
   }
 
   /** 这一步之后局面还救得回来吗:先过死局规则,推了箱子再让求解器复核一遍 */
@@ -463,13 +597,40 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     facings[active] = dir;
     moves++;
     hintCell = -1;
-    slideFrom(out.from, out.pushed ? out.to : out.to, out.pushed ? "push" : "walk", false);
+    // 三种移动三种画法:推(尘土+推箱姿态)/ 滑(擦痕+张爪)/ 传(旋入旋出)
+    const kind = classifyMove(def, out);
+    lastKind = kind;
+    lastMover = active;
+    if (kind === "teleport") {
+      if (out.pushed) {
+        // 箱子被传走:仓鼠正常跟半步,箱子在出口旋出、入口放旋入小闪
+        slideFrom(out.from, out.to, "push", false);
+        if (!softMotion) spinCell = out.boxTo;
+      } else if (!softMotion) {
+        // 仓鼠自己传送:不做跨场长平移,入口旋入、出口旋出(reduced 瞬移)
+        spinCell = out.to;
+      }
+    } else {
+      slideFrom(out.from, out.to, kind === "push" ? "push" : "walk", false);
+      if (kind === "push") slideFrom(out.boxFrom, out.boxTo, "push", false);
+    }
     opts.sfx(out.pushed ? "pop" : "tap");
     if (out.teleported) opts.sfx("coin");
     render();
+    // 特效在重绘之后落格,免得被 replaceChildren 一把清掉
+    if (kind === "push" && shouldShowDust(cellPx, softMotion)) {
+      spawnFx(out.boxFrom, dustHtml(dir), BH_TIMINGS.dustMs + 120);
+    } else if (kind === "slide" && !softMotion) {
+      spawnFx(out.from, scratchHtml(dir), BH_TIMINGS.scratchMs + 60);
+    } else if (kind === "teleport" && !softMotion) {
+      const path = out.pushed ? out.boxPath : out.path;
+      const entry = path.length >= 2 ? path[path.length - 2] : -1;
+      if (entry >= 0) spawnFx(entry, teleportInHtml(), BH_TIMINGS.teleportMs + 60);
+    }
 
     if (isSolved(def, state)) {
       finished = true;
+      celebrate();
       opts.sfx("win");
       opts.onWin(moves, undos, hintsUsed);
       return;
@@ -492,6 +653,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     undos++;
     hintCell = -1;
     stuckSaid = "";
+    lastKind = "walk";
+    lastMover = -1;
     // 撤销把刚才那一步反着播,速度快一倍
     slideFrom(wasAt, state.hamsters[active], "walk", true);
     opts.sfx("tap");
@@ -507,6 +670,10 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     hintCell = -1;
     stuckSaid = "";
     facings = [2, 2];
+    lastKind = "walk";
+    lastMover = -1;
+    doneCells = new Set();
+    grid.classList.remove("bxh-win");
     clearVeil();
     opts.sfx("tap");
     render();
@@ -593,6 +760,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       window.removeEventListener("orientationchange", onResize);
       cancelAnimationFrame(fitRaf);
       if (toastTimer) clearTimeout(toastTimer);
+      for (const timer of fxTimers) clearTimeout(timer);
+      fxTimers.clear();
       clearVeil();
       wrap.remove();
     },
@@ -608,6 +777,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       hintCell = -1;
       stuckSaid = "";
       facings = [2, 2];
+      lastKind = "walk";
+      lastMover = -1;
+      doneCells = new Set();
+      grid.classList.remove("bxh-win");
+      applyTheme();
       clearVeil();
       if (def.hamsters.length > 1 && !swapBtn.isConnected) hud.appendChild(swapBtn);
       if (def.hamsters.length <= 1 && swapBtn.isConnected) swapBtn.remove();
@@ -618,6 +792,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     showVeil,
     toast,
     moves: () => moves,
+    pendingFx: () => fxTimers.size,
   };
 }
 

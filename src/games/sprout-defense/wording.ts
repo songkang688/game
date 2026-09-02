@@ -32,12 +32,24 @@ const SWAPS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /**
- * 把一句给孩子看的话里的「血」换成元气的说法。
+ * 1.3 视觉步的同款收口:两句 1.2 冻结的提示里写着「☀️阳光」,
+ * 屏上的太阳已经改成绘制图标,提示句里的 ☀️ 字符也在渲染时摘掉。
+ * 数据照旧一个字节不动。
+ */
+const EMOJI_STRIPS: ReadonlyArray<string> = ["☀️"];
+
+/**
+ * 把一句给孩子看的话里的「血」换成元气的说法,顺带摘掉残留的 emoji 字符。
  * 没有命中就原样返回(绝大多数句子都走这条路,零开销)。
  */
 export function kidWording(text: string): string {
-  if (typeof text !== "string" || !text.includes("血")) return text;
+  if (typeof text !== "string") return text;
   let out = text;
-  for (const [from, to] of SWAPS) out = out.split(from).join(to);
+  if (out.includes("血")) {
+    for (const [from, to] of SWAPS) out = out.split(from).join(to);
+  }
+  for (const emoji of EMOJI_STRIPS) {
+    if (out.includes(emoji)) out = out.split(emoji).join("");
+  }
   return out;
 }

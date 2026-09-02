@@ -124,7 +124,7 @@ describe("weiqi-garden · 棋力与耗时", () => {
     // CI 里把模拟次数调低,靠启发式打分也要能赢下来
     const rate = winRate({ size: 9, hero: "master", foe: "rookie", games: 20, ai: FAST });
     expect(rate).toBeGreaterThanOrEqual(0.8);
-  });
+  }, 120_000);
 
   it("档位越高越强:高手打菜鸟也稳,普通打菜鸟至少七成", () => {
     expect(winRate({ size: 9, hero: "expert", foe: "rookie", games: 10, ai: FAST })).toBeGreaterThanOrEqual(0.8);

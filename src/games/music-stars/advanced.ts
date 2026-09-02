@@ -24,10 +24,13 @@ import {
   buildScores,
   type MusicLevel,
 } from "./levels";
+import { createFxLayer } from "./fx";
 import { toScore } from "./logic";
 import { glyphLine, rhythmValue, type NoteValue } from "./notation";
 import { clampSpeed, FULL_SPEED, rateWithSpeed, scaleMs, speedHint } from "./practice";
+import { prefersReducedMotion } from "./runtime";
 import { resetClippedScroll } from "./stageScroll";
+import { noteColorByMidi } from "./starTheme";
 import { ChordPad, sameChord } from "./touch";
 import { midiToFreq, pentatonicIntervalPhrase } from "./tuning";
 import {
@@ -39,6 +42,7 @@ import {
 } from "./timing";
 import type { StarSynth } from "./synth";
 import {
+  buildIntervalChoiceCard,
   createAudioBar,
   createBeatBar,
   createStarBoard,
@@ -127,7 +131,7 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   }
 
   const wrap = document.createElement("div");
-  wrap.className = "mst-wrap";
+  wrap.className = cfg.mode === "score" ? "mst-wrap mst-scoreplay" : "mst-wrap";
   wrap.style.background = opts.background;
   injectCss(wrap);
   const head = document.createElement("div");
@@ -226,6 +230,16 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   });
   wrap.appendChild(audioBar.el);
 
+  // 1.3 纯视觉：命中音波环 / 连击流星 / 星空渐亮的特效层（pointer-events:none）
+  const fx = createFxLayer({ reduced: prefersReducedMotion() });
+  wrap.appendChild(fx.el);
+  /** 连击的视觉计数（只驱动流星与星空渐亮，不进任何判定） */
+  let glowStreak = 0;
+  /** 第 i 颗星星在整排里的横向百分比位置（给音波环定位用） */
+  function keyXPct(i: number): number {
+    return ((i + 0.5) / Math.max(1, cfg.starCount)) * 100;
+  }
+
   let beatBar: BeatBarHandle | null = null;
 
   function tone(i: number, ms: number, voices = 1): void {
@@ -267,15 +281,24 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
     replayBtn.hidden = cfg.mode === "score";
   }
 
-  function renderDots(total: number, pattern?: readonly number[]): void {
+  function renderDots(total: number, pattern?: readonly number[], colors?: readonly string[]): void {
     dotsEl.innerHTML = "";
     for (let i = 0; i < total; i++) {
       const dot = document.createElement("div");
-      dot.className = `mst-dot${i < inputPos ? " mst-dot-on" : ""}${
+      dot.className = `mst-dot${i < inputPos ? " mst-dot-on" : i === inputPos ? " mst-dot-cur" : ""}${
         pattern && pattern[i] === 1 ? " mst-dot-long" : ""
       }`;
+      // 1.3 纯视觉：弹对的音符星按音高点亮彩虹色（只读映射，谁弹对谁亮）
+      if (i < inputPos && colors?.[i]) dot.style.color = colors[i];
+      // 当前拍的星星随既有节拍时钟脉动
+      if (i === inputPos) dot.style.animationDuration = `${noteMs() + Math.round(noteMs() * 0.35)}ms`;
       dotsEl.appendChild(dot);
     }
+  }
+
+  /** 简谱视奏的进度点用谱上音符自己的彩虹色（音高数据只读） */
+  function scoreDotColors(): string[] {
+    return (scores[roundIdx] ?? []).map((n) => noteColorByMidi(midis[n] ?? midis[0]));
   }
 
   function markDot(index: number, grade: HitGrade): void {
@@ -286,6 +309,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   function finish(): void {
     ended = true;
     beatBar?.stop();
+    // 结算：整片星空点亮（纯装饰）
+    fx.brighten(true);
     const got = rateWithSpeed(misses, speed);
     const praise = misses === 0 ? "一次都没走音，耳朵真灵！" : "整关全部完成，越弹越有样子了！";
     settle(() => ctx.win(got, `${praise}${speed >= FULL_SPEED ? "" : ` ${speedHint(speed)}`}`), 600);
@@ -294,6 +319,10 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   function onMiss(hint: string): void {
     misses++;
     ctx.sfx("oops");
+    // miss 只是让当前那颗星星轻轻眨一下眼，不批评；连击的星空渐亮顺势收掉
+    (dotsEl.children[inputPos] as HTMLElement | undefined)?.classList.add("mst-dot-blink");
+    glowStreak = 0;
+    fx.brighten(false);
     updateHud();
     if (misses > cfg.maxMiss) {
       ended = true;
@@ -448,6 +477,13 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
     inputPos = beatTaken.filter(Boolean).length;
     markDot(hit.index, hit.grade);
     beatBar?.mark(hit.index, hit.grade);
+    // 1.3 纯视觉：命中在鼓上炸开两圈音波环；连击攒够就放一条流星 + 星空渐亮
+    fx.ringAt(kind === 0 ? 36 : 64, 66);
+    glowStreak++;
+    if (glowStreak >= 4) {
+      fx.brighten(true);
+      if (glowStreak % 4 === 0) fx.meteor();
+    }
     msgEl.textContent = `${GRADE_WORDS[hit.grade]}！`;
   }
 
@@ -475,7 +511,10 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mst-choice";
-      btn.textContent = label;
+      // 1.3 视觉：选项装成琴键小卡（上下两星示意距离由选项文案只读映射）；
+      // 选项文本原样进 .mst-choice-label，读屏走 aria-label，题目数据零改动。
+      btn.setAttribute("aria-label", label);
+      buildIntervalChoiceCard(btn, label);
       const fn = (): void => {
         if (ended || listening) return;
         synth.unlock();
@@ -572,6 +611,7 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       return;
     }
     pad.reset();
+    for (const k of chord) fx.ringAt(keyXPct(k), 62);
     inputPos++;
     renderDots(chords.length);
     if (inputPos >= chords.length) {
@@ -605,9 +645,10 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
     if (!seq) return;
     lightStar(i, Math.min(460, noteMs()));
     if (i === seq[inputPos]) {
+      fx.ringAt(keyXPct(i), 62);
       inputPos++;
       paintScore();
-      renderDots(seq.length);
+      renderDots(seq.length, undefined, scoreDotColors());
       if (inputPos >= seq.length) {
         ctx.sfx("coin");
         board?.drawConstellation(seq);
@@ -639,7 +680,7 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
     board?.clearConstellation();
     if (cfg.mode === "score") {
       paintScore();
-      renderDots(scores[roundIdx].length);
+      renderDots(scores[roundIdx].length, undefined, scoreDotColors());
       msgEl.textContent = "照着简谱弹：1 哆 2 来 3 咪 5 索 6 拉；数字下面有横线的是半拍，后面带「-」的是两拍";
       // 简谱一行几个音每一轮都不一样，这一屏的高度跟着变，钳位重算一次
       fit.relayout();
@@ -681,6 +722,7 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       chordTimer = null;
       replayBtn.removeEventListener("click", onReplay);
       fit.dispose();
+      fx.destroy();
       for (const off of cleanups) off();
       cleanups.length = 0;
       beatBar?.destroy();

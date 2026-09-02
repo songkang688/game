@@ -19,7 +19,6 @@ import {
   SUPER_LV1_COST,
   SUPER_LV2_COST,
   characterById,
-  type Character,
   type MoveSlot
 } from "./frames";
 import {
@@ -58,24 +57,80 @@ import {
   versusMatchConfig,
   type LevelResult
 } from "./levels";
+import {
+  CONFETTI_COUNT,
+  HIT_FLASH_FRAMES,
+  HIT_SPARK_RAYS,
+  KO_FRAMES,
+  drawArcSlash,
+  drawComboPop,
+  drawConfettiPiece,
+  drawGuardShard,
+  drawHitSpark,
+  drawKoBanner,
+  drawMiniAvatar,
+  drawMiniStar,
+  drawProjectileOrb,
+  drawQFighter,
+  drawSeatAura,
+  drawStage,
+  drawWinBadges,
+  koBannerText,
+  makeConfetti,
+  makeShatter,
+  poseOf,
+  stageThemeOf,
+  type ConfettiPiece,
+  type Shard,
+  type StageThemeId,
+  type StrikeAim
+} from "./art";
 
 /** 舞台画布高度 */
 export const STAGE_HEIGHT = 250;
 /** 地面在画布里的 y */
 export const GROUND_Y = 214;
 
-const CSS = `
+/** 画布显示高压到这以下,人物比按钮还小,打不成了 */
+export const MIN_CANVAS_DISPLAY_PX = 140;
+
+/**
+ * 画布显示高的钳位:塞得下返回 null(别动),塞不下返回该钳到的像素(不低于 min)。
+ *
+ * 为什么要钳:HUD(双方血条/能量/护盾)两行 + 提示行 + 摇杆按钮排加起来 ~200px,
+ * 画布又是按宽度等比长高的 —— 640×360 横屏里 `.game-stage` 只给 ~340px,
+ * 画布 250px 显示高一占,摇杆和「轻/重/必杀」整排掉到裁切线以下;
+ * 触屏没键盘,按钮看不见 = 这局没法打。钳高后画布等比收窄(CSS 只设 max-height,
+ * 宽由 aspect-ratio 跟着缩),战场变小但整场都在屏里。
+ */
+export function canvasDisplayCapPx(nativeH: number, roomPx: number, min = MIN_CANVAS_DISPLAY_PX): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
+export const CSS = `
 .cc-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#FFF2F8,#F5F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .cc-hud{display:flex;gap:8px;align-items:stretch;margin-bottom:6px;}
 .cc-side{flex:1 1 0;min-width:0;}
 .cc-side.cc-right{text-align:right;}
-.cc-name{font-size:16px;font-weight:900;color:#8a4a76;overflow-wrap:anywhere;line-height:1.4;}
+.cc-topline{display:flex;align-items:center;gap:5px;min-height:26px;}
+.cc-right .cc-topline{flex-direction:row-reverse;}
+.cc-ava{width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.75);flex:0 0 auto;}
+.cc-stars{width:56px;height:18px;flex:0 0 auto;}
+.cc-name{font-size:16px;font-weight:900;color:#8a4a76;overflow-wrap:anywhere;line-height:1.4;min-width:0;}
 .cc-bar{height:12px;border-radius:8px;background:#F0E4EE;overflow:hidden;margin-top:3px;}
 .cc-bar>i{display:block;height:100%;border-radius:8px;transition:width .12s linear;}
 .cc-bar.cc-thin{height:7px;}
 .cc-vigor>i{background:linear-gradient(90deg,#FF9EC4,#F26FA4);}
 .cc-meter>i{background:linear-gradient(90deg,#FFD98A,#F5B93C);}
+.cc-meter.cc-full>i{background:linear-gradient(90deg,#FFD98A,#FFF3C9,#F5B93C,#FFD98A);background-size:200% 100%;
+  animation:ccflow 1.1s linear infinite;}
+@keyframes ccflow{from{background-position:0 0;}to{background-position:200% 0;}}
 .cc-guard>i{background:linear-gradient(90deg,#A9D8F5,#5FA9DE);}
 .cc-mid{flex:0 0 auto;text-align:center;min-width:86px;}
 .cc-timer{font-size:22px;font-weight:900;color:#7a4a86;line-height:1.1;}
@@ -98,6 +153,8 @@ const CSS = `
 .cc-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #E7A9C6;}
 .cc-btn:focus-visible,.cc-open:focus-visible,.cc-back:focus-visible{outline:3px solid #46246b;outline-offset:3px;}
 .cc-modebar,.cc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.cc-modebar[hidden]{display:none;}
 .cc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a4a86;text-align:center;overflow-wrap:anywhere;}
 .cc-open{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#E27BAE,#C55A91);box-shadow:0 4px 0 #A44576;}
@@ -132,9 +189,31 @@ const CSS = `
   .cc-btn{min-width:56px;min-height:56px;font-size:15px;}
   .cc-open{padding:9px 13px;font-size:14px;}
   .cc-face{min-width:64px;}
+  .cc-stars{width:44px;}
+}
+/* N-76:矮横屏把轻/重/必杀钉进 412;训练场日志可滚,帧数据不改 */
+@media (max-height:500px){
+  .cc-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
+  .cc-hud{flex:0 0 auto;margin-bottom:2px;}
+  .cc-canvas{max-height:min(120px,32dvh);width:auto;margin:0 auto;}
+  .cc-msg{min-height:0;max-height:1.35em;overflow:hidden;margin-top:2px;flex:0 0 auto;}
+  .cc-stick{width:56px;height:56px;}
+  .cc-stick>i{width:28px;height:28px;margin:-14px 0 0 -14px;}
+  .cc-btn{min-width:48px;min-height:48px;font-size:14px;}
+  .cc-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;flex:0 0 auto;
+    background:linear-gradient(180deg,rgba(255,242,248,0),#FFF2F8 14px);padding-top:4px;}
+  /* r18:字号回 16(360 正文守门),高度预算仍由 52px 限高+滚动兜住 */
+  .cc-info{max-height:52px;overflow:auto;margin-top:4px;flex:0 0 auto;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .cc-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;flex:0 0 auto;
+    background:linear-gradient(180deg,rgba(255,242,248,0),#FFF2F8 14px);padding-top:4px;}
+  .cc-canvas{max-height:min(200px,42dvh);}
 }
 @media (prefers-reduced-motion:reduce){
   .cc-bar>i{transition:none;}
+  .cc-meter.cc-full>i{animation:none;}
 }
 `;
 
@@ -206,7 +285,7 @@ export function heldToInput(h: HeldKeys): InputFrame {
 }
 
 // ---------------------------------------------------------------------------
-// 舞台绘制
+// 舞台绘制:资产都在 ./art,这里只管把对局状态翻译成绘制参数
 // ---------------------------------------------------------------------------
 
 interface Spark {
@@ -218,102 +297,47 @@ interface Spark {
   color: string;
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number, shift: number, color: string): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, "#FFF6FC");
-  sky.addColorStop(1, color);
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-
-  // 远层:大圆丘,跟着镜头慢慢挪
-  ctx.fillStyle = "rgba(255,255,255,.55)";
-  for (let i = -1; i < 6; i++) {
-    const x = ((i * 150 - shift * 0.25) % (w + 300)) + 150;
-    ctx.beginPath();
-    ctx.arc(x, GROUND_Y - 6, 78, Math.PI, 0);
-    ctx.fill();
-  }
-  // 近层:小圆丘,挪得快一点
-  ctx.fillStyle = "rgba(255,255,255,.8)";
-  for (let i = -1; i < 8; i++) {
-    const x = ((i * 110 - shift * 0.6) % (w + 220)) + 110;
-    ctx.beginPath();
-    ctx.arc(x, GROUND_Y + 4, 44, Math.PI, 0);
-    ctx.fill();
-  }
-  ctx.fillStyle = "#F3E4F0";
-  ctx.fillRect(0, GROUND_Y, w, h - GROUND_Y);
-  ctx.fillStyle = "rgba(200,150,190,.35)";
-  ctx.fillRect(0, GROUND_Y, w, 3);
+/** 命中放射火花(0.15s 一枚) */
+interface HitBurst {
+  x: number;
+  y: number;
+  age: number;
+  power: number;
 }
 
-function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-  ctx.fill();
+/** 连击 ≥ 3 的角落弹窗 */
+interface ComboPop {
+  side: 0 | 1;
+  n: number;
+  age: number;
 }
 
-function drawFighter(ctx: CanvasRenderingContext2D, f: FighterState, ch: Character): void {
-  const bx = f.x;
-  const feet = GROUND_Y - f.y;
-  const crouch = f.stance === "crouch";
-  const resting = f.phase === "rest";
-  const down = f.phase === "knockdown";
-  const bodyH = resting || down ? ch.crouchHeight * 0.7 : crouch ? ch.crouchHeight : ch.height;
-  const bodyW = ch.halfWidth * 2 + (down ? 14 : 0);
+/**
+ * 命中特效的粒子预算:soft(减弱动效)一律 0,正常给 6–8 根放射线 +
+ * `sparkCount` 颗星屑。纯查表,视觉契约测试直接断言。
+ */
+export function fxBudget(soft: boolean, power: number): { rays: number; stars: number } {
+  if (soft) return { rays: 0, stars: 0 };
+  return { rays: HIT_SPARK_RAYS, stars: sparkCount(power, false) };
+}
 
-  // 影子
-  ctx.fillStyle = "rgba(150,110,150,.16)";
-  ctx.beginPath();
-  ctx.ellipse(bx, GROUND_Y + 3, ch.halfWidth + 6, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 身体
-  ctx.fillStyle = ch.color;
-  roundedRect(ctx, bx - bodyW / 2, feet - bodyH, bodyW, bodyH, 14);
-  ctx.strokeStyle = ch.ink;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // 出招时伸一只手出去(判定框的位置)
-  const mv = currentMove(f);
-  if (mv && f.frame - 1 >= mv.startup && f.frame - 1 < mv.startup + mv.active) {
-    const rx = f.facing === 1 ? bx + mv.box.x : bx - mv.box.x - mv.box.w;
-    ctx.fillStyle = "rgba(255,255,255,.85)";
-    roundedRect(ctx, rx, feet - mv.box.y - mv.box.h, mv.box.w, mv.box.h, 12);
-    ctx.strokeStyle = ch.ink;
-    ctx.stroke();
+/** `?debug` 才把判定框描出来(以前是把 hitbox 当动画,现在只留调试口) */
+function debugBoxes(): boolean {
+  try {
+    const loc = (globalThis as { location?: { search?: string } }).location;
+    return typeof loc?.search === "string" && /[?&]debug/.test(loc.search);
+  } catch {
+    return false;
   }
+}
 
-  // 脸
-  const eyeY = feet - bodyH + 18;
-  ctx.fillStyle = ch.ink;
-  if (resting || down) {
-    ctx.fillRect(bx - 9, eyeY, 7, 2);
-    ctx.fillRect(bx + 3, eyeY, 7, 2);
-  } else {
-    ctx.beginPath();
-    ctx.arc(bx - 6 + f.facing * 2, eyeY, 2.6, 0, Math.PI * 2);
-    ctx.arc(bx + 6 + f.facing * 2, eyeY, 2.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.font = "16px system-ui";
-  ctx.textAlign = "center";
-  ctx.fillText(ch.emoji, bx, feet - bodyH - 4);
-
-  // 硬直时冒几颗小星星
-  if (f.phase === "hitstun" || f.phase === "guardbreak") {
-    ctx.fillStyle = "#FFD05A";
-    ctx.font = "13px system-ui";
-    ctx.fillText("✦", bx - 10, feet - bodyH - 16);
-    ctx.fillText("✦", bx + 10, feet - bodyH - 20);
-  }
+/** 把出招翻译成绘制目标:哪条肢体、伸到判定框中心哪个点(只读 box,不改 box) */
+function strikeAimOf(mv: { kind: string; box: { x: number; y: number; w: number; h: number } }): StrikeAim {
+  return {
+    dx: mv.box.x + mv.box.w * 0.5,
+    dy: mv.box.y + mv.box.h * 0.5,
+    limb: mv.kind === "heavy" ? "leg" : mv.kind === "light" ? "arm" : "both"
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +351,8 @@ export interface ArenaOpts {
   seats: [SeatKind, SeatKind];
   goalText?: string;
   training?: boolean;
+  /** 舞台主题(闯关按 levels 章节查表,其它模式各给一个默认) */
+  theme?: StageThemeId;
   sfx: (n: "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump") => void;
   onEnd?: (m: MatchState) => void;
 }
@@ -336,11 +362,70 @@ export interface Arena {
   state: () => MatchState;
 }
 
+/** 一侧 HUD 的持久节点(每帧只改数值,不重建 DOM,画布头像才留得住) */
+interface SideUi {
+  ava: HTMLCanvasElement;
+  name: HTMLElement;
+  stars: HTMLCanvasElement;
+  vigorBar: HTMLElement;
+  vigorFill: HTMLElement;
+  meterBar: HTMLElement;
+  meterFill: HTMLElement;
+  guardBar: HTMLElement;
+  guardFill: HTMLElement;
+  lastChar: string;
+  lastStars: number;
+}
+
+function buildSide(box: HTMLElement): SideUi {
+  const top = document.createElement("div");
+  top.className = "cc-topline";
+  const ava = document.createElement("canvas");
+  ava.className = "cc-ava";
+  ava.width = 24;
+  ava.height = 24;
+  ava.setAttribute("aria-hidden", "true");
+  const name = document.createElement("span");
+  name.className = "cc-name";
+  const stars = document.createElement("canvas");
+  stars.className = "cc-stars";
+  stars.width = 56;
+  stars.height = 18;
+  stars.setAttribute("role", "img");
+  top.append(ava, name, stars);
+  const mkBar = (cls: string, thin: boolean): [HTMLElement, HTMLElement] => {
+    const bar = document.createElement("div");
+    bar.className = `cc-bar${thin ? " cc-thin" : ""} ${cls}`;
+    bar.setAttribute("role", "img");
+    const fill = document.createElement("i");
+    bar.appendChild(fill);
+    return [bar, fill];
+  };
+  const [vigorBar, vigorFill] = mkBar("cc-vigor", false);
+  const [meterBar, meterFill] = mkBar("cc-meter", true);
+  const [guardBar, guardFill] = mkBar("cc-guard", true);
+  box.append(top, vigorBar, meterBar, guardBar);
+  return { ava, name, stars, vigorBar, vigorFill, meterBar, meterFill, guardBar, guardFill, lastChar: "", lastStars: -1 };
+}
+
 export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   const soft = reducedMotion();
   const cfg = { ...opts.cfg, reducedMotion: soft };
+  const theme = opts.theme ?? "sakura";
+  const dbg = debugBoxes();
   let m = createMatch(cfg);
   const sparks: Spark[] = [];
+  const bursts: HitBurst[] = [];
+  const shards: Shard[] = [];
+  const confetti: ConfettiPiece[] = [];
+  let comboPop: ComboPop | null = null;
+  const lastCombo: [number, number] = [0, 0];
+  /** 投技拉近的剩余演出帧 */
+  let grab = 0;
+  /** KO 演出:-1 = 还没 KO,>=0 = 倒计时 */
+  let koLeft = -1;
+  /** 渲染帧计数(动画相位;对局暂停时呼吸和花瓣也继续飘) */
+  let anim = 0;
   let dummyMode: DummyMode = opts.seats[1].kind === "dummy" ? opts.seats[1].mode : "stand";
 
   const wrap = document.createElement("div");
@@ -355,17 +440,40 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   const right = document.createElement("div");
   right.className = "cc-side cc-right";
   hud.append(left, mid, right);
+  const uiL = buildSide(left);
+  const uiR = buildSide(right);
 
-  function sideHTML(f: FighterState): string {
+  function updateSide(ui: SideUi, f: FighterState): void {
     const ch = characterOf(f);
+    if (ui.lastChar !== f.charId) {
+      ui.lastChar = f.charId;
+      ui.name.textContent = `${ch.emoji} ${ch.name}`;
+      const g = ui.ava.getContext("2d");
+      if (g) {
+        g.clearRect(0, 0, ui.ava.width, ui.ava.height);
+        drawMiniAvatar(g, { size: ui.ava.width, color: ch.color, ink: ch.ink, look: ch.look });
+      }
+    }
     const vig = Math.max(0, Math.round((f.vigor / f.vigorMax) * 100));
     const met = Math.round((f.meter / METER_MAX) * 100);
     const gua = Math.round((f.guard / f.guardMax) * 100);
-    const hearts = Math.max(0, Math.ceil((f.vigor / f.vigorMax) * 3));
-    return `<div class="cc-name">${ch.emoji} ${ch.name} <span aria-hidden="true">${"♥".repeat(hearts)}</span></div>
-      <div class="cc-bar cc-vigor" role="img" aria-label="元气 ${vig}%"><i style="width:${vig}%"></i></div>
-      <div class="cc-bar cc-thin cc-meter" role="img" aria-label="能量 ${met}%"><i style="width:${met}%"></i></div>
-      <div class="cc-bar cc-thin cc-guard" role="img" aria-label="护盾 ${gua}%"><i style="width:${gua}%"></i></div>`;
+    ui.vigorFill.style.width = `${vig}%`;
+    ui.vigorBar.setAttribute("aria-label", `元气 ${vig}%`);
+    ui.meterFill.style.width = `${met}%`;
+    ui.meterBar.setAttribute("aria-label", `能量 ${met}%`);
+    ui.meterBar.classList.toggle("cc-full", f.meter >= METER_MAX);
+    ui.guardFill.style.width = `${gua}%`;
+    ui.guardBar.setAttribute("aria-label", `护盾 ${gua}%`);
+    const starsLit = Math.max(0, Math.ceil((f.vigor / f.vigorMax) * 3));
+    if (starsLit !== ui.lastStars) {
+      ui.lastStars = starsLit;
+      ui.stars.setAttribute("aria-label", `元气星 ${starsLit} / 3`);
+      const g = ui.stars.getContext("2d");
+      if (g) {
+        g.clearRect(0, 0, ui.stars.width, ui.stars.height);
+        drawWinBadges(g, { n: starsLit, total: 3, w: ui.stars.width, h: ui.stars.height });
+      }
+    }
   }
 
   const canvas = document.createElement("canvas");
@@ -375,6 +483,58 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", "连招对决的舞台");
   const ctx = canvas.getContext("2d");
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(game-stage 类,定高会裁内容)的下沿;量不到返回 NaN */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  /** 画布显示高按可视余量钳一刀(见 canvasDisplayCapPx 的注释) */
+  function fitDisplay(): void {
+    if (destroyed || !canvas.style) return;
+    if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」
+    canvas.style.maxHeight = "";
+    canvas.style.maxWidth = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    // 画布下面的家当(提示行 + 摇杆按钮排):高度不随画布显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
+    const short = (globalThis.innerHeight || 800) <= 500;
+    const px = canvasDisplayCapPx(
+      canvasRect.height,
+      clip - canvasRect.top - below - 4,
+      short ? 96 : MIN_CANVAS_DISPLAY_PX
+    );
+    if (px !== null) {
+      // CSS 里画布是 width:100%,只钳高会压扁人物;宽也按 backing 比例一起钳才是等比
+      canvas.style.maxHeight = `${px}px`;
+      canvas.style.maxWidth = `${Math.round((px * canvas.width) / canvas.height)}px`;
+      // 等比收窄后画布居中,别贴在左边
+      canvas.style.marginLeft = "auto";
+      canvas.style.marginRight = "auto";
+    }
+  }
 
   const msg = document.createElement("div");
   msg.className = "cc-msg";
@@ -548,7 +708,7 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
     return heldToInput(merged);
   }
 
-  // --- 声音 ---
+  // --- 声音与命中特效 ---
   let lastSfx = 0;
   function playEvents(): void {
     for (const ev of m.events) {
@@ -563,15 +723,18 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
       else if (ev.kind === "clash") opts.sfx("tap");
       else if (ev.kind === "knockdown") opts.sfx("meow");
     }
-    if (!soft) {
-      for (const ev of m.events) {
-        if (ev.kind !== "hit" && ev.kind !== "throw" && ev.kind !== "clash") continue;
-        const n = sparkCount(ev.power, soft);
-        for (let i = 0; i < n; i++) {
+    for (const ev of m.events) {
+      // 投技拉近:抓住的那一下,双方画面拉近拖拽 3 帧(只挪画面不挪判定)
+      if (ev.kind === "throw") grab = 3;
+      const budget = fxBudget(soft, ev.power);
+      if (ev.kind === "crush" && budget.rays > 0) shards.push(...makeShatter(ev.x, GROUND_Y - ev.y));
+      if ((ev.kind === "hit" || ev.kind === "throw" || ev.kind === "clash") && budget.rays > 0) {
+        bursts.push({ x: ev.x, y: GROUND_Y - ev.y, age: 0, power: ev.power });
+        for (let i = 0; i < budget.stars; i++) {
           sparks.push({
             x: ev.x,
             y: GROUND_Y - ev.y,
-            vx: (i - n / 2) * 0.5,
+            vx: (i - budget.stars / 2) * 0.5,
             vy: -1 - (i % 3),
             life: 16 + (i % 5),
             color: i % 2 === 0 ? "#FFD05A" : "#FF9EC4"
@@ -579,14 +742,89 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
         }
       }
     }
+    // 连击 ≥ 3:角落弹出连击数字
+    for (const side of [0, 1] as const) {
+      const c = m.fighters[side].comboHits;
+      if (c >= 3 && c > lastCombo[side]) comboPop = { side, n: c, age: 0 };
+      lastCombo[side] = c;
+    }
   }
 
   // --- 渲染 ---
+
+  /** 画一位格斗家:光环 → 分层 Q 版 → 攻击弧光 → (调试)判定框 */
+  function drawOne(f: FighterState, side: 0 | 1, drawX: number): void {
+    if (!ctx) return;
+    const ch = characterOf(f);
+    const mv = currentMove(f);
+    const fr = f.frame - 1;
+    let seg: "startup" | "active" | "recovery" | null = null;
+    let prog = 0;
+    if (mv) {
+      if (fr < mv.startup) {
+        seg = "startup";
+        prog = fr / Math.max(1, mv.startup);
+      } else if (fr < mv.startup + mv.active) {
+        seg = "active";
+        prog = (fr - mv.startup) / Math.max(1, mv.active);
+      } else {
+        seg = "recovery";
+        prog = (fr - mv.startup - mv.active) / Math.max(1, mv.recovery);
+      }
+    }
+    const pose = poseOf({
+      phase: f.phase,
+      stance: f.stance,
+      moveKind: mv?.kind ?? null,
+      seg,
+      prog,
+      tick: anim + side * 37,
+      won: m.winner === f.side
+    });
+    drawSeatAura(ctx, { x: drawX, groundY: GROUND_Y, side, t: anim / 60, soft });
+    drawQFighter(ctx, {
+      x: drawX,
+      feet: GROUND_Y - f.y,
+      groundY: GROUND_Y,
+      facing: f.facing,
+      color: ch.color,
+      ink: ch.ink,
+      look: ch.look,
+      halfWidth: ch.halfWidth,
+      height: ch.height,
+      crouchHeight: ch.crouchHeight,
+      pose,
+      strike: mv && pose.strike > 0 ? strikeAimOf(mv) : null,
+      t: anim / 60
+    });
+    // 攻击弧光:命中帧亮起,收招头两帧留残光(投射招的光在弹丸上)
+    if (mv && !mv.projectile && fr >= mv.startup && fr < mv.startup + mv.active + 2) {
+      const k = Math.min(1, Math.max(0, (fr - mv.startup) / Math.max(1, mv.active + 1)));
+      drawArcSlash(ctx, {
+        x: drawX + f.facing * (mv.box.x + mv.box.w / 2),
+        y: GROUND_Y - f.y - mv.box.y - mv.box.h / 2,
+        facing: f.facing,
+        size: Math.max(mv.box.w, mv.box.h) * 0.62,
+        k,
+        kind: mv.kind,
+        color: ch.color,
+        soft
+      });
+    }
+    if (dbg && mv && fr >= mv.startup && fr < mv.startup + mv.active) {
+      const rx = f.facing === 1 ? f.x + mv.box.x : f.x - mv.box.x - mv.box.w;
+      ctx.strokeStyle = "rgba(255,60,90,.8)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx, GROUND_Y - f.y - mv.box.y - mv.box.h, mv.box.w, mv.box.h);
+    }
+  }
+
   function render(): void {
     if (!ctx) return;
+    anim += 1;
     const [a, b] = m.fighters;
-    left.innerHTML = sideHTML(a);
-    right.innerHTML = sideHTML(b);
+    updateSide(uiL, a);
+    updateSide(uiR, b);
     const secs = Math.ceil(m.timer / 60);
     const dots = (side: 0 | 1): string => {
       let s = "";
@@ -598,17 +836,46 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
       <div class="cc-dots">${dots(0)} · ${dots(1)}</div>
       <div class="cc-combo">${combo >= 2 ? `${combo} 连!` : `第 ${m.round} 回合`}</div>`;
 
-    const shake = !soft && m.hitstop > 0 ? (m.hitstop % 2 === 0 ? 2 : -2) : 0;
-    ctx.setTransform(1, 0, 0, 1, shake, 0);
-    drawBackground(ctx, cfg.stageWidth, STAGE_HEIGHT, (a.x + b.x) / 2, "#F7E9FB");
+    // 震屏:命中顿帧的小抖 + KO 的 0.3s 缩放震屏(soft 全关)
+    let sx = !soft && m.hitstop > 0 ? (m.hitstop % 2 === 0 ? 2 : -2) : 0;
+    let sy = 0;
+    let sc = 1;
+    if (!soft && koLeft > 0) {
+      const k = koLeft / KO_FRAMES;
+      sx += Math.sin(koLeft * 1.7) * 3 * k;
+      sy = Math.cos(koLeft * 2.3) * 2 * k;
+      sc = 1 + 0.03 * k;
+    }
+    ctx.setTransform(sc, 0, 0, sc, sx - ((sc - 1) * cfg.stageWidth) / 2, sy - ((sc - 1) * STAGE_HEIGHT) / 2);
+
+    drawStage(ctx, {
+      w: cfg.stageWidth,
+      h: STAGE_HEIGHT,
+      groundY: GROUND_Y,
+      shift: (a.x + b.x) / 2,
+      theme,
+      t: anim / 60,
+      soft
+    });
 
     for (const p of m.projectiles) {
-      ctx.fillStyle = p.color;
-      roundedRect(ctx, p.x, GROUND_Y - p.y - p.h, p.w, p.h, 10);
+      drawProjectileOrb(ctx, {
+        cx: p.x + p.w / 2,
+        cy: GROUND_Y - p.y - p.h / 2,
+        r: Math.min(p.w, p.h) / 2 + 3,
+        color: p.color,
+        t: anim / 60,
+        facing: p.vx >= 0 ? 1 : -1
+      });
     }
-    drawFighter(ctx, a, characterOf(a));
-    drawFighter(ctx, b, characterOf(b));
 
+    // 投技拉近:抓住的 3 帧里双方朝对方各挪 3px(只挪画面)
+    const pull = grab > 0 ? 3 : 0;
+    const dirAB = b.x >= a.x ? 1 : -1;
+    drawOne(a, 0, a.x + pull * dirAB);
+    drawOne(b, 1, b.x - pull * dirAB);
+
+    // 星屑(画的小星形,不再是 ✦ 字符)
     for (let i = sparks.length - 1; i >= 0; i--) {
       const s = sparks[i];
       s.x += s.vx;
@@ -619,10 +886,65 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
         sparks.splice(i, 1);
         continue;
       }
-      ctx.fillStyle = s.color;
-      ctx.font = "12px system-ui";
-      ctx.textAlign = "center";
-      ctx.fillText("✦", s.x, s.y);
+      drawMiniStar(ctx, s.x, s.y, 2.6 + (s.life % 3), s.color);
+    }
+    // 命中放射火花 + 闪白(0.15s)
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const bu = bursts[i];
+      bu.age += 1;
+      if (bu.age > HIT_FLASH_FRAMES) {
+        bursts.splice(i, 1);
+        continue;
+      }
+      drawHitSpark(ctx, { x: bu.x, y: bu.y, k: bu.age / HIT_FLASH_FRAMES, power: bu.power });
+    }
+    // 破防盾碎片
+    for (let i = shards.length - 1; i >= 0; i--) {
+      const s = shards[i];
+      s.x += s.vx;
+      s.y += s.vy;
+      s.vy += 0.16;
+      s.rot += s.vr;
+      s.life -= 1;
+      if (s.life <= 0) {
+        shards.splice(i, 1);
+        continue;
+      }
+      drawGuardShard(ctx, s);
+    }
+    // KO 彩带
+    for (let i = confetti.length - 1; i >= 0; i--) {
+      const p = confetti[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.12;
+      p.rot += p.vr;
+      p.life -= 1;
+      if (p.life <= 0) {
+        confetti.splice(i, 1);
+        continue;
+      }
+      drawConfettiPiece(ctx, p);
+    }
+    // 连击数字弹窗
+    if (comboPop) {
+      comboPop.age += 1;
+      const gone = comboPop.age > 48 || m.fighters[comboPop.side].comboHits === 0;
+      if (gone) comboPop = null;
+      else {
+        drawComboPop(ctx, {
+          x: comboPop.side === 0 ? 56 : cfg.stageWidth - 56,
+          y: 44,
+          n: comboPop.n,
+          age: comboPop.age,
+          soft
+        });
+      }
+    }
+    // KO 横幅(分级红线:文案只用「获胜」)
+    if (koLeft >= 0 && m.winner !== null) {
+      const name = m.winner === -1 ? null : characterOf(m.fighters[m.winner]).name;
+      drawKoBanner(ctx, { w: cfg.stageWidth, text: koBannerText(name), t: anim / 60 });
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -659,9 +981,22 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
         steps += 1;
         stepMatch(m, [inputFor(0), inputFor(1)]);
         playEvents();
-        if (m.winner !== null && !ended && !opts.training) {
+        if (grab > 0) grab -= 1;
+        if (m.winner !== null && koLeft < 0 && !opts.training) {
+          // KO 演出:0.3s 震屏 + 胜者举手 + 彩带 20 片(soft 直接结算)
+          koLeft = soft ? 0 : KO_FRAMES;
+          if (!soft && m.winner !== -1) {
+            const winX = m.fighters[m.winner].x;
+            confetti.push(...makeConfetti(winX, GROUND_Y - 130, CONFETTI_COUNT));
+          }
+        }
+      }
+      if (koLeft >= 0 && !ended) {
+        if (koLeft === 0) {
           ended = true;
           opts.onEnd?.(m);
+        } else {
+          koLeft -= 1;
         }
       }
     }
@@ -671,11 +1006,18 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
   raf = requestAnimationFrame(frame);
   render();
 
+  fitDisplay();
+  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
+  const fitTimer = window.setTimeout(fitDisplay, 0);
+  window.addEventListener("resize", fitDisplay);
+
   return {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
       raf = 0;
+      window.clearTimeout(fitTimer);
+      window.removeEventListener("resize", fitDisplay);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       for (const off of offs) off();
@@ -717,6 +1059,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const arena = createArena(stage, {
     cfg: matchConfigFor(cfg),
     goalText: goalLine(cfg),
+    theme: stageThemeOf(ctx.level),
     seats: [{ kind: "duo" }, { kind: "ai", tier: cfg.tier, style: cfg.foeStyle, seed: cfg.seed }],
     sfx: ctx.sfx,
     onEnd: (m) => {
@@ -914,14 +1257,16 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     arena = createArena(stage, {
       cfg: versusMatchConfig(chosenChar, foe === chosenChar ? "xingxing" : foe),
       goalText: "三局两胜,先赢两回合",
+      theme: "night",
       seats: [{ kind: "duo" }, { kind: "ai", tier, seed }],
       sfx: (n) => api.play(n),
       onEnd: (m) => {
         const won = m.winner === 0;
         if (won) api.addStars(2);
+        const s = m.stats[0];
         showOver(
           won ? "这一场赢下来啦!" : "这一场先到这里",
-          `回合比分 ${m.wins[0]}:${m.wins[1]},最长 ${m.stats[0].maxCombo} 连,取消 ${m.stats[0].cancels} 次。`,
+          `回合比分 ${m.wins[0]}:${m.wins[1]}。最大连击 ${s.maxCombo} 连 · 打中 ${s.hits} 下 · 投技 ${s.throws} 次 · 超必 ${s.supersUsed} 次 · 取消 ${s.cancels} 次。`,
           "🔁 再打一场",
           startVersus
         );
@@ -936,18 +1281,25 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     arena = createArena(stage, {
       cfg: endlessMatchConfig(cfg, chosenChar),
       goalText: `第 ${streak + 1} 场,赢了就继续。最高连胜 ${best}`,
+      theme: (["sakura", "night", "candy"] as const)[streak % 3],
       seats: [{ kind: "duo" }, { kind: "ai", tier: cfg.tier, seed: 5000 + streak * 31 }],
       sfx: (n) => api.play(n),
       onEnd: (m) => {
+        const s = m.stats[0];
         if (m.winner === 0) {
           streak += 1;
           best = save.recordEndlessBest(meta.id, streak);
           if (streak % 3 === 0) api.addStars(1);
-          showOver("赢啦,继续!", `已经连胜 ${streak} 场,最高纪录 ${best} 场。`, "▶ 下一场", startEndless);
+          showOver(
+            "赢啦,继续!",
+            `已经连胜 ${streak} 场,最高纪录 ${best} 场。这一场最大连击 ${s.maxCombo} 连 · 打中 ${s.hits} 下。`,
+            "▶ 下一场",
+            startEndless
+          );
         } else {
           showOver(
             "这一轮到此为止",
-            `连胜 ${streak} 场,最高纪录 ${best} 场。休息一下再来一轮吧!`,
+            `连胜 ${streak} 场,最高纪录 ${best} 场。这一场最大连击 ${s.maxCombo} 连。休息一下再来一轮吧!`,
             "🔁 重新开始",
             () => {
               streak = 0;
@@ -965,13 +1317,15 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     arena = createArena(stage, {
       cfg: versusMatchConfig(chosenChar, foeChar),
       goalText: "三局两胜,两个人一台设备",
+      theme: "candy",
       seats: [{ kind: "duo" }, { kind: "star" }],
       sfx: (n) => api.play(n),
       onEnd: (m) => {
         const who = m.winner === 0 ? characterById(chosenChar).name : characterById(foeChar).name;
+        const wi = m.winner === 1 ? 1 : 0;
         showOver(
           `${who} 这一场赢啦!`,
-          `回合比分 ${m.wins[0]}:${m.wins[1]}。换个角色再来一场?`,
+          `回合比分 ${m.wins[0]}:${m.wins[1]},胜方最大连击 ${m.stats[wi].maxCombo} 连。换个角色再来一场?`,
           "🔁 再来一场",
           startDuo
         );
@@ -987,6 +1341,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const created = createArena(holder, {
       cfg: trainingMatchConfig(chosenChar, foeChar === chosenChar ? "dundun" : foeChar),
       goalText: "训练场:不结算胜负,慢慢试连段",
+      theme: "sakura",
       training: true,
       seats: [{ kind: "duo" }, { kind: "dummy", mode: "stand" }],
       sfx: (n) => api.play(n)
@@ -1104,7 +1459,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,擂台能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "轻击命中之后马上按重击就是取消,连段一下子就长了。",
       grandMessage: "188 关全部拿下,连招杯冠军就是你!",
       guideTitle: "连招对决 · 帧数笔记"

@@ -40,27 +40,43 @@ import {
   starsFor,
   tapBalloon,
   twinPartner,
+  windSign,
   type AirCfg,
   type BalloonKind,
   type ChainNode,
   type FestState,
   type GoalState
 } from "./logic";
-
-const BALLOON_COLORS = [
-  { name: "红", css: "radial-gradient(circle at 35% 30%, #FFB3B3, #F0605F)", key: "#F0605F" },
-  { name: "黄", css: "radial-gradient(circle at 35% 30%, #FFF0B3, #F5C142)", key: "#F5C142" },
-  { name: "蓝", css: "radial-gradient(circle at 35% 30%, #B3D9FF, #4F94E8)", key: "#4F94E8" },
-  { name: "绿", css: "radial-gradient(circle at 35% 30%, #C9F0B3, #6BBB4E)", key: "#6BBB4E" },
-  { name: "紫", css: "radial-gradient(circle at 35% 30%, #E3CCFF, #9E6BD9)", key: "#9E6BD9" },
-];
-
-const KIND_BG: Partial<Record<BalloonKind, string>> = {
-  cloud: "radial-gradient(circle at 35% 30%, #E8E8EE, #9A9AAE)",
-  rainbow: "conic-gradient(#F0605F, #F5C142, #6BBB4E, #4F94E8, #9E6BD9, #F0605F)",
-  chain: "radial-gradient(circle at 35% 30%, #FFD8A8, #F08C42)",
-  gift: "radial-gradient(circle at 35% 30%, #FFE7B0, #E8A33D)"
-};
+// 1.3 视觉层:只管「怎么画」,一个玩法数都不带(见 visual.ts 顶部红线)
+import {
+  BALLOON_COLORS,
+  BLP_TIMINGS,
+  FAR_BLUR_PX,
+  FAR_SWAY_RATIO,
+  LABEL_PLATE_ALPHA,
+  LABEL_TOP_PCT,
+  SKY_DAY,
+  SKY_NIGHT,
+  STAR_CLIP,
+  SWELL_SCALE,
+  GIFT_SWAY_DEG,
+  TWIN_BUDDY_SCALE,
+  balloonKey,
+  colorSkin,
+  giftBoxSvg,
+  ironSkin,
+  kindBadgeSvg,
+  kindSkin,
+  knotColor,
+  shardCount,
+  shardVectors,
+  skyDecorHtml,
+  stringSvg,
+  timingsCss,
+  tokensCss,
+  twinRibbonSvg
+} from "./visual";
+import { touchUpliftCss } from "../../art/kit/uiTouch";
 
 interface Balloon {
   id: number;
@@ -91,39 +107,99 @@ interface Balloon {
 }
 
 const CSS = `
-.blp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.blp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; ${tokensCss()} ${timingsCss()} }
 .blp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .blp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C75A82; box-shadow: 0 2px 6px rgba(210,120,160,.25); font-size: 14px; white-space: nowrap; }
+.blp-order { border: 2px solid #FFD6E6; background: linear-gradient(180deg, #FFFFFF, #FFF4FA); }
 .blp-sky { position: relative; height: ${SKY_H}px; border-radius: 16px; overflow: hidden; }
-.blp-balloon { position: absolute; width: 56px; height: 68px; border: none; border-radius: 50% 50% 46% 46%; cursor: pointer; font-size: 22px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.3); padding: 0; }
-.blp-balloon::after { content: ""; position: absolute; left: 50%; bottom: -12px; width: 2px; height: 12px; background: rgba(120,100,90,.5); }
+.blp-balloon { position: absolute; width: 56px; height: 68px; border: none; border-radius: 50% 50% 46% 46%; cursor: pointer; font-size: 22px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.3); padding: 0; background-color: rgba(0,0,0,0); }
+.blp-balloon > * { pointer-events: none; }
+/* 椭圆光泽条:白 35%、blur 1px、旋 -20°——体积感的第二笔 */
+.blp-balloon::before { content: ""; position: absolute; left: 15%; top: 9%; width: 18%; height: 42%; border-radius: 50%; background: rgba(255,255,255,.35); filter: blur(1px); transform: rotate(-20deg); }
 .blp-balloon:active { transform: scale(.9); }
+/* 气球结:clip-path 三角贴在底缘中点,颜色随主色压暗一档(内联) */
+.blp-knot { position: absolute; left: 50%; bottom: -5px; width: 10px; height: 6px; transform: translateX(-50%); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+/* 气球线:内联 SVG 二次贝塞尔垂坠弧(控制点偏移见 visual.stringControlOffsetPx) */
+.blp-string { position: absolute; left: 50%; top: 100%; margin-top: 4px; transform: translateX(-50%); overflow: visible; }
 .blp-expr { font-size: 15px; letter-spacing: -0.5px; }
+/* 数字/算式衬牌:躲开 22% 高度的主高光,白底圆角保可读 */
+.blp-tag { position: absolute; left: 50%; top: ${LABEL_TOP_PCT}%; transform: translate(-50%, -50%); background: rgba(255,255,255,${LABEL_PLATE_ALPHA}); border-radius: 8px; padding: 0 5px; color: #A8386A; text-shadow: none; line-height: 1.3; white-space: nowrap; }
+/* 特殊球徽记(W6R1-12):与衬牌同一挂点,同样躲开主高光;形状见 visual.kindBadgeSvg */
+.blp-kbadge { position: absolute; left: 50%; top: ${LABEL_TOP_PCT}%; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 1px rgba(90,74,60,.22)); }
 .blp-shielded { box-shadow: 0 0 0 4px #C9D8E8, 0 0 0 6px rgba(160,190,220,.5); }
 .blp-twin { box-shadow: 0 0 0 3px #FFE1F0, 0 0 0 5px rgba(240,150,200,.6); }
-.blp-far { filter: saturate(.8) brightness(1.06); }
+.blp-far { filter: saturate(.8) brightness(1.06) blur(${FAR_BLUR_PX}px); }
 .blp-gift { box-shadow: 0 0 0 3px #FFF0C4, 0 0 0 6px rgba(230,180,90,.45); }
+/* 双子副球:主球 100% + 副球 ${Math.round(TWIN_BUDDY_SCALE * 100)}% 缩放右上相贴,丝带另有 SVG */
+.blp-buddy { position: absolute; right: -24%; top: -12%; width: ${TWIN_BUDDY_SCALE * 100}%; height: ${TWIN_BUDDY_SCALE * 100}%; border-radius: 50% 50% 46% 46%; opacity: .95; }
+.blp-ribbon { position: absolute; right: -14%; top: -10%; }
+/* 礼物气球下挂的小礼盒:挂在气球线末端,常驻 ±${GIFT_SWAY_DEG}° 摆动 */
+.blp-giftbox { position: absolute; left: 50%; top: 100%; margin-top: 20px; transform-origin: 50% -20px; transform: translateX(-50%); animation: blpGiftSway var(--blp-gift-sway-ms, 1.1s) ease-in-out infinite alternate; }
+.blp-gift-drop { animation: blpGiftDrop var(--blp-gift-drop-ms, .5s) ease-in forwards; }
 /* 快飘出画面的气球：虚线圈 + 上挑的小箭头，形状说话，不只靠颜色 */
 .blp-leaving { outline: 3px dashed rgba(232,89,12,.85); outline-offset: 2px; }
 .blp-leaving::after { content: "⬆"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 13px; color: #E8590C; }
-.blp-pop { animation: blpPop .22s ease forwards; pointer-events: none; }
+/* 爆炸三阶段①:鼓胀 ${SWELL_SCALE} 倍(前 ${BLP_TIMINGS.swellMs}ms)再放大消失 */
+.blp-pop { animation: blpPop .22s ease-out forwards; pointer-events: none; }
 .blp-shake { animation: blpShake .34s ease; }
-@keyframes blpPop { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes blpPop { 0% { transform: scale(1); opacity: 1; } ${Math.round((BLP_TIMINGS.swellMs / 220) * 100)}% { transform: scale(${SWELL_SCALE}); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
 @keyframes blpShake { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
+/* 爆炸三阶段②:白闪一帧(step,鼓胀结束时亮起;reduced 也保留) */
+.blp-flash { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 70%); pointer-events: none; opacity: 0; animation: blpFlash var(--blp-flash-ms, 16ms) steps(1, end) var(--blp-swell-ms, 60ms) forwards; }
+@keyframes blpFlash { from { opacity: 1; } to { opacity: 0; } }
+/* 爆炸三阶段③:5 片同色橡皮裂片,月牙形放射旋转渐隐 */
+.blp-shard { position: absolute; width: 10px; height: 14px; margin: -7px 0 0 -5px; border-radius: 0 100% 0 100%; background: var(--blp-shard, #F0605F); box-shadow: inset -1px -2px 0 rgba(0,0,0,.14); pointer-events: none; transition: transform var(--blp-shard-ms, 320ms) ease-out var(--blp-swell-ms, 60ms), opacity var(--blp-shard-ms, 320ms) ease-out var(--blp-swell-ms, 60ms); }
 .blp-bit { position: absolute; width: 8px; height: 8px; border-radius: 2px; pointer-events: none; }
+.blp-bit-star { border-radius: 0; clip-path: ${STAR_CLIP}; }
+.blp-bit-dot { border-radius: 50%; }
+/* 天空装饰:两层软云 0.1×/0.2× 视差;夜关月亮与星子 */
+.blp-decor { position: absolute; inset: 0; pointer-events: none; }
+.blp-cloudpuff { position: absolute; border-radius: 50%; background: radial-gradient(ellipse at 50% 55%, var(--blp-cloud), rgba(255,255,255,0) 72%); }
+.blp-cloud-a { width: 46%; height: 24%; left: -6%; top: 5%; animation: blpDrift var(--blp-cloud-slow-ms, 52s) linear infinite alternate; }
+.blp-cloud-b { width: 34%; height: 18%; right: -4%; top: 26%; animation: blpDrift var(--blp-cloud-fast-ms, 26s) linear infinite alternate-reverse; }
+@keyframes blpDrift { from { transform: translateX(-6%); } to { transform: translateX(28%); } }
+.blp-moon { position: absolute; right: 7%; top: 9%; width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle at 35% 32%, #FFFBE6, var(--blp-moon) 55%, #EFD98F); box-shadow: 0 0 18px 4px rgba(255,243,201,.35); }
+.blp-starlet { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #FFF7D9; box-shadow: 0 0 6px 1px rgba(255,247,217,.8); }
+@keyframes blpGiftSway { from { transform: translateX(-50%) rotate(-${GIFT_SWAY_DEG}deg); } to { transform: translateX(-50%) rotate(${GIFT_SWAY_DEG}deg); } }
+@keyframes blpGiftDrop { to { transform: translateX(-50%) translateY(46px) rotate(8deg); opacity: 0; } }
 .blp-msg { text-align: center; min-height: 20px; color: #C75A82; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.4; }
 .blp-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.blp-bar[hidden] { display: none; }
 .blp-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFD6E6; color: #A8386A; cursor: pointer; box-shadow: 0 3px 0 #F0AFC8; }
 .blp-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #F0AFC8; }
-.blp-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
+.blp-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; min-height: 44px; }
 .blp-over { text-align: center; padding: 14px 8px; }
 .blp-over h3 { margin: 0 0 6px; font-size: 19px; color: #A8386A; }
 .blp-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }
 .blp-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+/* C-8:矮横屏只钳天空的「显示高」,SKY_H=420 的世界常量与上升时间一个字不动。
+   气球顶锚定(style.top=y),钳高后可见窗口仍是逃逸线附近那段,大小与修前被视口
+   裁出的窗口一致;收益是 HUD/播报/气球全部回到首屏,线下不再有够不着的气球 */
+@media (max-height:500px) {
+  .blp-wrap { padding: 8px; }
+  .blp-top { margin-bottom: 4px; }
+  .blp-badge { padding: 3px 8px; }
+  .blp-sky { max-height: max(96px, calc(100dvh - 200px)); }
+  .l99-stage-wrap .blp-sky { max-height: max(96px, calc(100dvh - 300px)); }
+  .blp-msg { margin-top: 4px; }
+}
+@media (max-height:840px) and (min-height:501px) {
+  .blp-sky { max-height: max(120px, calc(100dvh - 240px)); }
+  .l99-stage-wrap .blp-sky { max-height: max(120px, calc(100dvh - 320px)); }
+}
 @media (prefers-reduced-motion: reduce) {
   .blp-pop, .blp-shake { animation-duration: .01s; }
   .blp-open:active, .blp-balloon:active { transform: none; }
+  /* 摆动、云移、裂片全停;静态渐变体积与白闪保留 */
+  .blp-cloudpuff, .blp-giftbox { animation: none; }
+  .blp-shard { transition: none; opacity: 0; }
+  .blp-gift-drop { animation-duration: .01s; }
 }
+${touchUpliftCss([".blp-open", ".blp-back"])}
+/* N-121:模式键抬到 44;window6 守门仍消费 touchUpliftCss(=40),本条叠在后面 */
+.blp-open,.blp-back{min-height:44px;}
+.blp-open,.blp-back{box-sizing:border-box;}
 `;
 
 function reducedMotion(): boolean {
@@ -137,29 +213,56 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return node;
 }
 
-/** 把气球做成一颗按钮：颜色 + 图案两条通道，色觉不一样的孩子也分得清 */
-function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () => number): void {
+/**
+ * 把气球做成一颗按钮：颜色 + 图案两条通道，色觉不一样的孩子也分得清。
+ * 1.3 只换皮：三层渐变体积 + 气球结 + 贝塞尔气球线 + 特殊气球本体差异件；
+ * 按钮热区（56×68 与 far 缩放）、aria-label 语义、dataset 镜像一个字不动。
+ * （export 只为视觉冒烟测试；游戏加载器仍只用 meta / mount。）
+ */
+export function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () => number, windDir = 0): void {
   const node = b.el;
   node.className = "blp-balloon";
   if (b.far) node.classList.add("blp-far");
-  const bg = KIND_BG[b.kind];
-  if (bg) {
-    node.style.background = bg;
-    node.textContent = KINDS[b.kind].emoji;
+  const scale = b.far ? FAR_SCALE : 1;
+  const special = kindSkin(b.kind);
+  let label = "";
+  let plate = false;
+  // 特殊球身份改挂 12px 白底描边 SVG 徽记(W6R1-12),不再贴系统 emoji
+  let badge = "";
+  if (special) {
+    node.style.background = special;
+    badge = kindBadgeSvg(b.kind, b.color, scale);
     if (b.kind === "gift") node.classList.add("blp-gift");
   } else {
-    node.style.background = BALLOON_COLORS[b.color].css;
+    node.style.background =
+      b.kind === "iron" ? ironSkin(BALLOON_COLORS[b.color].key, scale) : colorSkin(b.color);
     if (b.kind === "iron") node.classList.add("blp-shielded");
     if (b.kind === "twin") node.classList.add("blp-twin");
     if (mode === "math") {
       node.classList.add("blp-expr");
-      node.textContent = mathExprFor(b.num, rand);
+      label = mathExprFor(b.num, rand);
+      plate = true;
     } else if (mode === "number") {
-      node.textContent = String(b.num);
-    } else {
-      node.textContent = b.kind === "twin" ? KINDS.twin.emoji : b.kind === "iron" ? KINDS.iron.emoji : "";
+      label = String(b.num);
+      plate = true;
+    } else if (b.kind === "twin" || b.kind === "iron") {
+      badge = kindBadgeSvg(b.kind, b.color, scale);
     }
   }
+  node.textContent = "";
+  if (label) node.appendChild(el("span", plate ? "blp-tag" : "blp-label", label));
+  if (badge) node.insertAdjacentHTML("beforeend", badge);
+  const knot = el("span", "blp-knot");
+  knot.style.background = knotColor(balloonKey(b.kind, b.color));
+  node.appendChild(knot);
+  node.insertAdjacentHTML("beforeend", stringSvg(windDir));
+  if (b.kind === "twin") {
+    const buddy = el("span", "blp-buddy");
+    buddy.style.background = colorSkin(b.color);
+    node.appendChild(buddy);
+    node.insertAdjacentHTML("beforeend", twinRibbonSvg(BALLOON_COLORS[b.color].key, scale));
+  }
+  if (b.kind === "gift") node.insertAdjacentHTML("beforeend", giftBoxSvg(scale));
   if (b.far) {
     node.style.width = `${Math.round(56 * FAR_SCALE)}px`;
     node.style.height = `${Math.round(68 * FAR_SCALE)}px`;
@@ -173,9 +276,36 @@ function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () => number
   node.dataset.shield = b.kind === "iron" ? "1" : "0";
 }
 
+/**
+ * 爆炸三阶段的后两段（鼓胀在 .blp-pop 的关键帧里）：
+ * 白闪一帧（reduced 也保留，是「点中了」的功能反馈）→ 5 片同色橡皮裂片
+ * 放射抛物线 + 旋转渐隐（reduced 不生成）。总时长见 visual.burstTotalMs() ≤ 400ms。
+ */
+function burstFx(sky: HTMLElement, x: number, y: number, color: string, reduce: boolean, jan: Janitor): void {
+  const flash = el("div", "blp-flash");
+  flash.style.left = `${x}px`;
+  flash.style.top = `${y}px`;
+  sky.appendChild(flash);
+  jan.after(BLP_TIMINGS.swellMs + BLP_TIMINGS.flashMs + 60, () => flash.remove());
+  const vecs = shardVectors(shardCount(reduce));
+  for (const v of vecs) {
+    const s = el("div", "blp-shard");
+    s.style.setProperty("--blp-shard", color);
+    s.style.left = `${x}px`;
+    s.style.top = `${y}px`;
+    sky.appendChild(s);
+    jan.after(16, () => {
+      s.style.transform = `translate(${v.dx}px, ${v.dy}px) rotate(${v.rot}deg)`;
+      s.style.opacity = "0";
+    });
+    jan.after(BLP_TIMINGS.swellMs + BLP_TIMINGS.shardMs + 40, () => s.remove());
+  }
+}
+
 function confetti(sky: HTMLElement, x: number, y: number, color: string, n: number, jan: Janitor): void {
   for (let i = 0; i < n; i++) {
-    const bit = el("div", "blp-bit");
+    // 星星 / 圆点混着撒，比 1.2 的一色方块更像「彩纸 + 星星」
+    const bit = el("div", i % 2 === 0 ? "blp-bit blp-bit-star" : "blp-bit blp-bit-dot");
     bit.style.background = color;
     bit.style.left = `${x}px`;
     bit.style.top = `${y}px`;
@@ -233,7 +363,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ${cfg.wind ? `<span class="blp-badge blp-wind"></span>` : ""}
       <span class="blp-badge blp-life">💗💗💗</span>
     </div>
-    <div class="blp-sky" style="background:${cfg.night ? "linear-gradient(180deg,#2E3560,#5A4E8C)" : "linear-gradient(180deg,#C5E8FF,#F0F8FF)"}"></div>
+    <div class="blp-sky" style="background:${cfg.night ? SKY_NIGHT : SKY_DAY}"><div class="blp-decor">${skyDecorHtml(cfg.night)}</div></div>
     <div class="blp-msg"></div>
   `;
   stage.appendChild(wrap);
@@ -341,9 +471,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     b.gone = true;
     if (popAnim) {
       b.el.classList.add("blp-pop");
+      const skyW = Math.max(1, skyEl.clientWidth || 336);
+      const px = (b.x / 100) * skyW;
+      burstFx(skyEl, px, b.y, balloonKey(b.kind, b.color), reduce, jan);
+      if (b.kind === "gift") b.el.querySelector(".blp-giftbox")?.classList.add("blp-gift-drop");
       if (!reduce) {
-        const skyW = Math.max(1, skyEl.clientWidth || 336);
-        confetti(skyEl, (b.x / 100) * skyW, b.y, BALLOON_COLORS[b.color].key, 4, jan);
+        confetti(skyEl, px, b.y, BALLOON_COLORS[b.color].key, 4, jan);
       }
       jan.after(240, () => b.el.remove());
     } else {
@@ -547,7 +680,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         wave: 0,
         gone: false
       };
-      paintBalloon(b, cfg.mode, Math.random);
+      // 气球线的弯向只读既有风向做映射（视觉），风力数值一个不改
+      paintBalloon(b, cfg.mode, Math.random, cfg.wind ? windSign(clock, cfg.windFlipMs) : 0);
       node.style.left = `${b.x}%`;
       jan.on(node, "pointerdown", (ev: Event) => {
         ev.preventDefault();
@@ -592,7 +726,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       b.y = pos.y;
       b.el.style.left = `${b.x}%`;
       b.el.style.top = `${b.y}px`;
-      b.el.style.marginLeft = `${pos.swayPx}px`;
+      // 远景摆幅只有近景的 60%（纯渲染视差；逻辑位置 b.x/b.y 原样）
+      b.el.style.marginLeft = `${pos.swayPx * (b.far ? FAR_SWAY_RATIO : 1)}px`;
       // 快飘出画面的标出来：护礼物、按顺序这些关最吃「先处理最靠上的」
       const rise = (b.kind === "gift" ? giftAir : air).riseSpeed;
       b.el.classList.toggle("blp-leaving", b.kind !== "cloud" && aboutToEscape(b.y, rise));
@@ -674,7 +809,7 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
       <span class="blp-badge blp-miss">🎈 还能漏 ${FEST_MISS_LIMIT}</span>
       <span class="blp-badge blp-best"></span>
     </div>
-    <div class="blp-sky" style="background:linear-gradient(180deg,#C5E8FF,#FFF4FA)"></div>
+    <div class="blp-sky" style="background:${SKY_DAY}"><div class="blp-decor">${skyDecorHtml(false)}</div></div>
     <div class="blp-msg">气球节开始啦！戳破升上来的气球，🎁 礼物气球别戳、也别让它跑掉～</div>
     <div class="blp-again"><button class="blp-back" type="button">⬅️ 回到关卡地图</button></div>
   `;
@@ -712,9 +847,12 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
     b.gone = true;
     if (anim) {
       b.el.classList.add("blp-pop");
+      const skyW = Math.max(1, skyEl.clientWidth || 336);
+      const px = (b.x / 100) * skyW;
+      burstFx(skyEl, px, b.y, balloonKey(b.kind, b.color), reduce, jan);
+      if (b.kind === "gift") b.el.querySelector(".blp-giftbox")?.classList.add("blp-gift-drop");
       if (!reduce) {
-        const skyW = Math.max(1, skyEl.clientWidth || 336);
-        confetti(skyEl, (b.x / 100) * skyW, b.y, BALLOON_COLORS[b.color].key, 4, jan);
+        confetti(skyEl, px, b.y, BALLOON_COLORS[b.color].key, 4, jan);
       }
       jan.after(240, () => b.el.remove());
     } else {
@@ -937,7 +1075,8 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
       b.y = pos.y;
       b.el.style.left = `${b.x}%`;
       b.el.style.top = `${b.y}px`;
-      b.el.style.marginLeft = `${pos.swayPx}px`;
+      // 远景摆幅只有近景的 60%（纯渲染视差；逻辑位置 b.x/b.y 原样）
+      b.el.style.marginLeft = `${pos.swayPx * (b.far ? FAR_SWAY_RATIO : 1)}px`;
       // 快飘出画面的标出来：「先打最靠上的」这句话当场看得见
       b.el.classList.toggle("blp-leaving", b.kind !== "cloud" && aboutToEscape(b.y, rise));
       if (b.y < ESCAPE_Y) {

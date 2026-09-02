@@ -8,7 +8,7 @@ export const meta = {
   emoji: "❄️",
   category: "action" as const,
   color: "#DCEAF6",
-  blurb: "凛凛怕岩浆、焰焰怕冰水,两人合力闯 188 关机关森林;一个人玩按 Tab 换角色。",
+  blurb: "凛凛怕岩浆、焰焰怕冰水,两人在一半冰蓝一半暖橙的森林里合力闯 188 关机关;单人按 Tab 换角色。",
   // levels.ts 八章合计 188 关;index.ts 可切单人 Tab 换人或双人两套键位,没有无尽
   modes: ["campaign", "coop", "twoPlayer"] as const,
   levels: 188,

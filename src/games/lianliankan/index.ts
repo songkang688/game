@@ -4,7 +4,6 @@ export { meta };
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
 import {
-  MASK_FACE,
   anyMove,
   applyGravity,
   createBoard,
@@ -21,12 +20,15 @@ import {
 } from "./board";
 import { CHAPTERS, LEVELS, THEME_EMOJIS, turnsOf, type LlkLevel } from "./levels";
 import {
+  CELL_GAP_PX,
   HINT_MAX,
   Janitor,
+  RING_FRAC,
   SHAKE_MS,
   beginCollapse,
   bgOf,
   boardCleared,
+  cellSizePx,
   clearMs,
   collapseMs,
   endlessInit,
@@ -53,48 +55,133 @@ import {
   type LinkState,
   type Sfx
 } from "./logic";
+import {
+  HINT_GLOW_MS,
+  SHUFFLE_FX_MS,
+  hudGlyphSvg,
+  maskFaceSvg,
+  meteorPoints,
+  meteorSvg,
+  slimTile,
+  tileFaceSvg,
+  tileIconName,
+  type HudGlyph
+} from "./art";
 
 const CSS = `
-.llk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF2E4, #FDEBF3); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
-.llk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
-.llk-badge { background: #fff; border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D98548; box-shadow: 0 2px 6px rgba(220,160,100,.25); font-size: 14px; white-space: nowrap; }
-.llk-badge.llk-hurry { color: #E8590C; animation: llkBlink 1s infinite; }
+.llk-wrap {
+  --llk-desk: #E8D5BC;
+  --llk-tile-top: #FFFDF6;
+  --llk-tile-top2: #F4EDE0;
+  --llk-tile-side: #D8CBB4;
+  --llk-select: #F4859F;
+  --llk-trail: #FFD678;
+  --llk-hint: rgba(255,214,120,.28);
+  --llk-hurry: #F0955A;
+  --llk-ms-hover: 120ms;
+  --llk-ms-trail: 240ms;
+  --llk-ms-clear: 200ms;
+  --llk-ms-hint: 2s;
+  --llk-ms-shuffle: 180ms;
+  --llk-ms-heart: 900ms;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    repeating-linear-gradient(93deg, rgba(150,104,58,.05) 0 2px, rgba(150,104,58,0) 2px 9px),
+    repeating-linear-gradient(88deg, rgba(120,84,48,.045) 0 13px, rgba(120,84,48,0) 13px 31px),
+    linear-gradient(180deg, #F2E2C8, var(--llk-desk));
+  border-radius: 16px; padding: 12px; user-select: none; position: relative; z-index: 0; overflow: hidden;
+}
+/* 茶室四角的茶点小装饰:俯视茶杯(环 + 心)与茶点(小圆点),低饱和不抢牌面 */
+.llk-wrap::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at calc(100% - 22px) 22px, rgba(196,150,96,.22) 0 7px, rgba(196,150,96,0) 8px),
+    radial-gradient(circle at calc(100% - 22px) 22px, rgba(146,106,66,0) 0 11px, rgba(146,106,66,.20) 11px 14px, rgba(146,106,66,0) 15px),
+    radial-gradient(circle at 20px calc(100% - 20px), rgba(196,150,96,.18) 0 6px, rgba(196,150,96,0) 7px),
+    radial-gradient(circle at 20px calc(100% - 20px), rgba(146,106,66,0) 0 9px, rgba(146,106,66,.16) 9px 12px, rgba(146,106,66,0) 13px),
+    radial-gradient(circle at 14px 18px, rgba(146,106,66,.12) 0 4px, rgba(146,106,66,0) 5px),
+    radial-gradient(circle at 27px 12px, rgba(146,106,66,.10) 0 3.5px, rgba(146,106,66,0) 4.5px),
+    radial-gradient(circle at calc(100% - 16px) calc(100% - 14px), rgba(146,106,66,.12) 0 4px, rgba(146,106,66,0) 5px),
+    radial-gradient(circle at calc(100% - 29px) calc(100% - 20px), rgba(146,106,66,.10) 0 3.5px, rgba(146,106,66,0) 4.5px);
+}
+.llk-top { display: flex; justify-content: center; align-items: stretch; margin-bottom: 8px; gap: 5px; flex-wrap: wrap; }
+.llk-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(180deg, #FFFEFA, #FFF3E2); border-radius: 12px; padding: 5px 7px; font-weight: 700; color: #8A6238; box-shadow: 0 2px 0 #E2CFB2, 0 3px 7px rgba(160,120,70,.16); font-size: 14px; white-space: nowrap; }
+.llk-glyph { width: 14px; height: 14px; flex: none; }
+.llk-bico { display: inline-flex; width: 14px; height: 14px; flex: none; }
+.llk-bico .llk-glyph { width: 100%; height: 100%; }
+.llk-badge.llk-hurry { background: linear-gradient(180deg, #FFAF7E, var(--llk-hurry)); color: #FFF9F2; box-shadow: 0 2px 0 #D07A42, 0 3px 9px rgba(240,149,90,.4); animation: llkHeart var(--llk-ms-heart) ease-in-out infinite; }
 .llk-badge.llk-rule { color: #7A5AA8; background: #F3ECFF; }
-@keyframes llkBlink { 50% { opacity: .5; } }
+@keyframes llkHeart { 50% { transform: scale(1.03); } }
 .llk-tools { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
-.llk-tool { border: none; border-radius: 14px; min-height: 44px; min-width: 118px; padding: 6px 14px; font-weight: 700; background: #FFD9A8; color: #8A5A20; cursor: pointer; box-shadow: 0 3px 0 #EFBC82; font-size: 15px; font-family: inherit; }
-.llk-tool.llk-hintbtn { background: #D9ECFF; color: #2F6DA8; box-shadow: 0 3px 0 #A8CDEF; }
-.llk-tool:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFBC82; }
+.llk-tool { display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; border-radius: 12px; min-height: 44px; min-width: 74px; padding: 4px 8px; font-weight: 700; background: linear-gradient(180deg, #FFE3B8, #FFD199); color: #8A5A20; cursor: pointer; box-shadow: 0 3px 0 #E5B276, 0 4px 8px rgba(180,130,70,.2); font-size: 14px; font-family: inherit; }
+.llk-tool.llk-hintbtn { background: linear-gradient(180deg, #E2F1FF, #CBE4FB); color: #2F6DA8; box-shadow: 0 3px 0 #9FC6E8, 0 4px 8px rgba(90,140,190,.2); }
+.llk-tool:active { transform: translateY(1px); box-shadow: 0 2px 0 #E5B276; }
+.llk-tool.llk-hintbtn:active { box-shadow: 0 2px 0 #9FC6E8; }
 .llk-tool:disabled { opacity: .5; }
 .llk-boardbox { position: relative; }
 .llk-board { display: grid; gap: 3px; transition: transform .3s ease; }
+/* N-72:915 上按宽摊方格,4×4 一格 ~200 盘面 crop 496。收的是盘,洗牌/提示勿挤 */
+@media (max-height: 500px) {
+  .llk-board { max-width: min(420px, 78dvh); margin-inline: auto; width: 100%; }
+  .llk-msg { min-height: 0; margin-top: 4px; }
+}
+@media (max-height: 840px) and (min-height:501px) {
+  .llk-board { max-width: min(520px, 70dvh); margin-inline: auto; width: 100%; }
+  .llk-tools { position: sticky; bottom: 0; z-index: 4; padding: 4px 0 2px;
+    background: linear-gradient(180deg, rgba(255,248,236,0), #FFF8EC 40%); }
+}
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
-.llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; font-size: clamp(13px, 4vw, 24px); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: 0 2px 4px rgba(200,140,90,.18); transition: transform .12s, opacity .2s, box-shadow .12s; }
+/* 麻将砖三层:顶面米白渐变(圆角 10px)+ 底部 3px 暖灰立面 + 1px 软影 */
+.llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; position: relative; background-color: var(--llk-tile-top); background-image: linear-gradient(160deg, var(--llk-tile-top), rgba(255,253,246,.24) 46%, rgba(216,203,180,.34) 100%); box-shadow: 0 3px 0 var(--llk-tile-side), 0 4px 5px rgba(140,105,66,.2); transition: transform var(--llk-ms-hover) ease-out, box-shadow var(--llk-ms-hover) ease-out, opacity .2s; }
+/* 图标绘制区 = 牌面 68% */
+.llk-cell > span { width: 68%; height: 68%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.llk-cell .llk-face { width: 100%; height: 100%; display: block; filter: drop-shadow(0 1px 1px rgba(120,90,50,.22)); }
 .llk-cell.llk-edge { aspect-ratio: auto; background: transparent !important; box-shadow: none; pointer-events: none; }
 .llk-cell.llk-gone { background: transparent !important; box-shadow: none; cursor: default; }
-.llk-cell.llk-sel { box-shadow: 0 0 0 3px #FF9E5E; transform: scale(1.08); }
-.llk-cell.llk-hint { box-shadow: 0 0 0 3px #4C9BE8; animation: llkHint .6s ease-in-out 2; }
-.llk-cell.llk-mask { background: #E7E0F5 !important; color: #8B7BB8; }
-.llk-cell.llk-linking { box-shadow: 0 0 0 3px #FFB347, 0 0 12px 3px rgba(255,160,70,.6); }
-.llk-cell.llk-clear { animation: llkClear .18s ease forwards; }
+/* 已消除的格位留一道极浅凹槽痕迹:伪元素画的,不新增节点、不挡任何点击 */
+.llk-cell.llk-gone:not(.llk-edge)::after { content: ""; position: absolute; inset: 8%; border-radius: 9px; background: rgba(120,90,54,.05); box-shadow: inset 0 1.5px 3px rgba(120,90,54,.1), inset 0 -1px 1.5px rgba(255,253,246,.5); pointer-events: none; }
+@media (hover: hover) and (pointer: fine) {
+  .llk-cell:not(.llk-gone):not(.llk-edge):hover { transform: translateY(-2px); box-shadow: 0 5px 0 var(--llk-tile-side), 0 8px 10px rgba(140,105,66,.24); }
+  .llk-cell.llk-shape3:not(.llk-gone):hover { transform: translateY(-2px) rotate(45deg); }
+}
+.llk-cell.llk-sel { transform: translateY(-4px); box-shadow: 0 0 0 3px var(--llk-select), 0 6px 0 var(--llk-tile-side), 0 9px 14px rgba(244,133,159,.42); }
+.llk-cell.llk-hint { box-shadow: 0 0 0 3px var(--llk-hint), 0 0 16px 7px var(--llk-hint), 0 3px 0 var(--llk-tile-side); animation: llkHintBreath calc(var(--llk-ms-hint) / 2) ease-in-out 2; }
+.llk-cell.llk-mask { background-color: #E7E0F5 !important; }
+.llk-cell.llk-linking { box-shadow: 0 0 0 3px var(--llk-trail), 0 0 14px 4px rgba(255,214,120,.65), 0 3px 0 var(--llk-tile-side); }
+.llk-cell.llk-clear { animation: llkClear var(--llk-ms-clear) ease-in forwards; }
 .llk-cell.llk-shake { animation: llkShake ${SHAKE_MS}ms ease; }
-.llk-cell:active { transform: scale(.92); }
+.llk-cell.llk-shuf { animation: llkShufHop var(--llk-ms-shuffle) ease-in-out both; }
+.llk-cell:active { transform: scale(.94); }
 /* 同色系靠轮廓区分，色觉不敏感也认得出 */
 .llk-shape0 { border-radius: 50%; }
 .llk-shape1 { border-radius: 6px; }
 .llk-shape2 { border-radius: 50% 12% 50% 12%; }
 .llk-shape3 { border-radius: 26%; transform: rotate(45deg); }
-.llk-shape3 > span { display: block; transform: rotate(-45deg); }
+.llk-shape3 > span { transform: rotate(-45deg); }
 .llk-shape4 { border-radius: 46% 46% 40% 40%; }
-.llk-cell.llk-shape3.llk-sel { transform: rotate(45deg) scale(1.08); }
-@keyframes llkClear { to { transform: scale(.2); opacity: 0; } }
+.llk-cell.llk-shape3.llk-sel { transform: translateY(-4px) rotate(45deg); }
+/* 360px 兜底:牌面量出来不足 34px 时省略侧沿,只留顶面 + 描边 */
+.llk-board.llk-slim .llk-cell { box-shadow: 0 0 0 1px var(--llk-tile-side); }
+.llk-board.llk-slim .llk-cell.llk-gone, .llk-board.llk-slim .llk-cell.llk-edge { box-shadow: none; }
+.llk-board.llk-slim .llk-cell.llk-sel { box-shadow: 0 0 0 3px var(--llk-select); }
+.llk-board.llk-slim .llk-cell.llk-linking { box-shadow: 0 0 0 3px var(--llk-trail); }
+.llk-board.llk-slim .llk-cell.llk-hint { box-shadow: 0 0 0 3px var(--llk-hint), 0 0 12px 5px var(--llk-hint); }
+@keyframes llkClear { 45% { transform: perspective(320px) rotateY(78deg) scale(.86); opacity: .95; } 100% { transform: perspective(320px) rotateY(96deg) scale(.18); opacity: 0; } }
 @keyframes llkShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-@keyframes llkHint { 50% { opacity: .55; } }
-.llk-line { position: absolute; inset: 0; pointer-events: none; }
-.llk-msg { text-align: center; min-height: 22px; color: #D98548; font-weight: 700; margin-top: 8px; font-size: 15px; line-height: 1.45; }
-.llk-modebar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+@keyframes llkHintBreath { 50% { box-shadow: 0 0 0 5px var(--llk-hint), 0 0 26px 13px var(--llk-hint), 0 3px 0 var(--llk-tile-side); } }
+@keyframes llkShufHop { 45% { transform: translateY(-7px) rotate(2deg) scale(.96); } }
+@keyframes llkTrailFade { to { opacity: 0; } }
+/* 流星覆盖层:独立 SVG 挂在盘面容器最后,pointer-events: none 绝不挡点击 */
+.llk-fx { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.llk-line { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: block; animation: llkTrailFade 200ms ease-out var(--llk-ms-trail) both; }
+.llk-line.llk-line-calm { animation: none; }
+.llk-line .llk-dust { filter: drop-shadow(0 0 3px rgba(255,214,120,.8)); }
+.llk-msg { text-align: center; min-height: 22px; color: #8A5A30; font-weight: 700; margin-top: 8px; font-size: 15px; line-height: 1.45; }
+.llk-modebar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关时模式条要真的让位 */
+.llk-modebar[hidden] { display: none; }
 .llk-open { border: none; border-radius: 14px; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFE0B8; color: #A05C1E; cursor: pointer; box-shadow: 0 3px 0 #EFC291; }
-.llk-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFC291; }
+.llk-open:active { transform: translateY(1px); box-shadow: 0 2px 0 #EFC291; }
 .llk-back { border: none; border-radius: 14px; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
 .llk-over { text-align: center; padding: 14px 8px; }
 .llk-over h3 { margin: 0 0 6px; font-size: 19px; color: #A05C1E; }
@@ -102,8 +189,15 @@ const CSS = `
 .llk-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) {
   .llk-board, .llk-cell { transition: none; }
-  .llk-badge.llk-hurry, .llk-cell.llk-hint { animation: none; }
+  /* hurry 只变色不缩放;洗牌瞬换;流星不滑动;翻转消散改淡出 */
+  .llk-badge.llk-hurry, .llk-cell.llk-shuf, .llk-line { animation: none; }
+  .llk-cell.llk-hint { animation: none; }
+  .llk-cell.llk-clear { animation: llkFadeOut 120ms ease forwards; }
+  .llk-cell:hover, .llk-cell.llk-sel { transform: none; }
+  .llk-cell.llk-shape3:hover, .llk-cell.llk-shape3.llk-sel { transform: rotate(45deg); }
+  .llk-cell:not(.llk-gone):not(.llk-edge):hover { box-shadow: 0 0 0 2px var(--llk-select), 0 3px 0 var(--llk-tile-side); }
 }
+@keyframes llkFadeOut { to { opacity: 0; } }
 `;
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text?: string): T {
@@ -159,7 +253,8 @@ interface ViewHooks {
 class BoardView {
   readonly root: HTMLElement;
   private readonly boardEl: HTMLElement;
-  private readonly canvas: HTMLCanvasElement;
+  /** 流星覆盖层的宿主:里面挂独立的 <svg class="llk-line">,永远在盘面容器最后 */
+  private readonly fx: HTMLElement;
   private readonly cells: HTMLButtonElement[][] = [];
   private link: LinkState = linkInit();
   private frozen = false;
@@ -175,8 +270,8 @@ class BoardView {
   ) {
     this.root = el("div", "llk-boardbox");
     this.boardEl = el("div", "llk-board");
-    this.canvas = el<HTMLCanvasElement>("canvas", "llk-line");
-    this.root.append(this.boardEl, this.canvas);
+    this.fx = el("div", "llk-fx");
+    this.root.append(this.boardEl, this.fx);
     // 一个委托监听管整块棋盘：无尽补盘时不会越攒越多
     this.jan.on(this.boardEl, "click", (ev: Event) => {
       const hit = (ev.target as HTMLElement | null)?.closest?.(".llk-cell") as HTMLElement | null;
@@ -225,14 +320,36 @@ class BoardView {
     this.clearLine();
     this.build();
     this.render();
+    this.fit();
   }
 
   freeze(): void {
     this.frozen = true;
   }
 
+  /** 收摊：冻结输入、整体拆掉流星覆盖层（计时归零由 Janitor 统一管） */
+  dispose(): void {
+    this.freeze();
+    this.clearLine();
+  }
+
   get state(): BoardState {
     return this.board;
+  }
+
+  /** 这套主题的键：图标映射按它转起点，v 相同必同款 */
+  private get themeKey(): string {
+    return this.emojis[0] ?? "";
+  }
+
+  /** 360px 兜底：量出真实牌宽，低于 34px 就切成「顶面 + 描边」的轻量画法 */
+  fit(): void {
+    const w = this.boardEl.clientWidth;
+    const px =
+      w > 0
+        ? (w - CELL_GAP_PX * (this.board.cols + 1)) / (this.board.cols + RING_FRAC * 2)
+        : cellSizePx(this.board.cols);
+    this.boardEl.classList.toggle("llk-slim", slimTile(px));
   }
 
   render(): void {
@@ -245,8 +362,8 @@ class BoardView {
         node.className = "llk-cell";
         if (v < 0) {
           node.classList.add("llk-gone");
-          span.textContent = "";
-          node.style.background = "";
+          this.setFace(span, "", "");
+          node.style.backgroundColor = "";
           node.setAttribute("aria-hidden", "true");
           continue;
         }
@@ -256,26 +373,55 @@ class BoardView {
         node.classList.add(shapeClass(v));
         if (hidden) {
           node.classList.add("llk-mask");
-          span.textContent = MASK_FACE;
-          node.style.background = "";
+          this.setFace(span, "mask", maskFaceSvg());
+          node.style.backgroundColor = "";
           node.setAttribute("aria-label", "戴着面具的图案，点一下看看");
         } else {
-          span.textContent = this.emojis[v];
-          node.style.background = bgOf(v);
-          node.setAttribute("aria-label", `图案 ${this.emojis[v]}`);
+          this.setFace(span, `${this.themeKey}#${v}`, tileFaceSvg(this.themeKey, v));
+          node.style.backgroundColor = bgOf(v);
+          node.setAttribute("aria-label", `图案 ${tileIconName(this.themeKey, v)}`);
         }
         if (picked) node.classList.add("llk-sel");
       }
     }
   }
 
-  /** 提示：把真求解出来的一对高亮一下 */
+  /** 牌面只在真的换款时才重写 innerHTML，render 频繁跑也不抖 */
+  private setFace(span: HTMLElement, key: string, svg: string): void {
+    if (span.dataset.face === key) return;
+    span.dataset.face = key;
+    span.innerHTML = svg;
+  }
+
+  /** 提示：判定真求解出来的那一对泛柔光（呼吸两次共 2s） */
   highlight(pair: [Pt, Pt]): void {
     for (const [r, c] of pair) {
       const node = this.cells[r][c];
       node.classList.add("llk-hint");
-      this.jan.after(1400, () => node.classList.remove("llk-hint"));
+      this.jan.after(HINT_GLOW_MS, () => node.classList.remove("llk-hint"));
     }
+  }
+
+  /** 洗牌：全部牌小幅腾空转位（180ms 交错）；安静模式瞬换不动 */
+  shuffleFx(): void {
+    if (this.calm) return;
+    const { R, C } = this.board;
+    for (let r = 1; r < R - 1; r++) {
+      for (let c = 1; c < C - 1; c++) {
+        if (this.board.grid[r][c] < 0) continue;
+        const node = this.cells[r][c];
+        node.style.animationDelay = `${((r + c) % 5) * 14}ms`;
+        node.classList.add("llk-shuf");
+      }
+    }
+    this.jan.after(SHUFFLE_FX_MS + 90, () => {
+      for (const row of this.cells) {
+        for (const node of row) {
+          node.classList.remove("llk-shuf");
+          node.style.animationDelay = "";
+        }
+      }
+    });
   }
 
   private onCell(r: number, c: number): void {
@@ -323,7 +469,7 @@ class BoardView {
     }
   }
 
-  /** 连上了：画线 → 撑住 → 缩掉 → 收拢滑动 → 回到待命 */
+  /** 连上了：流星滑过 → 到达 → 两张牌翻转消散 → 收拢滑动 → 回到待命 */
   private runLink(pair: [Pt, Pt], path: Pt[]): void {
     const [a, z] = pair;
     this.hooks.sfx("pop");
@@ -332,7 +478,6 @@ class BoardView {
     this.drawPath(path);
 
     this.jan.after(linkHoldMs(this.calm), () => {
-      this.clearLine();
       for (const [r, c] of pair) {
         const node = this.cells[r][c];
         node.classList.remove("llk-linking");
@@ -340,6 +485,8 @@ class BoardView {
       }
       this.jan.after(clearMs(this.calm), () => {
         for (const [r, c] of pair) this.cells[r][c].classList.remove("llk-clear");
+        // 流星焰尾陪着翻转淡完（CSS 那头在褪），这里才整体收走
+        this.clearLine();
         removePair(this.board, a, z);
         const moves = applyGravity(this.board, this.gravity);
         this.hooks.afterCollapse();
@@ -389,44 +536,24 @@ class BoardView {
     return longest;
   }
 
-  /** 画出真实路径（含拐点）的发光折线 */
+  /**
+   * 画出真实路径（含拐点）的流星光带。
+   * 折线坐标是 `meteorPoints` 把判定算出的拐点一比一映射成格子中心——
+   * 一个点都不自己算、不加、不减；「线是怎么绕过去的」全由判定说了算。
+   */
   private drawPath(path: readonly Pt[]): void {
     const w = this.boardEl.clientWidth;
     const h = this.boardEl.clientHeight;
     if (!w || !h) return;
-    this.canvas.width = w;
-    this.canvas.height = h;
-    const c2d = this.canvas.getContext("2d");
-    if (!c2d) return;
-    c2d.clearRect(0, 0, w, h);
-    const pts = path.map(([r, c]) => {
+    const pts = meteorPoints(path, (r, c) => {
       const node = this.cells[r][c];
       return [node.offsetLeft + node.offsetWidth / 2, node.offsetTop + node.offsetHeight / 2];
     });
-    c2d.lineCap = "round";
-    c2d.lineJoin = "round";
-    c2d.strokeStyle = "rgba(255,190,120,.55)";
-    c2d.lineWidth = 11;
-    c2d.beginPath();
-    pts.forEach(([x, y], i) => (i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y)));
-    c2d.stroke();
-    c2d.strokeStyle = "#FF8A4C";
-    c2d.lineWidth = 4;
-    c2d.beginPath();
-    pts.forEach(([x, y], i) => (i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y)));
-    c2d.stroke();
-    // 拐点上点一颗小圆点，让「线是怎么绕过去的」一目了然
-    c2d.fillStyle = "#FFD8A8";
-    for (let i = 1; i < pts.length - 1; i++) {
-      c2d.beginPath();
-      c2d.arc(pts[i][0], pts[i][1], 5, 0, Math.PI * 2);
-      c2d.fill();
-    }
+    this.fx.innerHTML = meteorSvg(pts, w, h, { calm: this.calm });
   }
 
   clearLine(): void {
-    const c2d = this.canvas.getContext("2d");
-    if (c2d) c2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.fx.innerHTML = "";
   }
 
   clearSelection(): void {
@@ -459,28 +586,31 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   );
 
   const wrap = el("div", "llk-wrap");
+  // 顶栏卡片化:剩余对数 / 计时 / 洗牌 / 提示四枚圆角卡片一行(360px 也放得下)
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="llk-top">
-      <span class="llk-badge llk-left">🧸 剩 0 对</span>
-      <span class="llk-badge llk-time">⏰ 0 秒</span>
+      <span class="llk-badge llk-left">${hudGlyphSvg("pairs")}<b class="llk-btext">剩0对</b></span>
+      <span class="llk-badge llk-time">${hudGlyphSvg("clock")}<b class="llk-btext">0秒</b></span>
+      <button class="llk-tool llk-shuffle" type="button">${hudGlyphSvg("shuffle")}<b class="llk-btext">洗牌×${cfg.shuffles}</b></button>
+      <button class="llk-tool llk-hintbtn" type="button"><span class="llk-bico">${hudGlyphSvg("bulb")}</span><b class="llk-btext">提示×${HINT_MAX}</b></button>
       ${ruleChip(cfg) ? `<span class="llk-badge llk-rule">${ruleChip(cfg)}</span>` : ""}
     </div>
     <div class="llk-holder"></div>
-    <div class="llk-tools">
-      <button class="llk-tool llk-hintbtn" type="button">💡 提示 x${HINT_MAX}</button>
-      <button class="llk-tool llk-shuffle" type="button">🔀 洗牌 x${cfg.shuffles}</button>
-    </div>
     <div class="llk-msg"></div>
   `;
   stage.appendChild(wrap);
 
   const holder = wrap.querySelector(".llk-holder") as HTMLElement;
-  const leftEl = wrap.querySelector(".llk-left") as HTMLElement;
+  const leftText = wrap.querySelector(".llk-left .llk-btext") as HTMLElement;
   const timeEl = wrap.querySelector(".llk-time") as HTMLElement;
+  const timeText = wrap.querySelector(".llk-time .llk-btext") as HTMLElement;
   const msgEl = wrap.querySelector(".llk-msg") as HTMLElement;
   const hintBtn = wrap.querySelector(".llk-hintbtn") as HTMLButtonElement;
+  const hintIco = wrap.querySelector(".llk-hintbtn .llk-bico") as HTMLElement;
+  const hintText = wrap.querySelector(".llk-hintbtn .llk-btext") as HTMLElement;
   const shuffleBtn = wrap.querySelector(".llk-shuffle") as HTMLButtonElement;
+  const shuffleText = wrap.querySelector(".llk-shuffle .llk-btext") as HTMLElement;
 
   function rerollMasks(): void {
     if (!cfg.disguise) return;
@@ -505,16 +635,23 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   });
   view.setGravity(cfg.gravity);
   holder.appendChild(view.root);
+  jan.after(0, () => view.fit());
+  jan.on(window, "resize", () => view.fit());
 
   function renderTop(): void {
-    leftEl.textContent = `🧸 剩 ${tilesLeft(board) / 2} 对`;
-    timeEl.textContent = `⏰ ${timeLeft} 秒`;
+    leftText.textContent = `剩${tilesLeft(board) / 2}对`;
+    timeText.textContent = `${timeLeft}秒`;
     timeEl.classList.toggle("llk-hurry", timeLeft <= 15);
-    shuffleBtn.textContent = `🔀 洗牌 x${shufflesLeft}`;
+    shuffleText.textContent = `洗牌×${shufflesLeft}`;
     shuffleBtn.disabled = shufflesLeft <= 0 || levelDone;
     // 提示用完之后按钮不灰掉，改成「指个方向」：不给格子，只把搜索范围缩小
     const left = hintsLeft(hintsUsed);
-    hintBtn.textContent = left > 0 ? `💡 提示 x${left}` : "🔍 指个方向";
+    hintText.textContent = left > 0 ? `提示×${left}` : "指个方向";
+    const glyph: HudGlyph = left > 0 ? "bulb" : "compass";
+    if (hintIco.dataset.g !== glyph) {
+      hintIco.dataset.g = glyph;
+      hintIco.innerHTML = hudGlyphSvg(glyph);
+    }
     hintBtn.disabled = levelDone;
   }
 
@@ -557,6 +694,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         ? "洗好啦！这一把是特意摆出来的，保证有得连～"
         : `洗好啦，重新找找看（还剩 ${shufflesLeft} 次）`;
     view.clearSelection();
+    view.shuffleFx();
     renderTop();
   }
 
@@ -663,6 +801,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   return {
     destroy() {
       levelDone = true;
+      view.dispose();
       jan.destroy();
       wrap.remove();
     }
@@ -686,26 +825,27 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     <style>${CSS}</style>
     <div class="llk-modebar">
       <button class="llk-back" type="button">⬅️ 回地图</button>
-      <span class="llk-badge llk-best"></span>
+      <span class="llk-badge llk-best">${hudGlyphSvg("medal")}<b class="llk-btext"></b></span>
     </div>
     <div class="llk-top">
-      <span class="llk-badge llk-round">🎪 第 1 盘</span>
-      <span class="llk-badge llk-pairs">🔗 0 对</span>
-      <span class="llk-badge llk-time">⏰ 不限时</span>
+      <span class="llk-badge llk-round">${hudGlyphSvg("round")}<b class="llk-btext">第 1 盘</b></span>
+      <span class="llk-badge llk-pairs">${hudGlyphSvg("chain")}<b class="llk-btext">0 对</b></span>
+      <span class="llk-badge llk-time">${hudGlyphSvg("clock")}<b class="llk-btext">不限时</b></span>
     </div>
     <div class="llk-holder"></div>
     <div class="llk-tools">
-      <button class="llk-tool llk-shuffle" type="button">🔀 重排</button>
+      <button class="llk-tool llk-shuffle" type="button">${hudGlyphSvg("shuffle")}<b class="llk-btext">重排</b></button>
     </div>
     <div class="llk-msg"></div>
   `;
   host.appendChild(wrap);
 
   const holder = wrap.querySelector(".llk-holder") as HTMLElement;
-  const roundEl = wrap.querySelector(".llk-round") as HTMLElement;
-  const pairsEl = wrap.querySelector(".llk-pairs") as HTMLElement;
+  const roundText = wrap.querySelector(".llk-round .llk-btext") as HTMLElement;
+  const pairsText = wrap.querySelector(".llk-pairs .llk-btext") as HTMLElement;
   const timeEl = wrap.querySelector(".llk-time") as HTMLElement;
-  const bestEl = wrap.querySelector(".llk-best") as HTMLElement;
+  const timeText = wrap.querySelector(".llk-time .llk-btext") as HTMLElement;
+  const bestText = wrap.querySelector(".llk-best .llk-btext") as HTMLElement;
   const msgEl = wrap.querySelector(".llk-msg") as HTMLElement;
   const shuffleBtn = wrap.querySelector(".llk-shuffle") as HTMLButtonElement;
 
@@ -721,15 +861,17 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   });
   view.setGravity(spec.gravity);
   holder.appendChild(view.root);
+  jan.after(0, () => view.fit());
+  jan.on(window, "resize", () => view.fit());
 
   function renderTop(): void {
-    roundEl.textContent = `🎪 第 ${st.round} 盘`;
-    pairsEl.textContent = `🔗 ${st.pairs} 对`;
-    timeEl.textContent = timeLeft > 0 ? `⏰ ${timeLeft} 秒` : "⏰ 不限时";
+    roundText.textContent = `第 ${st.round} 盘`;
+    pairsText.textContent = `${st.pairs} 对`;
+    timeText.textContent = timeLeft > 0 ? `${timeLeft} 秒` : "不限时";
     timeEl.classList.toggle("llk-hurry", timeLeft > 0 && timeLeft <= 15);
-    bestEl.textContent = (() => {
+    bestText.textContent = (() => {
       const best = save.getGameProgress(meta.id).endlessBest;
-      return best > 0 ? `🏅 最好 ${best} 对` : "🏅 还没有最好成绩";
+      return best > 0 ? `最好 ${best} 对` : "还没有最好成绩";
     })();
     shuffleBtn.disabled = st.over;
   }
@@ -757,6 +899,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     if (!anyMove(board, spec.maxTurns)) {
       const rep = fairShuffle(board, Math.random, spec.maxTurns);
       view.clearSelection();
+      view.shuffleFx();
       msgEl.textContent = rep.constructed
         ? "连不动啦，帮你摆了一把保证有得连的～"
         : "连不动啦，自动重排一次，接着连！";
@@ -800,6 +943,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     if (st.over) return;
     fairShuffle(board, Math.random, spec.maxTurns);
     view.clearSelection();
+    view.shuffleFx();
     api.play("meow");
     msgEl.textContent = "重排好啦，重新扫一遍～";
   });
@@ -823,6 +967,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   return {
     destroy() {
       st = { ...st, over: true };
+      view.dispose();
       jan.destroy();
       wrap.remove();
     }

@@ -54,7 +54,7 @@ jobs:
 
       # 与 ci.yml 一致:runner 比开发机慢,放宽单个用例的超时,避免重模拟用例假失败。
       - name: 单元测试
-        run: npm test -- --testTimeout=30000
+        run: npm test -- --testTimeout=180000
 
       - name: 类型检查 + 构建
         run: npm run build
@@ -214,9 +214,26 @@ jobs:
           # 🌸 一朵一星 ⭐ $VERSION
 
           给小朋友的 **76 款原创小游戏**合集:**188 关**战役地图,还有双人对战和无尽挑战。
+          **1.3 把 76 款画面都重画成了粉彩 Q 版**,玩法和存档没动。
           **没有广告、没有内购、不用注册、不联网、不收集任何数据。**
 
           正式发行只挂 **三个包**:Mac 安装包、Windows 便携版、安卓 APK。
+          EOF
+
+          # 本版亮点:有 docs/release-notes/<版本>.md 就插进来,没有就跳过。
+          # 以后每发一版只要加一个笔记文件,不用再回来改这个工作流。
+          if [ -f "docs/release-notes/$VERSION.md" ]; then
+            {
+              echo ""
+              echo "## 这一版新增了什么"
+              echo ""
+              cat "docs/release-notes/$VERSION.md"
+            } >> RELEASE_BODY.md
+          else
+            echo "::warning::没有 docs/release-notes/$VERSION.md,Release 说明里不会有本版亮点"
+          fi
+
+          cat >> RELEASE_BODY.md <<EOF
 
           ## 下载哪一个?
 

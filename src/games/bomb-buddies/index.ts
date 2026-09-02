@@ -1,7 +1,7 @@
 import { meta } from "./meta";
 export { meta };
 
-// 泡泡炸弹人:格子迷宫里摆泡泡的合家欢对战游戏。
+// 泡泡布阵:格子迷宫里摆泡泡的合家欢对战游戏。
 //
 // 五种玩法共用同一套对局运行时 `createMatch`:
 //  - 闯关:188 关八大主题,清怪 / 找出口 / 泡泡王三种目标(走 level99 框架);
@@ -25,6 +25,7 @@ import {
 import { getLevelExtras } from "../../ui/level188Contract";
 import { stopSpeaking } from "../speech";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import GUIDE from "./guide";
 import {
   AI_LABEL,
@@ -92,15 +93,56 @@ import {
   winLine,
   xOf,
   yOf,
+  bubbleAge,
   type Fighter,
   type Intent,
   type InputName,
   type World,
 } from "./logic";
+import { shade, withAlpha } from "../../art/kit/palette";
+import { ballGradient, softShadow } from "../../art/kit/volume";
+import { topSideBlock } from "../../art/kit/block25d";
+import { drawParticles, spawnPetals, stepParticles, type Particle } from "../../art/kit/sparkle";
+import { blinkOn, drawChibi, walkFrameAt, type ChibiSpec } from "../../art/kit/chibi";
+import {
+  BB_CHIBI_OUTFIT,
+  BB_COLORS,
+  BB_CROWN_GOLD,
+  BB_PULSE_TINT,
+  BbBoomFx,
+  BbFighterFx,
+  DANGER_EDGE,
+  DANGER_RGB,
+  PULSE_WINDOW_MS,
+  bombPulseScale,
+  crackStage,
+  dangerEdgeAlpha,
+  dangerGlowAlpha,
+  drawBossKing,
+  drawCritter,
+  drawDoor,
+  drawHudRing,
+  drawItemIcon,
+  drawRivets,
+  drawWallOrnament,
+  fuseSparkPhase,
+  hudRingColor,
+  sparkPath,
+  themeOfChapter,
+} from "./visual13";
 
 const P_NAME = ["朵朵", "星星"];
-const P_EMOJI = ["🌸", "⭐"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
+
+/**
+ * 双人自绘小人的参数(1.3 起彻底替换 emoji 主角)。
+ * 剪影靠「花发卡 vs 星呆毛 + 裙 vs 裤」双保险区分,灰度截图下也分得清。
+ */
+const CHIBI_SPECS: ChibiSpec[] = [
+  // 修复员 B1:服装改用灰度拉开档(粉亮蓝深,灰差 ≥15/255),裙裤之外多一条明暗通道
+  { skin: "#FFE3D2", outfit: BB_CHIBI_OUTFIT[0], outfitStyle: "dress", accessory: "flower", accessoryColor: "#FF9FBE" },
+  { skin: "#FFE9D8", outfit: BB_CHIBI_OUTFIT[1], outfitStyle: "pants", accessory: "star", accessoryColor: "#FFD678" },
+];
 
 /** 两套键位一个字都不重叠,写在一处,暂停面板与各模式提示共用 */
 export const KEY_HELP =
@@ -175,7 +217,9 @@ export const CSS = `
 .bmb-board canvas{display:block;}
 .bmb-tip{font-size:14px;font-weight:700;line-height:1.45;text-align:center;max-width:620px;color:#6a5f8c;
   background:#ffffffcc;border-radius:12px;padding:5px 10px;}
-.bmb-pads{display:flex;justify-content:center;align-items:flex-start;gap:10px;width:100%;}
+.bmb-pads{display:flex;justify-content:center;align-items:flex-start;gap:10px;width:100%;
+  position:sticky;bottom:0;z-index:4;background:linear-gradient(180deg,#f2f5fff0,#fff3f8f5);
+  padding:6px 0 2px;}
 .bmb-padwrap{display:flex;flex-direction:column;align-items:center;gap:3px;}
 .bmb-padname{font-size:12px;font-weight:900;}
 .bmb-pad{display:flex;align-items:center;gap:6px;}
@@ -269,11 +313,43 @@ export const CSS = `
 @media (max-height:700px){
   .bmb-tip{display:none;}
 }
+@media (max-height:500px) and (min-width:700px){
+  .bmb-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;
+    grid-template-areas:"hud hud hud" "padl board padr" "tip tip tip";}
+  .bmb-hud{grid-area:hud;}
+  .bmb-board{grid-area:board;justify-self:center;}
+  .bmb-tip{grid-area:tip;}
+  .bmb-pads{display:contents;position:static;background:none;padding:0;}
+  .bmb-padwrap:first-child{grid-area:padl;}
+  .bmb-padwrap:last-child{grid-area:padr;}
+  .bmb-padwrap:only-child{grid-area:padr;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:700px){
+  .bmb-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+    grid-template-areas:"hud hud hud" "padl board padr" "tip tip tip";}
+  .bmb-hud{grid-area:hud;}
+  .bmb-board{grid-area:board;justify-self:center;}
+  .bmb-tip{grid-area:tip;}
+  .bmb-pads{display:contents;position:static;background:none;padding:0;}
+  .bmb-padwrap:first-child{grid-area:padl;}
+  .bmb-padwrap:last-child{grid-area:padr;}
+  .bmb-padwrap:only-child{grid-area:padr;}
+}
+@media (max-height:840px) and (min-height:501px) and (max-width:699px){
+  .bmb-pads{position:sticky;bottom:0;z-index:4;}
+}
 @media (prefers-reduced-motion:reduce){
   .bmb-btn:active,.bmb-act:active,.bmb-pick:active{transform:none;}
   .bmb-knob{transition:none;}
   .bmb-chip--save{animation:none;}
 }
+/* 1.3 视觉升级:HUD 头像徽章 + 倒计时圆环(画布尺寸是 2x 的,CSS 收回一半) */
+.bmb-ava{width:18px;height:18px;vertical-align:-4px;margin-right:3px;}
+.bmb-ring{width:16px;height:16px;vertical-align:-3px;margin-right:2px;}
+.bmb-nm{margin-right:3px;}
+/* 摇杆名牌:emoji 退休,本色小圆点认人 */
+.bmb-padname::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;
+  background:currentColor;margin-right:4px;vertical-align:-1px;}
 `;
 
 const STYLE_ID = "bmb-style";
@@ -323,11 +399,15 @@ const PALETTES: Palette[] = [
 // 彩虹波:一圈圈软色的波纹,不是火。核心偏白、边缘走七彩,越淡越像肥皂泡的膜。
 const WAVE_CORE = "#ffffff";
 const WAVE_RING = ["#ffd7e6", "#ffe9b8", "#d6f5cf", "#cdeafc", "#ded6fb"];
-/** 泡泡本体:半透明的蓝白,和地板拉得开 */
-const BUBBLE_SKIN = "#bfe6f7";
-const BUBBLE_SHINE = "#ffffff";
-/** 砖被波及散开的小花 */
-const FLOWER_EMOJI = ["🌸", "🌼", "🌺", "💠"];
+// 泡泡与地形的皮肤主色全部收进 visual13 的 BB_COLORS 常量块;
+// 这里只留几笔由主色派生的受光 / 砖缝 / 铆钉色(`shade` 是唯一取色入口)。
+const BRICK_LINE = shade(BB_COLORS.bbBrick, -14);
+const BRICK_SHEEN = shade(BB_COLORS.bbBrick, 18);
+const BRICK_CRACK = shade(BB_COLORS.bbBrick, -38);
+const WALL_SHEEN = shade(BB_COLORS.bbWall, 18);
+const WALL_RIVET = shade(BB_COLORS.bbWall, -32);
+/** 砖被波及散开的花瓣粒子(矢量,替换 emoji 小花池)的备选色 */
+const PETAL_COLORS = ["#FFC2DA", "#FFD1E4", "#F7A9C9", "#CDEAFB"];
 
 // ---------------------------------------------------------------------------
 // 一场对局
@@ -403,6 +483,8 @@ interface FighterView {
   rx: number;
   ry: number;
   hop: number;
+  /** 这一帧还在往目标格挪吗(走路步态用) */
+  moving: boolean;
 }
 
 const HOLD_KEYS: InputName[] = ["up", "right", "down", "left"];
@@ -420,7 +502,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   const fighters: Fighter[] = [];
   for (let i = 0; i < seats; i++) {
     const spawn = lv.spawns[i] ?? lv.spawns[0];
-    const f = makeFighter(i, P_NAME[i], P_EMOJI[i], spawn, coop ? 0 : i);
+    // 主角不再挂 emoji:画布上的形象由 chibi 自绘,HUD 用头像徽章
+    const f = makeFighter(i, P_NAME[i], "", spawn, coop ? 0 : i);
     for (const item of lv.starters) applyItem(f, item);
     if (i === 0 && opts.carry) Object.assign(f, opts.carry);
     fighters.push(f);
@@ -447,10 +530,19 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     pool: lv.pool,
   });
 
-  const views: FighterView[] = fighters.map((f) => ({ rx: xOf(board, f.pos), ry: yOf(board, f.pos), hop: 0 }));
+  const views: FighterView[] = fighters.map((f) => ({
+    rx: xOf(board, f.pos),
+    ry: yOf(board, f.pos),
+    hop: 0,
+    moving: false,
+  }));
 
-  /** 砖被彩虹波扫到时散出来的小花(纯装饰,不参与判定) */
-  const petals: { x: number; y: number; dx: number; life: number; emoji: string }[] = [];
+  /** 砖被彩虹波扫到时散出来的花瓣粒子(矢量,纯装饰不参与判定) */
+  let fx: Particle[] = [];
+  /** 爆炸涟漪账本:中心白闪 2 帧 + 沿四臂推进的花瓣串 + 末端星屑 */
+  const boomFx = new BbBoomFx();
+  /** 埋弹下蹲窗口账本(谁刚放了泡泡谁就蹲 120ms) */
+  const fighterFx = new BbFighterFx();
 
   /**
    * 系统里勾了「减少动态效果」就别晃。
@@ -471,14 +563,33 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   const wrap = el("div", "bmb-wrap");
   const hud = el("div", "bmb-hud");
   const chipTime = el("span", "bmb-chip");
+  // 倒计时圆环进度化:小画布圆环 + 原来的时间文本,读的还是同一个 secondsLeft
+  const ringCv = document.createElement("canvas") as HTMLCanvasElement;
+  ringCv.width = 32;
+  ringCv.height = 32;
+  ringCv.className = "bmb-ring";
+  const ringG = ringCv.getContext("2d");
+  ringG?.setTransform(2, 0, 0, 2, 0, 0);
+  const timeText = el("span");
+  chipTime.append(ringCv, timeText);
   const chipGoal = el("span", "bmb-chip");
   // 名字和数字分开装:窄屏上把名字收起来,一排芯片就能挤进 315px,HUD 从两行变一行
   const chipStats: { box: HTMLElement; name: HTMLElement; body: HTMLElement }[] = [];
   for (let i = 0; i < seats; i++) {
     const box = el("span", `bmb-chip bmb-chip-p${i}`);
+    // 双人头像徽章:一张小画布,画一遍迷你 chibi,不用 emoji 认人
+    const ava = document.createElement("canvas") as HTMLCanvasElement;
+    ava.width = 36;
+    ava.height = 36;
+    ava.className = "bmb-ava";
+    const ag = ava.getContext("2d");
+    if (ag) {
+      ag.setTransform(2, 0, 0, 2, 0, 0);
+      drawChibi(ag, 9, 8, 15, CHIBI_SPECS[i] ?? CHIBI_SPECS[0], { pose: "idle" });
+    }
     const name = el("span", "bmb-nm");
     const body = el("span");
-    box.append(name, body);
+    box.append(ava, name, body);
     chipStats.push({ box, name, body });
   }
   const pauseBtn = el("button", "bmb-btn bmb-btn--ghost") as HTMLButtonElement;
@@ -559,7 +670,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 
   function buildPad(seat: number): void {
     const box = el("div", "bmb-padwrap");
-    const name = el("div", "bmb-padname", `${P_EMOJI[seat]} ${P_NAME[seat]}`);
+    // 名牌不再用 emoji:CSS ::before 画一颗本色小圆点认人
+    const name = el("div", "bmb-padname", P_NAME[seat]);
     name.style.color = P_COLOR[seat];
 
     const pad = el("div", "bmb-pad");
@@ -705,18 +817,22 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   function layout(): void {
     const wide = (globalThis as { innerWidth?: number }).innerWidth ?? 400;
     const avail = Math.max(MIN_CELL_PX * board.w, Math.min(host.clientWidth || wide, 620));
-    const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    // 高度不够就只能让棋盘小一点,但**不允许**把格子压到 24px 以下 ——
-    // 宁可这一屏挤一挤,也不能让孩子看不清脚下那格是砖还是泡泡。
-    const maxH = Math.max(MIN_CELL_PX * board.h, roomForBoard(viewH));
+    const guessed = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
+    const roomH = Math.max(MIN_CELL_PX * board.h, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const maxH = Math.max(MIN_CELL_PX * board.h, roomForBoard(guessed), roomH);
     cell = boardCellSize(board.w, board.h, avail, maxH);
     const cssW = cell * board.w;
     const cssH = cell * board.h;
+    // N-96:24px 格底线的 13 行棋盘(312px)比 915×412 的真实余量(约 220px)还高,
+    // 底排 63px 切出屏。真余量装不下时整块按比例缩「显示」——cell、坐标、判定全不动,
+    // 摇杆/键盘不走画布坐标,缩显示零副作用。量不到余量(测试桩)时 shrink=1 原样。
+    const room = roomForBoard(guessed);
+    const shrink = Number.isFinite(room) && room > 80 && cssH > room ? room / cssH : 1;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
-    canvas.style.width = `${cssW}px`;
-    canvas.style.height = `${cssH}px`;
+    canvas.style.width = `${Math.round(cssW * shrink)}px`;
+    canvas.style.height = `${Math.round(cssH * shrink)}px`;
     g?.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   layout();
@@ -742,13 +858,11 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     g.closePath();
   }
 
-  function emojiAt(text: string, cx: number, cy: number, size: number): void {
-    if (!g) return;
-    g.font = `${Math.round(size)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(text, cx, cy);
-  }
+  // 修复员 S3/S4:小怪与泡泡王也改为程序化自绘(drawCritter / drawBossKing),
+  // glyphAt 随最后一批 emoji 字形一起退休 —— 画布上再无 emoji 角色。
+
+  /** 三套主题装饰(花园藤蔓 / 冰原霜花 / 星空星子):只换装饰层,不换布局数据 */
+  const theme = themeOfChapter(lv.chapter);
 
   function render(): void {
     if (!g) return;
@@ -760,7 +874,38 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 
     const timing = dangerTiming(board, world.bombs, world.pierce);
 
-    // 地板 / 墙 / 砖
+    // ① 地板棋盘:双色差 4% 明度、四角圆润(硬墙格不铺,墙自己盖)
+    for (let y = 0; y < board.h; y++) {
+      for (let x = 0; x < board.w; x++) {
+        const cellIdx = y * board.w + x;
+        if (board.cells[cellIdx] === TILE_HARD) continue;
+        const px = x * cell;
+        const py = y * cell;
+        g.fillStyle = (x + y) % 2 === 0 ? BB_COLORS.bbFloorA : BB_COLORS.bbFloorB;
+        roundRect(px + 0.5, py + 0.5, cell - 1, cell - 1, Math.max(2, cell * 0.12));
+        g.fill();
+      }
+    }
+
+    // ② 危险格泛红呼吸 + 边缘虚线。什么时候开始亮、多快变亮仍由 dangerTiming
+    //    与 1.2 的同一条归一化说了算(见 visual13.dangerGlowAlpha),这里只换皮。
+    //    永远压在砖下 —— 砖面另有裂纹提示,角色也不遮它。
+    for (const [cellIdx, burn] of timing) {
+      if (world.flames.has(cellIdx)) continue;
+      const px = (cellIdx % board.w) * cell;
+      const py = Math.floor(cellIdx / board.w) * cell;
+      g.fillStyle = `rgba(${DANGER_RGB},${dangerGlowAlpha(burn, world.time, calmMotion).toFixed(3)})`;
+      roundRect(px + 1.5, py + 1.5, cell - 3, cell - 3, Math.max(3, cell * 0.2));
+      g.fill();
+      g.strokeStyle = withAlpha(DANGER_EDGE, dangerEdgeAlpha(burn));
+      g.lineWidth = Math.max(1.5, cell * 0.06);
+      g.setLineDash([Math.max(3, cell * 0.14), Math.max(2, cell * 0.1)]);
+      roundRect(px + 2, py + 2, cell - 4, cell - 4, Math.max(3, cell * 0.2));
+      g.stroke();
+      g.setLineDash([]);
+    }
+
+    // ③ 硬墙 / 软砖 / 门:2.5D 双面块(光源左上 45°,侧面在右下)
     for (let y = 0; y < board.h; y++) {
       for (let x = 0; x < board.w; x++) {
         const cellIdx = y * board.w + x;
@@ -768,69 +913,87 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         const py = y * cell;
         const t = board.cells[cellIdx];
         if (t === TILE_HARD) {
-          g.fillStyle = palette.wall;
-          roundRect(px + 1, py + 1, cell - 2, cell - 2, Math.max(3, cell * 0.18));
+          topSideBlock(g, px + 1, py + 1, cell - 2, cell - 2, BB_COLORS.bbWall, undefined, Math.max(2, cell * 0.14));
+          const topW = (cell - 2) * 0.82;
+          g.fillStyle = WALL_SHEEN;
+          roundRect(px + 2.5, py + 2.5, topW - 3, Math.max(2, cell * 0.12), Math.max(1.5, cell * 0.06));
           g.fill();
-          g.fillStyle = palette.wallTop;
-          roundRect(px + 2.5, py + 2, cell - 5, (cell - 4) * 0.42, Math.max(2, cell * 0.14));
-          g.fill();
+          drawRivets(g, px + 1, py + 1, topW, topW, WALL_RIVET);
+          drawWallOrnament(g, theme, px + 1, py + 1, topW, palette.wall);
           continue;
         }
-        g.fillStyle = palette.floor;
-        g.fillRect(px, py, cell, cell);
-        g.strokeStyle = palette.line;
-        g.lineWidth = 1;
-        g.strokeRect(px + 0.5, py + 0.5, cell - 1, cell - 1);
         if (t === TILE_SOFT) {
-          g.fillStyle = palette.brick;
-          roundRect(px + 2, py + 2, cell - 4, cell - 4, Math.max(3, cell * 0.22));
-          g.fill();
-          g.fillStyle = palette.brickTop;
-          roundRect(px + 3.5, py + 3, cell - 7, (cell - 6) * 0.38, Math.max(2, cell * 0.16));
-          g.fill();
-        } else if (world.exitOpen && cellIdx === world.exit) {
-          emojiAt("🚪", px + cell / 2, py + cell / 2, cell * 0.66);
-        }
-        // 马上要被彩虹波扫到的格子描一圈,越近越亮,让孩子来得及跑开
-        const burn = timing.get(cellIdx);
-        if (burn !== undefined && !world.flames.has(cellIdx)) {
-          const near = Math.max(0, Math.min(1, 1 - burn / FUSE_MS));
-          g.strokeStyle = `rgba(255,150,190,${0.15 + near * 0.55})`;
-          g.lineWidth = Math.max(1.5, cell * 0.06);
-          roundRect(px + 2, py + 2, cell - 4, cell - 4, Math.max(3, cell * 0.2));
+          topSideBlock(g, px + 2, py + 2, cell - 4, cell - 4, BB_COLORS.bbBrick, undefined, Math.max(2, cell * 0.16));
+          const topW = (cell - 4) * 0.82;
+          // 2×2 砖缝:一横三竖(上下两排错半格),砖才像砖
+          g.strokeStyle = BRICK_LINE;
+          g.lineWidth = Math.max(1, cell * 0.035);
+          g.beginPath();
+          g.moveTo(px + 3, py + 2 + topW / 2);
+          g.lineTo(px + 1 + topW, py + 2 + topW / 2);
+          g.moveTo(px + 2 + topW / 2, py + 3);
+          g.lineTo(px + 2 + topW / 2, py + 2 + topW / 2);
+          g.moveTo(px + 2 + topW * 0.28, py + 2 + topW / 2);
+          g.lineTo(px + 2 + topW * 0.28, py + 1 + topW);
+          g.moveTo(px + 2 + topW * 0.72, py + 2 + topW / 2);
+          g.lineTo(px + 2 + topW * 0.72, py + 1 + topW);
           g.stroke();
+          g.fillStyle = BRICK_SHEEN;
+          roundRect(px + 3.5, py + 3, topW - 3, Math.max(2, cell * 0.1), Math.max(1.5, cell * 0.05));
+          g.fill();
+          // 被炸前的两阶段裂纹:纯视觉,由 dangerTiming 读数驱动,不碰「一次炸碎」的逻辑
+          const stage = crackStage(timing.get(cellIdx));
+          if (stage > 0) {
+            g.strokeStyle = BRICK_CRACK;
+            g.lineWidth = Math.max(1, cell * 0.045);
+            g.beginPath();
+            g.moveTo(px + cell * 0.3, py + cell * 0.22);
+            g.lineTo(px + cell * 0.46, py + cell * 0.4);
+            g.lineTo(px + cell * 0.38, py + cell * 0.58);
+            g.stroke();
+            if (stage > 1) {
+              g.beginPath();
+              g.moveTo(px + cell * 0.66, py + cell * 0.3);
+              g.lineTo(px + cell * 0.56, py + cell * 0.48);
+              g.lineTo(px + cell * 0.68, py + cell * 0.66);
+              g.stroke();
+            }
+          }
+        } else if (world.exitOpen && cellIdx === world.exit) {
+          // 拱形木门 + 星星门牌(自绘,替换 emoji 门)
+          drawDoor(g, px, py, cell);
         }
       }
     }
 
-    // 道具
+    // ④ 道具:白卡片 + 统一自绘图标(火力=星火 / 泡泡数=泡泡串 / 脚力=小靴……)
     for (const [cellIdx, kind] of world.items) {
       const px = (cellIdx % board.w) * cell;
       const py = Math.floor(cellIdx / board.w) * cell;
       g.fillStyle = "#ffffffdd";
       roundRect(px + cell * 0.14, py + cell * 0.14, cell * 0.72, cell * 0.72, cell * 0.24);
       g.fill();
-      emojiAt(ITEM_INFO[kind].emoji, px + cell / 2, py + cell / 2 + 1, cell * 0.48);
+      drawItemIcon(g, kind, px + cell / 2, py + cell / 2, cell * 0.26);
     }
 
-    // 泡泡:0.4 秒鼓起来 → 晃悠悠 → 最后一段绷紧发亮,三段看得出区别
+    // ⑤ 炸弹泡泡:三停径向渐变 + 月牙反光 + 引信星火;临爆前 1s ±6% 体积脉动
     for (const bomb of world.bombs) {
       const px = (bomb.pos % board.w) * cell;
       const py = Math.floor(bomb.pos / board.w) * cell;
       const grow = growProgress(bomb.fuse, bomb.remote);
       const stage = bubbleStage(bomb.fuse, bomb.remote);
-      // 膨胀段从 0.3 倍长到 1 倍;之后轻轻晃;快破的时候绷大一点点
-      const beat =
-        stage === "grow"
-          ? 0.3 + grow * 0.7
-          : stage === "burst"
-            ? 1.06 + 0.06 * Math.sin((FUSE_MS - bomb.fuse) / 45)
-            : 0.94 + 0.05 * Math.sin((FUSE_MS - bomb.fuse) / 150);
+      const pulsing = !bomb.remote && bomb.fuse <= PULSE_WINDOW_MS;
+      // 膨胀段从 0.3 倍长到 1 倍;临爆窗口走 ±6% 脉动(reduced 退化为变色);其余轻轻晃
+      let beat: number;
+      if (stage === "grow") beat = 0.3 + grow * 0.7;
+      else if (pulsing) beat = bombPulseScale(bomb.fuse, calmMotion);
+      else beat = 0.96 + (calmMotion ? 0 : 0.04 * Math.sin((FUSE_MS - bomb.fuse) / 150));
       const r = cell * 0.36 * beat;
       const cx = px + cell / 2;
       const cy = py + cell / 2;
-      g.globalAlpha = 0.9;
-      g.fillStyle = BUBBLE_SKIN;
+      softShadow(g, cx, cy + cell * 0.34, cell * 0.3, cell * 0.09, 0.16, 1, "rgba(93,64,90,1)");
+      g.globalAlpha = 0.92;
+      g.fillStyle = ballGradient(g, cx, cy, Math.max(1, r), pulsing && calmMotion ? BB_PULSE_TINT : BB_COLORS.bbBubble);
       g.beginPath();
       g.arc(cx, cy, r, 0, Math.PI * 2);
       g.fill();
@@ -841,12 +1004,35 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       g.beginPath();
       g.arc(cx, cy, r, 0, Math.PI * 2);
       g.stroke();
-      g.fillStyle = BUBBLE_SHINE;
-      g.globalAlpha = 0.9;
+      // 顶部月牙反光 + 小高光点(光源左上 45°)
+      g.strokeStyle = "rgba(255,255,255,.8)";
+      g.lineWidth = Math.max(1.5, r * 0.16);
       g.beginPath();
-      g.arc(cx - r * 0.34, cy - r * 0.34, r * 0.22, 0, Math.PI * 2);
+      g.arc(cx, cy, r * 0.7, -Math.PI * 0.78, -Math.PI * 0.32);
+      g.stroke();
+      g.fillStyle = "rgba(255,255,255,.9)";
+      g.beginPath();
+      g.arc(cx - r * 0.32, cy - r * 0.36, r * 0.14, 0, Math.PI * 2);
       g.fill();
-      g.globalAlpha = 1;
+      // 引信星火:沿弧线上蹿(400ms 循环);reduced 停在引信头当静态星火点
+      const sparkT = calmMotion ? 1 : fuseSparkPhase(bubbleAge(bomb.fuse, bomb.remote), false);
+      const fx0x = cx;
+      const fx0y = cy - r;
+      const fcx = cx + r * 0.42;
+      const fcy = cy - r - cell * 0.16;
+      const fx1x = cx + r * 0.5;
+      const fx1y = cy - r - cell * 0.26;
+      g.strokeStyle = "#b9a3d6";
+      g.lineWidth = Math.max(1, cell * 0.04);
+      g.beginPath();
+      g.moveTo(fx0x, fx0y);
+      g.quadraticCurveTo(fcx, fcy, fx1x, fx1y);
+      g.stroke();
+      const sx = (1 - sparkT) * (1 - sparkT) * fx0x + 2 * (1 - sparkT) * sparkT * fcx + sparkT * sparkT * fx1x;
+      const sy = (1 - sparkT) * (1 - sparkT) * fx0y + 2 * (1 - sparkT) * sparkT * fcy + sparkT * sparkT * fx1y;
+      g.fillStyle = "#FFD678";
+      sparkPath(g, sx, sy, Math.max(2.5, cell * 0.09));
+      g.fill();
       // 最后一秒在泡泡上写倒数,孩子能读着数字跑
       if (!bomb.remote && bomb.fuse <= 1000) {
         g.fillStyle = "#6a4fa8";
@@ -857,53 +1043,39 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       }
     }
 
-    // 彩虹波:一圈圈化开的软色波纹(不是火,没有热度)
-    for (const [cellIdx, left] of world.flames) {
-      const px = (cellIdx % board.w) * cell;
-      const py = Math.floor(cellIdx / board.w) * cell;
-      const k = Math.max(0, Math.min(1, left / FLAME_MS));
-      g.globalAlpha = 0.25 + k * 0.5;
-      g.fillStyle = WAVE_RING[cellIdx % WAVE_RING.length];
-      roundRect(px + 1, py + 1, cell - 2, cell - 2, cell * 0.34);
-      g.fill();
-      g.fillStyle = WAVE_CORE;
-      // 波纹从中心往外化开:刚扫过时是一小团,散掉之前铺满整格
-      const inset = cell * (0.06 + k * 0.24);
-      roundRect(px + inset, py + inset, cell - inset * 2, cell - inset * 2, cell * 0.3);
-      g.fill();
-      g.globalAlpha = 1;
-    }
-
-    // 砖变成小花散开:每一朵活 FLAME_MS,边飘边淡
-    for (const p of petals) {
-      const age = Math.max(0, Math.min(1, 1 - p.life / FLAME_MS));
-      g.globalAlpha = 1 - age;
-      emojiAt(p.emoji, p.x * cell + cell / 2 + p.dx * age * cell, p.y * cell + cell / 2 - age * cell * 0.6, cell * 0.42);
-      g.globalAlpha = 1;
-    }
-
-    // 小怪
+    // ⑥ 小怪 + 双人小人(角色画在格中心,判定格位置不动)
+    //    修复员 S3/S4:裸 emoji / 平涂粉圆 → 四母形自绘小怪 + 三停渐变泡泡王
     for (const c of world.critters) {
       const px = (c.pos % board.w) * cell;
       const py = Math.floor(c.pos / board.w) * cell;
       const info = CRITTER_INFO[c.kind];
+      const ccx = px + cell / 2;
+      const ccy = py + cell / 2;
       if (c.kind === "boss") {
-        g.fillStyle = "#ffe0f0";
-        g.beginPath();
-        g.arc(px + cell / 2, py + cell / 2, cell * 0.46, 0, Math.PI * 2);
-        g.fill();
+        drawBossKing(g, ccx, ccy, cell);
+      } else {
+        drawCritter(g, c.kind, ccx, ccy, cell, c.dir === DIR_LEFT ? -1 : 1);
       }
-      emojiAt(info.emoji, px + cell / 2, py + cell / 2, cell * (c.kind === "boss" ? 0.72 : 0.6));
       if (info.layers > 1) {
+        // 层数徽记搬到头顶小圆牌(自绘圆 + 描边;数字是功能文字,字形保留)
+        const bx = px + cell * 0.84;
+        const by = py + cell * 0.1;
+        const br = Math.max(6, cell * 0.17);
+        g.fillStyle = "#FFF6FA";
+        g.beginPath();
+        g.arc(bx, by, br, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = shade(BB_CROWN_GOLD, -20);
+        g.lineWidth = 1.5;
+        g.stroke();
         g.fillStyle = "#7a5da8";
-        g.font = `900 ${Math.round(cell * 0.28)}px system-ui, sans-serif`;
+        g.font = `900 ${Math.round(cell * 0.24)}px system-ui, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";
-        g.fillText(`${c.layers}`, px + cell * 0.8, py + cell * 0.22);
+        g.fillText(`${c.layers}`, bx, by + 0.5);
       }
     }
 
-    // 人
     fighters.forEach((f, i) => {
       const v = views[i];
       // 被罩住的人在泡泡里左右晃:一眼看出这不是「站着不动」而是「出不来」
@@ -911,21 +1083,15 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       const cx = v.rx * cell + cell / 2 + sway;
       const cy = v.ry * cell + cell / 2 - v.hop;
       const r = cell * 0.34;
-      g.fillStyle = P_COLOR[i];
-      g.beginPath();
-      g.arc(cx, cy, r, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#fff";
-      g.beginPath();
-      g.arc(cx - r * 0.32, cy - r * 0.18, r * 0.22, 0, Math.PI * 2);
-      g.arc(cx + r * 0.32, cy - r * 0.18, r * 0.22, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#3a3357";
-      g.beginPath();
-      g.arc(cx - r * 0.32, cy - r * 0.16, r * 0.1, 0, Math.PI * 2);
-      g.arc(cx + r * 0.32, cy - r * 0.16, r * 0.1, 0, Math.PI * 2);
-      g.fill();
-      emojiAt(f.emoji, cx, cy - r * 1.15, cell * 0.34);
+      const pose = f.bubbleT > 0 ? "trapped" : fighterFx.squatting(i, world.time) ? "squat" : v.moving ? "walk" : "idle";
+      drawChibi(g, cx, cy, cell, CHIBI_SPECS[i] ?? CHIBI_SPECS[0], {
+        pose,
+        walkFrame: walkFrameAt(world.time),
+        // 左右移动整体镜像,上下移动不镜像
+        facing: f.facing === DIR_LEFT ? -1 : 1,
+        blink: pose === "idle" || pose === "walk" ? blinkOn(world.time, i) : false,
+        reduced: calmMotion,
+      });
       // 护盾:头上顶几个小圈就是还剩几层
       if (f.shield > 0 && f.bubbleT <= 0) {
         g.strokeStyle = "#ffc95e";
@@ -971,25 +1137,49 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         g.fillText("电脑", cx, cy + r * 1.35);
       }
     });
+
+    // ⑦ 彩虹波纹 + 爆炸涟漪 + 粒子(压在角色上层:波是半透明的软色,不遮人)
+    //    波纹逐格照抄 world.flames —— 覆盖格与判定格由构造保证完全一致。
+    for (const [cellIdx, left] of world.flames) {
+      const px = (cellIdx % board.w) * cell;
+      const py = Math.floor(cellIdx / board.w) * cell;
+      const k = Math.max(0, Math.min(1, left / FLAME_MS));
+      g.globalAlpha = 0.25 + k * 0.5;
+      g.fillStyle = WAVE_RING[cellIdx % WAVE_RING.length];
+      roundRect(px + 1, py + 1, cell - 2, cell - 2, cell * 0.34);
+      g.fill();
+      g.fillStyle = WAVE_CORE;
+      // 波纹从中心往外化开:刚扫过时是一小团,散掉之前铺满整格
+      const inset = cell * (0.06 + k * 0.24);
+      roundRect(px + inset, py + inset, cell - inset * 2, cell - inset * 2, cell * 0.3);
+      g.fill();
+      g.globalAlpha = 1;
+    }
+    boomFx.draw(g, cell, world.time);
+    drawParticles(g, fx);
   }
 
   // ---- HUD -----------------------------------------------------------------
   function refreshHud(): void {
-    chipTime.textContent =
-      world.limit > 0
-        ? `⏱ ${formatClock(secondsLeft(world))}`
-        : `⏱ ${formatClock(Math.floor(world.time / 1000))}`;
+    const secs = world.limit > 0 ? secondsLeft(world) : Math.floor(world.time / 1000);
+    timeText.textContent = `⏱ ${formatClock(secs)}`;
+    // 倒计时圆环进度化:有限时画剩余比例,无限时画一圈静态描边
+    if (ringG) {
+      const frac = world.limit > 0 ? Math.max(0, Math.min(1, (secs * 1000) / world.limit)) : 1;
+      ringG.clearRect(0, 0, 16, 16);
+      drawHudRing(ringG, 8, 8, 6, frac, world.limit > 0 ? hudRingColor(frac) : "#B9AEDC");
+    }
     if (duel) {
       chipGoal.textContent = `⚔️ ${opts.banner}`;
     } else if (world.goal === "exit") {
-      chipGoal.textContent = world.exitOpen ? "🚪 出口开了,走过去!" : `👾 剩 ${world.critters.length} 只 · 再找出口`;
+      chipGoal.textContent = world.exitOpen ? "🌟 出口开了,走过去!" : `👾 剩 ${world.critters.length} 只 · 再找出口`;
     } else {
       chipGoal.textContent = `👾 剩 ${world.critters.length} 只`;
     }
     fighters.forEach((f, i) => {
       const gear = `${f.kick ? "🦵" : ""}${f.ghost ? "✨" : ""}${f.remote ? "📡" : ""}${f.shield > 0 ? `🛡${f.shield}` : ""}`;
       chipStats[i].name.textContent = f.name;
-      chipStats[i].body.textContent = `${f.emoji} 🌈${f.power} 🫧${f.bombs} 👟${f.speed}${gear ? ` ${gear}` : ""}`;
+      chipStats[i].body.textContent = `🌈${f.power} 🫧${f.bombs} 👟${f.speed}${gear ? ` ${gear}` : ""}`;
     });
     refreshRescueChip();
   }
@@ -1099,19 +1289,15 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
             opts.sfx("pop");
             lastBoom = now;
           }
+          // 涟漪落账:中心白闪 + 按波次沿臂推进的花瓣串 + 末端星屑
+          boomFx.noteBoom(board, e.waves, world.time, calmMotion);
           break;
         case "brick": {
-          // 砖变成小花散开:每块砖散两朵,一左一右
-          const x = e.cell % board.w;
-          const y = Math.floor(e.cell / board.w);
-          for (let k = 0; k < 2; k++) {
-            petals.push({
-              x,
-              y,
-              dx: k === 0 ? -0.42 : 0.42,
-              life: FLAME_MS,
-              emoji: FLOWER_EMOJI[(e.cell + k) % FLOWER_EMOJI.length],
-            });
+          // 砖变成小花瓣散开(矢量粒子);reduced 不撒会飞的花瓣,静态涟漪已足够
+          if (!calmMotion) {
+            const bx = (e.cell % board.w) * cell + cell / 2;
+            const by = Math.floor(e.cell / board.w) * cell + cell / 2;
+            fx.push(...spawnPetals(bx, by, { count: 4, colors: PETAL_COLORS, size: Math.max(4, cell * 0.16) }));
           }
           break;
         }
@@ -1266,15 +1452,15 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       return;
     }
 
+    // 炸心位置要在 stepWorld 之前记:boom 事件到手时炸弹已经从世界里消失了
+    boomFx.noteBombs(world.bombs);
     stepWorld(world, dt, intentsFor(now, dt));
+    // 埋弹下蹲要在 stepWorld 之后看:这一帧新落的泡泡才数得到
+    fighterFx.update(world.bombs, seats, world.time);
     if (opts.shrinkRound) maybeShrink();
     consumeEvents(now);
-
-    // 小花飘一会儿就散掉(纯装饰,从后往前删不影响下标)
-    for (let i = petals.length - 1; i >= 0; i--) {
-      petals[i].life -= dt;
-      if (petals[i].life <= 0) petals.splice(i, 1);
-    }
+    boomFx.step(world.time);
+    fx = stepParticles(fx, dt / 1000);
 
     // 视觉插值:格子跳到目标位,人走得顺滑一点
     fighters.forEach((f, i) => {
@@ -1285,7 +1471,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       v.rx += (tx - v.rx) * k;
       v.ry += (ty - v.ry) * k;
       const moving = Math.abs(tx - v.rx) + Math.abs(ty - v.ry) > 0.05;
-      v.hop = moving && f.bubbleT <= 0 ? Math.abs(Math.sin(now / 90)) * cell * 0.06 : 0;
+      v.moving = moving && f.bubbleT <= 0;
+      // 走路的小蹦跶:reduced 幅度减半(步态是「在动」的功能反馈,不清零)
+      v.hop = v.moving ? Math.abs(Math.sin(now / 90)) * cell * (calmMotion ? 0.03 : 0.06) : 0;
     });
 
     refreshHud();
@@ -1319,7 +1507,10 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         pending[i].boom = false;
         pending[i].kick = false;
       }
-      petals.length = 0;
+      // 粒子与动画计时账本全部归零
+      fx = [];
+      boomFx.reset();
+      fighterFx.reset();
       world.events.length = 0;
       toast = "";
       toastUntil = 0;
@@ -1885,7 +2076,7 @@ export function mount(api: GameApi): BombBuddiesHandle {
         if (i + 1 < TOTAL_LEVELS) buttons.push({ label: "▶ 下一关", go: () => openDirectLevel(i + 1) });
         buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
         buttons.push({ label: "🗺️ 回选关", ghost: true, go: closeDirect });
-        finish(`⭐ 第 ${i + 1} 关过关!`, msg ?? "放泡泡的位置挑得很准!", buttons);
+        finish(`🌟 第 ${i + 1} 关过关!`, msg ?? "放泡泡的位置挑得很准!", buttons);
       },
       lose: (msg) => {
         if (settled) return;
@@ -1944,8 +2135,8 @@ export function mount(api: GameApi): BombBuddiesHandle {
       },
       guide: GUIDE,
       mapHint: "放泡泡之前先想好往哪躲,拐角后面永远安全。",
-      grandMessage: "188 关全部通关,你就是泡泡炸弹人里最会算退路的那一个!",
-      guideTitle: "泡泡炸弹人 · 放泡手册",
+      grandMessage: "188 关全部通关,你就是泡泡布阵里最会算退路的那一个!",
+      guideTitle: "泡泡布阵 · 放泡手册",
     }
   );
 

@@ -35,7 +35,6 @@ import {
   makeTower,
   nudgeToVertical,
   paddleBounce,
-  particleCount,
   popcornTargets,
   powerBarLabel,
   powerEffects,
@@ -58,8 +57,46 @@ import {
   type TowerState
 } from "./logic";
 
+import { candyDarken, candyLighten, paintCandyBrick } from "../../art/kit/candyBrick";
+import {
+  BK_PALETTE,
+  BK_TOWER_ACCENT,
+  BK_WALL_PX,
+  CAPSULE_BOTTOM,
+  CAPSULE_TOP,
+  MAGNET_ARC_LINES,
+  PIERCE_ORBIT_STARS,
+  PORTAL_ACCENT_IN,
+  PORTAL_ACCENT_OUT,
+  RIBBON_COLORS,
+  RIBBON_MIN_COMBO,
+  capsuleSwingDeg,
+  chapterAccent,
+  clearDebris,
+  crackLevel,
+  lampXs,
+  magnetArcPhase,
+  magnetArcWobble,
+  paddlePressOffset,
+  paintDebris,
+  pierceOrbitAngle,
+  portalPulseScale,
+  portalSpinAngle,
+  pushDebris,
+  ribbonAlpha,
+  spawnBrickDebris,
+  stepDebris,
+  trailLayers,
+  type Debris
+} from "./visual";
+import { touchUpliftCss } from "../../art/kit/uiTouch";
+
 const BRICK_COLORS = ["#FF9EC8", "#FFD26E", "#9FE08D", "#8FCBFF", "#C9A0F0", "#FFB48A"];
 const PORTAL_COLOR = "#7B6CD9";
+
+/** 浮雕标记的两层墨色：亮唇在下、墨色压上（光源统一左上 45°） */
+const MARK_LIGHT = "rgba(255,255,255,.8)";
+const MARK_INK = "rgba(74,58,88,.65)";
 
 /** 冒烟脚本才需要逐帧状态镜像，正常游玩不写 DOM 属性 */
 const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.search);
@@ -78,37 +115,47 @@ interface Capsule {
   kind: PowerKind;
 }
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
-}
-
 const CSS = `
-.brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
+.brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: pan-y; position: relative; }
 .brk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
-.brk-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(210,140,110,.25); font-size: 14px; white-space: nowrap; }
+.brk-badge { background: #fff; border: 1px solid rgba(224,210,232,.9); border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(93,74,110,.16); font-size: 14px; white-space: nowrap; }
 .brk-power { min-height: 20px; text-align: center; font-size: 14px; font-weight: 700; color: #7A5AA8; letter-spacing: 1px; }
 /* 砖塔的节奏牌：压得快的时候换个底色，色觉之外还有「快」字兜着 */
 .brk-badge.brk-pace-hot { color: #B4432B; background: #FFEDE6; }
-.brk-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDF8F0, #F4EFFB); touch-action: none; }
-.brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
+.brk-canvas { width: 100%; height: auto; max-height: calc(100dvh - 168px); object-fit: contain; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDEFF5, #F3E4F0); touch-action: none; }
+/* U-11:平板横屏/矮横屏壳层更高,168 预算会切掉挡板;默认句留给 C-2 守门 */
+@media (max-height: 840px) and (min-height:501px) {
+  .brk-canvas { max-height: calc(100dvh - 248px); }
+}
+.brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; position: sticky; bottom: 0; z-index: 3; padding: 6px 0 2px; background: linear-gradient(180deg, rgba(255,239,228,.2), #FFEFE4); }
 .brk-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9AE; color: #8A4A20; cursor: pointer; box-shadow: 0 4px 0 #EBA987; touch-action: none; }
 .brk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBA987; }
 .brk-msg { text-align: center; min-height: 20px; color: #C97B5A; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.4; }
 .brk-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.brk-bar[hidden] { display: none; }
 .brk-open { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFD9C4; color: #8A4A20; cursor: pointer; box-shadow: 0 3px 0 #F0B594; }
 .brk-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #F0B594; }
-.brk-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
+.brk-back { border: none; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; min-height: 44px; }
 .brk-over { text-align: center; padding: 14px 8px; }
 .brk-over h3 { margin: 0 0 6px; font-size: 19px; color: #7A5AA8; }
 .brk-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }
 .brk-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) {
   .brk-btn:active, .brk-open:active { transform: none; }
+}
+${touchUpliftCss([".brk-open", ".brk-back"])}
+.brk-open,.brk-back{min-height:44px;box-sizing:border-box;}
+/* N-124 模式:915×412 钉回关。写在 uiTouch 40 后面,才能盖过 min-height:40 */
+@media (max-height:820px) and (pointer:coarse){
+  .brk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;
+    box-sizing:border-box;min-height:0;}
+  .brk-top,.brk-power,.brk-msg{flex:0 0 auto;}
+  .brk-canvas{max-height:min(160px,38dvh);}
+  .brk-ctrl,.brk-again{position:sticky;bottom:0;z-index:4;flex:0 0 auto;margin-top:4px;
+    background:linear-gradient(180deg,rgba(255,239,228,.2),#FFEFE4);}
+  .brk-msg{max-height:1.3em;overflow:hidden;margin-top:2px;}
+  .brk-back{min-height:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 }
 `;
 
@@ -127,11 +174,18 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 // 画砖 / 画球：闯关与无尽共用同一套笔触
 // ---------------------------------------------------------------------------
 
-function drawMark(c2d: CanvasRenderingContext2D, mark: BrickMark, x: number, y: number, w: number, h: number): void {
-  if (mark === "none") return;
-  c2d.save();
-  c2d.strokeStyle = "rgba(255,255,255,.9)";
-  c2d.fillStyle = "rgba(255,255,255,.9)";
+/** 标记的一遍笔触：几何与 1.2 完全一致，只把颜色抽成参数，浮雕靠画两遍 */
+function markPass(
+  c2d: CanvasRenderingContext2D,
+  mark: BrickMark,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  tone: string
+): void {
+  c2d.strokeStyle = tone;
+  c2d.fillStyle = tone;
   c2d.lineWidth = 1.6;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -167,15 +221,24 @@ function drawMark(c2d: CanvasRenderingContext2D, mark: BrickMark, x: number, y: 
     c2d.closePath();
     c2d.fill();
   } else if (mark === "shine") {
-    c2d.strokeStyle = "#FFF6DF";
+    c2d.strokeStyle = tone;
     c2d.lineWidth = 2;
     c2d.beginPath();
     c2d.roundRect(x, y, w, h, 5);
     c2d.stroke();
   }
+}
+
+/** 特殊砖标记升级成内凹浮雕：亮唇偏移 1px 在下、墨色压上，图案通道语义不变 */
+function drawMark(c2d: CanvasRenderingContext2D, mark: BrickMark, x: number, y: number, w: number, h: number): void {
+  if (mark === "none") return;
+  c2d.save();
+  markPass(c2d, mark, x, y + 1, w, h, mark === "shine" ? "#FFF6DF" : MARK_LIGHT);
+  markPass(c2d, mark, x, y, w, h, MARK_INK);
   c2d.restore();
 }
 
+/** 果冻糖砖：五道工序交给 kit/candyBrick；多血砖掉几档血就叠几层裂纹 */
 function drawBrick(
   c2d: CanvasRenderingContext2D,
   x: number,
@@ -183,91 +246,413 @@ function drawBrick(
   w: number,
   h: number,
   color: string,
-  mark: BrickMark
+  mark: BrickMark,
+  cracks = 0,
+  crackSeed = 1
 ): void {
-  c2d.fillStyle = color;
-  c2d.beginPath();
-  c2d.roundRect(x, y, w, h, 5);
-  c2d.fill();
+  paintCandyBrick(c2d, x, y, w, h, color, { cracks, crackSeed });
   drawMark(c2d, mark, x, y, w, h);
 }
 
-function drawPortal(c2d: CanvasRenderingContext2D, cx: number, cy: number): void {
+/**
+ * 星门：双环旋转（外环顺、内环逆，3200ms 一圈；reduced 静止）。
+ * 进口 / 出口的亮环互为反色，一眼分得清哪扇是哪扇；
+ * 球进出后 160ms 内门圈涨 8% 再回落（portalPulseScale，reduced 恒 1）。
+ */
+function drawPortal(
+  c2d: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  flip: boolean,
+  sincePulseMs: number,
+  nowMs: number,
+  reduce: boolean
+): void {
+  const spin = portalSpinAngle(nowMs, reduce) * (flip ? -1 : 1);
+  const pulse = portalPulseScale(sincePulseMs, reduce);
+  const R = (BRICK_H / 2 + 1) * pulse;
+  const accent = flip ? PORTAL_ACCENT_OUT : PORTAL_ACCENT_IN;
+  c2d.save();
+  c2d.translate(cx, cy);
+  c2d.beginPath();
+  c2d.arc(0, 0, R, 0, Math.PI * 2);
   c2d.fillStyle = PORTAL_COLOR;
-  c2d.beginPath();
-  c2d.arc(cx, cy, BRICK_H / 2 + 1, 0, Math.PI * 2);
   c2d.fill();
-  c2d.fillStyle = "#EDE9FF";
-  c2d.beginPath();
-  c2d.arc(cx, cy, BRICK_H / 4, 0, Math.PI * 2);
-  c2d.fill();
-}
-
-function drawPaddle(c2d: CanvasRenderingContext2D, x: number, w: number, magnet: boolean): void {
-  c2d.fillStyle = magnet ? "#4FAE8C" : "#8A6BD0";
-  c2d.beginPath();
-  c2d.roundRect(x - w / 2, PADDLE_Y, w, PADDLE_H, 6);
-  c2d.fill();
-}
-
-function drawBallWithTrail(c2d: CanvasRenderingContext2D, b: Ball, speed: number, pierce: boolean): void {
-  if (b.trail.length > 1) {
-    const span = trailLength(speed);
-    c2d.save();
-    c2d.strokeStyle = pierce ? "rgba(140,220,255,.5)" : "rgba(255,107,158,.35)";
-    c2d.lineWidth = Math.max(3, Math.min(BALL_R * 1.6, span * 0.3));
-    c2d.lineCap = "round";
+  c2d.lineWidth = 2;
+  for (const [off, tone] of [
+    [0, accent],
+    [Math.PI, "rgba(255,255,255,.75)"]
+  ] as Array<[number, string]>) {
+    c2d.strokeStyle = tone;
     c2d.beginPath();
-    c2d.moveTo(b.trail[0][0], b.trail[0][1]);
-    for (let i = 1; i < b.trail.length; i++) c2d.lineTo(b.trail[i][0], b.trail[i][1]);
+    c2d.arc(0, 0, R - 1.6, spin + off, spin + off + Math.PI * 0.62);
+    c2d.stroke();
+  }
+  c2d.lineWidth = 1.4;
+  for (const [off, tone] of [
+    [0, "rgba(255,255,255,.65)"],
+    [Math.PI, accent]
+  ] as Array<[number, string]>) {
+    c2d.strokeStyle = tone;
+    c2d.beginPath();
+    c2d.arc(0, 0, R * 0.55, -spin + off, -spin + off + Math.PI * 0.62);
+    c2d.stroke();
+  }
+  c2d.beginPath();
+  c2d.arc(0, 0, R * 0.26, 0, Math.PI * 2);
+  c2d.fillStyle = "#EDE9FF";
+  c2d.fill();
+  c2d.restore();
+}
+
+/**
+ * 挡板质感：三停线性渐变（顶亮→主体→底暗）+ 两端圆头高光点。
+ * 磁铁态换 bkPaddleMagnet 并加表面电弧微光与吸附点凹槽（色 + 电弧双通道）。
+ * 接球瞬间靠 paddlePressOffset 往下画 2px 再 80ms 弹回——
+ * 纯视觉偏移，PADDLE_Y / PADDLE_H 判定线一动不动。
+ */
+function drawPaddle(
+  c2d: CanvasRenderingContext2D,
+  x: number,
+  w: number,
+  magnet: boolean,
+  reduce: boolean,
+  nowMs: number,
+  catchMs: number
+): void {
+  const py = PADDLE_Y + paddlePressOffset(nowMs - catchMs, reduce);
+  const base = magnet ? BK_PALETTE.bkPaddleMagnet : BK_PALETTE.bkPaddle;
+  const grad = c2d.createLinearGradient(0, py, 0, py + PADDLE_H);
+  grad.addColorStop(0, candyLighten(base, 0.32));
+  grad.addColorStop(0.45, base);
+  grad.addColorStop(1, candyDarken(base, 0.2));
+  c2d.save();
+  c2d.beginPath();
+  c2d.roundRect(x - w / 2, py, w, PADDLE_H, 6);
+  c2d.fillStyle = grad;
+  c2d.fill();
+  c2d.strokeStyle = candyDarken(base, 0.24);
+  c2d.lineWidth = 1;
+  c2d.stroke();
+  c2d.fillStyle = "rgba(255,255,255,.8)";
+  for (const sx of [-1, 1]) {
+    c2d.beginPath();
+    c2d.arc(x + sx * (w / 2 - 4.5), py + 3.6, 1.6, 0, Math.PI * 2);
+    c2d.fill();
+  }
+  if (magnet) {
+    // 吸附点提示凹槽：球会吸在板心，先把位置画出来
+    c2d.fillStyle = "rgba(74,58,88,.28)";
+    c2d.beginPath();
+    c2d.roundRect(x - 7, py + 1.6, 14, 2.6, 1.3);
+    c2d.fill();
+    // 表面电弧微光：两条抖动细线，每 90ms 换一次姿势；reduced 静止为常亮直线
+    const phase = magnetArcPhase(nowMs, reduce);
+    c2d.strokeStyle = "rgba(255,255,244,.9)";
+    c2d.lineWidth = 1;
+    for (let line = 0; line < MAGNET_ARC_LINES; line++) {
+      const yy = py - 1.6 - line * 2.2;
+      const x0 = x - w / 2 + 5;
+      const x1 = x + w / 2 - 5;
+      const segs = 4;
+      c2d.beginPath();
+      c2d.moveTo(x0, yy);
+      for (let s = 1; s <= segs; s++) {
+        const sx = x0 + ((x1 - x0) * s) / segs;
+        c2d.lineTo(sx, s === segs ? yy : yy + magnetArcWobble(phase, line * 5 + s) * 1.6);
+      }
+      c2d.stroke();
+    }
+  }
+  c2d.restore();
+}
+
+/**
+ * 球与拖尾：拖尾方向沿历史位置采样（1.2 的做法原样保留），
+ * 升级成双层——外晕宽而淡、芯线细而亮；span 仍由 logic.trailLength 决定。
+ * 球本体三停径向渐变（高光左上 45°）；穿透态外圈加两颗星屑环绕。
+ */
+function drawBallWithTrail(
+  c2d: CanvasRenderingContext2D,
+  b: Ball,
+  speed: number,
+  pierce: boolean,
+  nowMs: number,
+  reduce: boolean
+): void {
+  if (b.trail.length > 1) {
+    const layers = trailLayers(speed, BALL_R);
+    const tracePath = (): void => {
+      c2d.beginPath();
+      c2d.moveTo(b.trail[0][0], b.trail[0][1]);
+      for (let i = 1; i < b.trail.length; i++) c2d.lineTo(b.trail[i][0], b.trail[i][1]);
+    };
+    c2d.save();
+    c2d.lineCap = "round";
+    c2d.strokeStyle = pierce ? "rgba(140,220,255,.4)" : BK_PALETTE.bkTrailGlow;
+    c2d.lineWidth = layers.glowWidth;
+    tracePath();
+    c2d.stroke();
+    c2d.globalAlpha = 0.65;
+    c2d.strokeStyle = BK_PALETTE.bkTrailCore;
+    c2d.lineWidth = layers.coreWidth;
+    tracePath();
     c2d.stroke();
     c2d.restore();
   }
-  c2d.fillStyle = pierce ? "#6FD0FF" : "#FF6B9E";
+  const base = pierce ? "#6FD0FF" : "#FF6B9E";
+  const g = c2d.createRadialGradient(b.x - BALL_R * 0.4, b.y - BALL_R * 0.4, BALL_R * 0.15, b.x, b.y, BALL_R);
+  g.addColorStop(0, "#FFFFFF");
+  g.addColorStop(0.35, candyLighten(base, 0.3));
+  g.addColorStop(1, candyDarken(base, 0.12));
+  c2d.fillStyle = g;
   c2d.beginPath();
   c2d.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
   c2d.fill();
+  if (pierce) {
+    c2d.fillStyle = "#FFF6DF";
+    for (let i = 0; i < PIERCE_ORBIT_STARS; i++) {
+      const a = pierceOrbitAngle(nowMs, i, reduce);
+      c2d.beginPath();
+      c2d.arc(b.x + Math.cos(a) * (BALL_R + 3.5), b.y + Math.sin(a) * (BALL_R + 3.5), 1.5, 0, Math.PI * 2);
+      c2d.fill();
+    }
+  }
 }
 
-function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule): void {
+/** 连击彩带：连击 ≥ 5 时画面边缘三色细带一闪（120ms；alpha 由 ribbonAlpha 算好传入） */
+function drawRibbon(c2d: CanvasRenderingContext2D, alpha: number): void {
+  if (alpha <= 0) return;
+  c2d.save();
+  c2d.globalAlpha = alpha;
+  RIBBON_COLORS.forEach((color, i) => {
+    const off = 1 + i * 2;
+    c2d.fillStyle = color;
+    c2d.fillRect(off, off, W - off * 2, 2);
+    c2d.fillRect(off, H - off - 2, W - off * 2, 2);
+    c2d.fillRect(off, off, 2, H - off * 2);
+    c2d.fillRect(W - off - 2, off, 2, H - off * 2);
+  });
+  c2d.restore();
+}
+
+/** 胶囊图标墨色(与 HUD 文本同源) */
+const CAPSULE_ICON_INK = "#3A2E4A";
+
+/**
+ * 道具小图标:六种全走双色矢量(W6R1-04 修复,serif emoji 内贴退休)。
+ * 画在胶囊原点坐标系(已 translate/rotate),半径约 6.5px。
+ */
+function drawCapsuleIcon(c2d: CanvasRenderingContext2D, kind: Capsule["kind"]): void {
+  c2d.save();
+  c2d.lineCap = "round";
+  c2d.lineJoin = "round";
+  switch (kind) {
+    case "wide": {
+      // 双向外扩箭头:板变宽
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1.8;
+      c2d.beginPath();
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(5.5, 1);
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(-3, -1.6);
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(-3, 3.6);
+      c2d.moveTo(5.5, 1);
+      c2d.lineTo(3, -1.6);
+      c2d.moveTo(5.5, 1);
+      c2d.lineTo(3, 3.6);
+      c2d.stroke();
+      break;
+    }
+    case "triple": {
+      // 一颗变三颗:品字三小球(主色粉 + 墨描边)
+      c2d.fillStyle = "#FF6B9E";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1;
+      for (const [ix, iy] of [[0, -2.6], [-3.4, 3], [3.4, 3]] as const) {
+        c2d.beginPath();
+        c2d.arc(ix, iy + 1, 2.4, 0, Math.PI * 2);
+        c2d.fill();
+        c2d.stroke();
+      }
+      break;
+    }
+    case "pierce": {
+      // 穿透:四角星芒(金)+ 墨描边
+      c2d.fillStyle = "#F0C25A";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1;
+      c2d.beginPath();
+      c2d.moveTo(0, -5.6);
+      c2d.quadraticCurveTo(1.2, -0.2, 5.6, 1);
+      c2d.quadraticCurveTo(1.2, 2.2, 0, 7.6);
+      c2d.quadraticCurveTo(-1.2, 2.2, -5.6, 1);
+      c2d.quadraticCurveTo(-1.2, -0.2, 0, -5.6);
+      c2d.closePath();
+      c2d.fill();
+      c2d.stroke();
+      break;
+    }
+    case "slow": {
+      // 慢速小乌龟:绿壳半圆 + 壳纹 + 探头
+      c2d.fillStyle = "#7CC96B";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1.1;
+      c2d.beginPath();
+      c2d.arc(-0.6, 2.4, 4.6, Math.PI, 0);
+      c2d.closePath();
+      c2d.fill();
+      c2d.stroke();
+      c2d.beginPath();
+      c2d.moveTo(-2.6, 2.4);
+      c2d.lineTo(-1.4, -1);
+      c2d.moveTo(1.4, 2.4);
+      c2d.lineTo(0.4, -1);
+      c2d.stroke();
+      c2d.fillStyle = "#8FD98B";
+      c2d.beginPath();
+      c2d.arc(4.9, 1.2, 1.7, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.stroke();
+      break;
+    }
+    case "magnet": {
+      // 磁力:红 U 形磁铁 + 白极头
+      c2d.strokeStyle = "#E85D75";
+      c2d.lineWidth = 2.6;
+      c2d.beginPath();
+      c2d.arc(0, -0.4, 3.8, Math.PI, 0);
+      c2d.moveTo(-3.8, -0.4);
+      c2d.lineTo(-3.8, 4.4);
+      c2d.moveTo(3.8, -0.4);
+      c2d.lineTo(3.8, 4.4);
+      c2d.stroke();
+      c2d.fillStyle = "#FFFFFF";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 0.9;
+      for (const px of [-3.8, 3.8]) {
+        c2d.beginPath();
+        c2d.rect(px - 1.4, 3.2, 2.8, 2.4);
+        c2d.fill();
+        c2d.stroke();
+      }
+      break;
+    }
+    default: {
+      // narrow「别接」:双向内收箭头(形状通道再加一重表意)
+      c2d.strokeStyle = "#E0709A";
+      c2d.lineWidth = 1.8;
+      c2d.beginPath();
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(-1.6, 1);
+      c2d.moveTo(-1.6, 1);
+      c2d.lineTo(-3.6, -1.4);
+      c2d.moveTo(-1.6, 1);
+      c2d.lineTo(-3.6, 3.4);
+      c2d.moveTo(5.5, 1);
+      c2d.lineTo(1.6, 1);
+      c2d.moveTo(1.6, 1);
+      c2d.lineTo(3.6, -1.4);
+      c2d.moveTo(1.6, 1);
+      c2d.lineTo(3.6, 3.4);
+      c2d.stroke();
+      break;
+    }
+  }
+  c2d.restore();
+}
+
+/**
+ * 药丸胶囊：下落时 ±4° 摆动（600ms 周期；reduced 竖直下落）。
+ * W6R1-04 修复:主体从平涂双段改为四停纵向渐变(受光白 → 上半 → 下半 → 暗底)
+ * + 左上高光斑;图标从 serif emoji 换成 drawCapsuleIcon 的双色矢量。
+ * 「别接我」的空心圈形状通道原样保留(capsuleLook 判定一个字不动)。
+ */
+function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule, nowMs: number, reduce: boolean): void {
   const look = capsuleLook(cap.kind);
-  c2d.beginPath();
-  c2d.arc(cap.x, cap.y, 11, 0, Math.PI * 2);
+  const ang = (capsuleSwingDeg(nowMs, cap.x * 0.13, reduce) * Math.PI) / 180;
+  const rw = 9;
+  const rh = 12;
+  c2d.save();
+  c2d.translate(cap.x, cap.y);
+  c2d.rotate(ang);
   if (look.hollow) {
-    // 空心圈：形状本身就在说「别接我」，不指望孩子分得出那点粉色
+    // 空心圈药丸：形状本身就在说「别接我」，不指望孩子分得出那点粉色
     c2d.lineWidth = 3;
     c2d.strokeStyle = "#E0709A";
+    c2d.beginPath();
+    c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
     c2d.stroke();
   } else {
-    c2d.fillStyle = look.fill;
-    c2d.fill();
-  }
-  c2d.font = "14px serif";
-  c2d.textAlign = "center";
-  c2d.textBaseline = "middle";
-  c2d.fillStyle = "#3A2E4A";
-  c2d.fillText(look.emoji, cap.x, cap.y + 1);
-}
-
-function drawParticles(c2d: CanvasRenderingContext2D, list: Particle[]): void {
-  for (const p of list) {
-    c2d.globalAlpha = Math.max(0, Math.min(1, p.life * 2.2));
-    c2d.fillStyle = p.color;
+    // 双段果冻药丸:同一支四停纵向渐变里保住「上白下蓝」的两半读法
+    const g = c2d.createLinearGradient(0, -rh, 0, rh);
+    g.addColorStop(0, "#FFFFFF");
+    g.addColorStop(0.46, candyDarken(look.fill === "#FFFFFF" ? CAPSULE_TOP : look.fill, 0.05));
+    g.addColorStop(0.54, CAPSULE_BOTTOM);
+    g.addColorStop(1, candyDarken(CAPSULE_BOTTOM, 0.18));
     c2d.beginPath();
-    c2d.arc(p.x, p.y, 2.6, 0, Math.PI * 2);
+    c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
+    c2d.fillStyle = g;
     c2d.fill();
+    // 中缝细影(两半胶囊的接缝)
+    c2d.save();
+    c2d.clip();
+    c2d.fillStyle = BK_PALETTE.bkShadow;
+    c2d.fillRect(-rw, -0.5, rw * 2, 1);
+    c2d.restore();
+    // 左上高光斑(全场光源左上 45° 约定)
+    c2d.fillStyle = "rgba(255,255,255,.85)";
+    c2d.beginPath();
+    c2d.ellipse(-rw * 0.38, -rh * 0.52, 2.2, 3.4, -0.5, 0, Math.PI * 2);
+    c2d.fill();
+    c2d.beginPath();
+    c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
+    c2d.strokeStyle = candyDarken(CAPSULE_BOTTOM, 0.2);
+    c2d.lineWidth = 1.5;
+    c2d.stroke();
   }
-  c2d.globalAlpha = 1;
+  drawCapsuleIcon(c2d, cap.kind);
+  c2d.restore();
 }
 
-function stepParticles(list: Particle[], dt: number): Particle[] {
-  for (const p of list) {
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += 380 * dt;
-    p.life -= dt;
-  }
-  return list.filter((p) => p.life > 0);
+/**
+ * 场景底：上下渐变背景 + 顶部主题色装饰灯带 + 左右上边墙内凹槽。
+ * 边墙是纯装饰（3px），物理边界仍然是 0..W，一像素判定都不挪。
+ */
+function paintScene(c2d: CanvasRenderingContext2D, accent: string): void {
+  const g = c2d.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, BK_PALETTE.bkBgTop);
+  g.addColorStop(1, BK_PALETTE.bkBgBottom);
+  c2d.fillStyle = g;
+  c2d.fillRect(0, 0, W, H);
+  // 顶部灯带：一根细线挂一排小圆灯，关卡主题色与暖白相间（静态，reduced 同样保留）
+  c2d.strokeStyle = BK_PALETTE.bkShadow;
+  c2d.lineWidth = 1;
+  c2d.beginPath();
+  c2d.moveTo(0, 7);
+  c2d.lineTo(W, 7);
+  c2d.stroke();
+  lampXs(W).forEach((lx, i) => {
+    c2d.fillStyle = i % 2 === 0 ? accent : "#FFF6DF";
+    c2d.beginPath();
+    c2d.arc(lx, 9, 2.4, 0, Math.PI * 2);
+    c2d.fill();
+  });
+  // 边墙内凹槽：墙体 + 内侧暗线 + 最外亮线，光源统一左上 45°
+  c2d.fillStyle = BK_PALETTE.bkWall;
+  c2d.fillRect(0, 0, BK_WALL_PX, H);
+  c2d.fillRect(W - BK_WALL_PX, 0, BK_WALL_PX, H);
+  c2d.fillRect(0, 0, W, BK_WALL_PX);
+  c2d.fillStyle = candyDarken(BK_PALETTE.bkWall, 0.16);
+  c2d.fillRect(BK_WALL_PX - 1, 0, 1, H);
+  c2d.fillRect(W - BK_WALL_PX, 0, 1, H);
+  c2d.fillRect(0, BK_WALL_PX - 1, W, 1);
+  c2d.fillStyle = "rgba(255,255,255,.6)";
+  c2d.fillRect(0, 0, 1, H);
+  c2d.fillRect(W - 1, 0, 1, H);
+  c2d.fillRect(0, 0, W, 1);
 }
 
 /** 拖板热区：手指在球台下半屏拖，板心与手指之间留一点偏移，别被手挡住 */
@@ -287,6 +672,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const reduce = reducedMotion();
   const rand = mulberry32(ctx.level * 7919 + 17);
   const jan = new Janitor();
+  /** 灯带用的章节主题色（纯视觉） */
+  const accent = chapterAccent(ctx.level);
+  /** 每扇星门最近一次被球进出的时间戳（门圈涨缩用，纯视觉） */
+  const portalPulse = new Map<number, number>();
 
   let destroyed = false;
   let ended = false;
@@ -300,10 +689,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let moveT = 0;
   let balls: Ball[] = [];
   let capsules: Capsule[] = [];
-  let particles: Particle[] = [];
+  let debris: Debris[] = [];
   let timers: PowerTimers = {};
   let combo = 0;
   let lastPop = 0;
+  /** 最近一次接球的时间戳（挡板下压回弹用，纯视觉） */
+  let catchAt = -1e9;
+  /** 最近一次触发连击彩带的时间戳与当时连击数 */
+  let ribbonAt = -1e9;
+  let ribbonCombo = 0;
   /** 击砖顿感剩余秒数 */
   let stopT = 0;
   let sinceHit = 0;
@@ -431,13 +825,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   function burst(r: number, c: number): void {
-    const n = particleCount(7, reduce);
     const cx = c * brickW + brickW / 2 + brickOffsetX();
     const cy = BRICK_TOP + r * BRICK_H + BRICK_H / 2;
     const color = faceOf(r, c).color;
-    for (let i = 0; i < n; i++) {
-      particles.push({ x: cx, y: cy, vx: (rand() - 0.5) * 190, vy: (rand() - 0.5) * 160 - 40, life: 0.45, color });
-    }
+    // 四角碎片 + 星屑，seed 按格子固定；reduced 一片不生成，总量有上限
+    debris = pushDebris(debris, spawnBrickDebris(r * 131 + c * 17 + 1, cx, cy, color, reduce));
   }
 
   function comboPop(): void {
@@ -512,6 +904,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     combo++;
     burst(r, c);
     comboPop();
+    if (combo >= RIBBON_MIN_COMBO) {
+      ribbonAt = lastTime;
+      ribbonCombo = combo;
+    }
     if (res.gift || rand() < DROP_CHANCE) dropCapsule(r, c);
     if (res.chain) {
       for (const [nr, nc] of popcornTargets(r, c, rows, COLS)) breakAt(nr, nc, true);
@@ -529,6 +925,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     b.y = BRICK_TOP + other[0] * BRICK_H + BRICK_H / 2 + (b.vy > 0 ? BRICK_H : -BRICK_H);
     b.portalCd = PORTAL_COOLDOWN;
     b.trail.length = 0;
+    // 进出两扇门一起涨缩一下（160ms，reduced 不动）
+    portalPulse.set(fromR * 100 + fromC, lastTime);
+    portalPulse.set(other[0] * 100 + other[1], lastTime);
     ctx.sfx("coin");
     msgEl.textContent = "🌀 咻——从另一扇星门飞出来啦！";
     hintT = 1.8;
@@ -621,6 +1020,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           b.y = PADDLE_Y - BALL_R - 1;
           ctx.sfx("tap");
         }
+        catchAt = lastTime;
         combo = 0;
       }
 
@@ -689,27 +1089,30 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function draw(): void {
     if (!c2d) return;
-    c2d.clearRect(0, 0, W, H);
+    // 图层序（从底到顶）：①背景+灯带 ②边墙 ③砖阵 ④星门 ⑤胶囊 ⑥拖尾 ⑦球 ⑧挡板 ⑨碎片/彩带
+    paintScene(c2d, accent);
     const dx = brickOffsetX();
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < COLS; c++) {
         const orig = cfg.layout[r][c];
+        if (orig === KIND.PORTAL || grid[r][c] === KIND.EMPTY) continue;
         const x = c * brickW + 2 + dx;
         const y = BRICK_TOP + r * BRICK_H + 2;
-        if (orig === KIND.PORTAL) {
-          drawPortal(c2d, x + brickW / 2 - 2, y + BRICK_H / 2 - 2);
-          continue;
-        }
-        if (grid[r][c] === KIND.EMPTY) continue;
         const face = faceOf(r, c);
-        drawBrick(c2d, x, y, brickW - 4, BRICK_H - 4, face.color, face.mark);
+        drawBrick(c2d, x, y, brickW - 4, BRICK_H - 4, face.color, face.mark, crackLevel(orig, grid[r][c]), r * 31 + c);
       }
     }
-    for (const cap of capsules) drawCapsule(c2d, cap);
-    drawPaddle(c2d, paddleX, paddleW(), eff().magnet);
+    portals.forEach(([pr, pc], i) => {
+      const px = pc * brickW + brickW / 2 + dx;
+      const py = BRICK_TOP + pr * BRICK_H + BRICK_H / 2;
+      drawPortal(c2d, px, py, i % 2 === 1, lastTime - (portalPulse.get(pr * 100 + pc) ?? -1e9), lastTime, reduce);
+    });
+    for (const cap of capsules) drawCapsule(c2d, cap, lastTime, reduce);
     const sp = speed();
-    for (const b of balls) drawBallWithTrail(c2d, b, sp, eff().pierce);
-    drawParticles(c2d, particles);
+    for (const b of balls) drawBallWithTrail(c2d, b, sp, eff().pierce, lastTime, reduce);
+    drawPaddle(c2d, paddleX, paddleW(), eff().magnet, reduce, lastTime, catchAt);
+    paintDebris(c2d, debris);
+    drawRibbon(c2d, ribbonAlpha(lastTime - ribbonAt, ribbonCombo, reduce));
     if (SMOKE) canvas.dataset.balls = balls.map((b) => `${Math.round(b.x)},${Math.round(b.y)}`).join(";");
   }
 
@@ -719,7 +1122,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     lastTime = now;
     moveT += dt;
     timers = tickPowers(timers, dt);
-    particles = stepParticles(particles, dt);
+    debris = stepDebris(debris, dt * 1000);
     if (hintT > 0) {
       hintT -= dt;
       if (hintT <= 0) msgEl.textContent = "";
@@ -823,6 +1226,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      clearDebris(debris);
+      portalPulse.clear();
       jan.destroy();
       wrap.remove();
     }
@@ -880,7 +1285,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   let dir = 0;
   let timers: PowerTimers = {};
   let capsules: Capsule[] = [];
-  let particles: Particle[] = [];
+  let debris: Debris[] = [];
   let running = false;
   let over = false;
   let lastTime = 0;
@@ -888,6 +1293,10 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   let combo = 0;
   let lastPop = 0;
   let paceT = 0;
+  /** 最近一次接球时间戳（挡板下压回弹）与彩带触发点（都是纯视觉） */
+  let catchAt = -1e9;
+  let ribbonAt = -1e9;
+  let ribbonCombo = 0;
   const brickW = W / TOWER_COLS;
 
   function eff() {
@@ -918,7 +1327,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     ball = { x: paddleX, y: PADDLE_Y - BALL_R - 1, vx: 0, vy: 0, portalCd: 0, stuck: 0, trail: [] };
     timers = {};
     capsules = [];
-    particles = [];
+    debris = [];
     running = false;
     over = false;
     combo = 0;
@@ -939,13 +1348,10 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   }
 
   function burst(r: number, c: number, kind: number): void {
-    const n = particleCount(6, reduce);
     const cx = c * brickW + brickW / 2;
     const cy = towerRowY(state, r) + BRICK_H / 2;
     const color = brickFace(kind, kind).color;
-    for (let i = 0; i < n; i++) {
-      particles.push({ x: cx, y: cy, vx: (rand() - 0.5) * 180, vy: (rand() - 0.5) * 150 - 30, life: 0.4, color });
-    }
+    debris = pushDebris(debris, spawnBrickDebris(r * 131 + c * 17 + state.bricksBroken * 7 + 1, cx, cy, color, reduce));
   }
 
   function comboPop(): void {
@@ -1009,6 +1415,10 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     if (res.broke.length > 0) {
       combo += res.broke.length;
       comboPop();
+      if (combo >= RIBBON_MIN_COMBO) {
+        ribbonAt = lastTime;
+        ribbonCombo = combo;
+      }
     } else {
       api.play("tap");
     }
@@ -1087,6 +1497,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
         ball.y = PADDLE_Y - BALL_R - 1;
         api.play("tap");
       }
+      catchAt = lastTime;
       combo = 0;
     }
 
@@ -1118,7 +1529,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
 
   function draw(): void {
     if (!c2d) return;
-    c2d.clearRect(0, 0, W, H);
+    paintScene(c2d, BK_TOWER_ACCENT);
     // 危险线
     c2d.strokeStyle = "rgba(233,120,120,.5)";
     c2d.setLineDash([6, 6]);
@@ -1136,17 +1547,18 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
         if (kind === KIND.EMPTY) continue;
         const face = brickFace(kind, kind);
         const color = kind === KIND.NORMAL ? BRICK_COLORS[(r + c) % BRICK_COLORS.length] : face.color;
-        drawBrick(c2d, c * brickW + 2, y + 2, brickW - 4, BRICK_H - 4, color, face.mark);
+        drawBrick(c2d, c * brickW + 2, y + 2, brickW - 4, BRICK_H - 4, color, face.mark, 0, r * 31 + c);
       }
     }
-    for (const cap of capsules) drawCapsule(c2d, cap);
-    drawPaddle(c2d, paddleX, paddleW(), eff().magnet);
+    for (const cap of capsules) drawCapsule(c2d, cap, lastTime, reduce);
     if (ball.stuck !== null) {
       ball.x = Math.max(BALL_R, Math.min(W - BALL_R, paddleX + ball.stuck));
       ball.y = PADDLE_Y - BALL_R - 1;
     }
-    drawBallWithTrail(c2d, ball, speed(), eff().pierce);
-    drawParticles(c2d, particles);
+    drawBallWithTrail(c2d, ball, speed(), eff().pierce, lastTime, reduce);
+    drawPaddle(c2d, paddleX, paddleW(), eff().magnet, reduce, lastTime, catchAt);
+    paintDebris(c2d, debris);
+    drawRibbon(c2d, ribbonAlpha(lastTime - ribbonAt, ribbonCombo, reduce));
   }
 
   function tick(now: number): void {
@@ -1154,7 +1566,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     const dt = Math.min(0.03, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
     timers = tickPowers(timers, dt);
-    particles = stepParticles(particles, dt);
+    debris = stepDebris(debris, dt * 1000);
     if (hintT > 0) {
       hintT -= dt;
       if (hintT <= 0) msgEl.textContent = "";
@@ -1253,6 +1665,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
       disposed = true;
       over = true;
       cancelAnimationFrame(raf);
+      clearDebris(debris);
       jan.destroy();
       wrap.remove();
     }

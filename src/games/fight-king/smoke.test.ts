@@ -89,9 +89,10 @@ describe("五个入口", () => {
     open(rec);
     const css = rec.dom.root.find((e) => e.tagName === "style")?.textContent ?? "";
     expect(css.length).toBeGreaterThan(0);
-    // 训练场的帧数读数与触屏钮的钮名原来都是 11px，双人时左右各四颗钮更难认
-    expect(css).toContain(".fk-clock-r{font-size:12px;");
-    expect(css).toContain(".fk-pad-name{font-size:12px;");
+    // 训练场的帧数读数与触屏钮的钮名原来都是 11px;1.3 第 2 轮把 HUD 微标签
+    // 一并提到宪法 14px 下限(visual-r2 修遗留#4),这里跟着抬高钉死
+    expect(css).toContain(".fk-clock-r{font-size:14px;");
+    expect(css).toContain(".fk-pad-name{font-size:14px;");
     // 整份 CSS 逐条量过去，带小数的也算数（.fk-ch-n 与 360px 档的 .fk-name 原来是 11.5px，
     // 只挡整数像素的话它们会从筛子缝里漏过去）
     const sizes = [...css.matchAll(/font-size:([\d.]+)px/g)].map((m) => Number(m[1]));

@@ -89,6 +89,34 @@ import {
   type World,
   type WorldEvent,
 } from "./logic";
+import { shade, withAlpha } from "../../art/kit/palette";
+import { bubbleFilm, bubbleGloss, sheenAngle } from "../../art/kit/bubbleSkin";
+import {
+  BRO_KITS,
+  CANDY_KINDS,
+  PB_BUBBLE_HOLD,
+  PB_COLORS,
+  PB_WARP_A,
+  PB_WARP_B,
+  broBody,
+  cloudScroll,
+  cloudTint,
+  drawCandy,
+  drawDizzyStars,
+  drawEventSpark,
+  highFiveFrame,
+  mouthState,
+  paintBro,
+  paintCloud,
+  paintHighFive,
+  paintPuffRing,
+  shouldHighFive,
+  skyForLevel,
+  springCoilYs,
+  swayAngle,
+  updraftFeather,
+  type SparkKind,
+} from "./visual13";
 
 // ---------------------------------------------------------------------------
 // 配色:一章一套粉彩,统一走「泡泡糖 + 奶油色」的干净路子
@@ -116,11 +144,13 @@ const PALETTES: Palette[] = [
   { sky0: "#FFF1E8", sky1: "#FFF9F4", far: "#FAD6BE", deck: "#F0A87C", deckSoft: "#FBE2D0", deco: "#D4814F" },
 ];
 
-/** 两位噗噗兄弟的配色:朵朵粉,星星蓝 */
-const BROS = [
-  { body: "#FF9EC4", dark: "#E2749F", belly: "#FFE3EE", eye: "#5A3350", name: "朵朵" },
-  { body: "#8FBEF5", dark: "#6693CE", belly: "#E1EDFC", eye: "#2F4A73", name: "星星" },
-];
+/**
+ * 两位噗噗兄弟:骨架与配色都住在 `visual13.ts` 的 `BRO_KITS` 里 ——
+ * 哥哥朵朵(翘呆毛 / 背带裤 / 圆耳朵)、弟弟星星(圆边小帽 / 围兜 / 后脑揪揪)。
+ * 几何只算一次,渲染层直接引用。
+ */
+const BRO_GEOMS = [broBody(0), broBody(1)] as const;
+const BRO_NAMES = [BRO_KITS[0].name, BRO_KITS[1].name] as const;
 
 /** 三种咕噜怪的配色 */
 const GOO = {
@@ -128,8 +158,6 @@ const GOO = {
   hopper: { body: "#FFD36E", dark: "#E0AE3C", face: "#7A5410", label: "蹦蹦怪" },
   chaser: { body: "#FF9A8B", dark: "#DE6E5E", face: "#7C3225", label: "追追怪" },
 };
-
-const CANDY_ART = ["🍬", "🍭", "🧁", "🍡"];
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -148,10 +176,14 @@ const CSS = `
 .pfb-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;position:relative;}
 .pfb-hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
-.pfb-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;color:#3F5C77;
-  box-shadow:0 2px 6px rgba(110,140,175,.24);white-space:nowrap;}
-.pfb-chip-a{background:#FFE4EF;color:#A33C6C;}
-.pfb-chip-b{background:#DEEBFC;color:#2F5A8C;}
+/* 计数卡片化:白瓷卡 + 细边 + 顶光,徽章与数字排一行 */
+.pfb-chip{background:linear-gradient(180deg,#FFFFFF,#F3FAFF);border:1px solid rgba(150,180,210,.28);
+  border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;color:#3F5C77;
+  box-shadow:0 2px 6px rgba(110,140,175,.24);white-space:nowrap;
+  display:inline-flex;align-items:center;gap:4px;}
+.pfb-chip-a{background:linear-gradient(180deg,#FFEDF5,#FFE0EE);color:#A33C6C;}
+.pfb-chip-b{background:linear-gradient(180deg,#E9F3FE,#DAEAFB);color:#2F5A8C;}
+.pfb-badge{width:17px;height:24px;display:inline-block;}
 .pfb-bar{position:relative;flex:1;min-width:104px;height:20px;border-radius:999px;background:#ffffffcc;
   overflow:hidden;box-shadow:inset 0 1px 3px rgba(100,130,165,.28);}
 .pfb-bar-fill{height:100%;width:0%;border-radius:999px;transition:width .16s linear;
@@ -160,6 +192,7 @@ const CSS = `
 .pfb-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:14px;font-weight:900;color:#33526E;white-space:nowrap;overflow:hidden;}
 .pfb-btn{border:none;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:900;cursor:pointer;
+  min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffdd;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.32);}
 .pfb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
 .pfb-btn:focus-visible,.pfb-key:focus-visible,.pfb-mode:focus-visible,.pfb-veil-btn:focus-visible,
@@ -174,7 +207,8 @@ const CSS = `
 .pfb-veil-sub{font-size:14px;font-weight:700;color:#4E7295;line-height:1.6;max-width:340px;}
 .pfb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .pfb-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;
+  min-height:44px;display:inline-flex;align-items:center;}
 .pfb-veil-btn.pfb-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .pfb-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #B95278;}
 .pfb-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -203,7 +237,7 @@ const CSS = `
 /* display:flex 会盖掉 hidden 属性自带的 display:none,进了某个模式就得把这排按钮收起来 */
 .pfb-modebar[hidden]{display:none;}
 .pfb-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
+  min-height:${TOUCH_MIN}px;cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pfb-mode.pfb-mode-duel{background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
 .pfb-mode.pfb-mode-bot{background:linear-gradient(180deg,#B79AE6,#9375CD);box-shadow:0 4px 0 #7256A6;}
 .pfb-mode.pfb-mode-coop{background:linear-gradient(180deg,#9AD07C,#78B45B);box-shadow:0 4px 0 #5E9146;}
@@ -216,13 +250,13 @@ const CSS = `
 .pfb-picker-title{font-size:17px;font-weight:900;color:#2F5A8C;}
 .pfb-picks{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .pfb-pick{border:none;border-radius:18px;padding:12px 16px;min-width:132px;cursor:pointer;font-family:inherit;
-  background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;}
+  background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;min-height:${TOUCH_MIN}px;}
 .pfb-pick:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(110,140,175,.3);}
 .pfb-pick-name{font-size:16px;font-weight:900;color:#2F5A8C;}
 .pfb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
 .pfb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
 .pfb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
-.pfb-open{border:none;border-radius:16px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;
+.pfb-open{border:none;border-radius:16px;padding:10px 18px;min-height:${TOUCH_MIN}px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pfb-done{text-align:center;padding:18px 12px;font-size:16px;font-weight:800;color:#2F5A8C;line-height:1.7;}
 @media (max-width:420px){
@@ -244,9 +278,27 @@ const CSS = `
 @media (hover:none) and (max-width:420px){ .pfb-pad-name{display:none;} }
 @media (max-height:620px){
   .pfb-cv{height:170px;}
-  .pfb-pads{--k:46px;margin-top:4px;}
+  .pfb-pads{--k:${TOUCH_MIN}px;margin-top:4px;}
   .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;}
   .pfb-tip{margin-top:4px;font-size:11px;}
+}
+/* N-42 / C-8: 矮横屏把六键垫到画布右侧，暂停钮已抬到 44 */
+@media (max-height:500px) and (min-width:640px){
+  .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;}
+  .pfb-hud{grid-column:1/-1;}
+  .pfb-stagebox{grid-column:1;min-width:0;}
+  .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;}
+  .pfb-tip{grid-column:1/-1;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:10px;}
+  .pfb-hud{grid-column:1/-1;}
+  .pfb-stagebox{grid-column:1;min-width:0;}
+  .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;position:sticky;top:0;}
+  .pfb-tip{grid-column:1/-1;}
+}
+@media (max-height:840px) and (min-height:501px) and (max-width:639px){
+  .pfb-pads{position:sticky;bottom:0;z-index:4;padding-top:4px;}
 }
 @media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }
 `;
@@ -281,12 +333,7 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath();
 }
 
-function emojiAt(g: CanvasRenderingContext2D, ch: string, x: number, y: number, size: number): void {
-  g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(ch, x, y);
-}
+// 修复员 G5:emojiAt 助手随最后一批画布 emoji 字形(飘字粒子)一起退休。
 
 /**
  * 系统里勾了「减弱动效」没有。
@@ -338,20 +385,31 @@ function drawUpdraft(g: CanvasRenderingContext2D, gs: GadgetState, t: number): v
   g.lineTo(r.x1 - 1, r.y0);
   g.stroke();
   g.setLineDash([]);
-  // 往上飘的小气泡:管子里的气是往上走的,这一点得看得见
-  g.fillStyle = "rgba(255,255,255,.8)";
+  // 半透明羽毛旋涡:几片小羽毛左右交替、边转边升 —— 「气是往上走的」这一点
+  // 比原来的圆点更看得见;reduced 时 t 恒 0,羽毛静止排成一串
   for (let i = 0; i < 4; i++) {
-    const phase = ((t * (UPDRAFT_MAX_UP / 120) + i * 0.25) % 1 + 1) % 1;
-    const by = r.y1 - phase * h;
-    const bx = r.x0 + w * (0.28 + 0.44 * ((i * 7) % 3) * 0.5);
+    const f = updraftFeather(i, t, UPDRAFT_MAX_UP / 120);
+    const fx = r.x0 + w * f.x01;
+    const fy = r.y1 - f.y01 * h;
+    g.save();
+    g.translate(fx, fy);
+    g.rotate(f.rot);
+    g.fillStyle = "rgba(255,255,255,.72)";
     g.beginPath();
-    g.arc(bx, by, 3 + (i % 2), 0, Math.PI * 2);
+    g.ellipse(0, 0, 6.4, 2.3, 0, 0, Math.PI * 2);
     g.fill();
+    g.strokeStyle = "rgba(126,216,206,.75)";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(-5, 0);
+    g.lineTo(5.4, 0);
+    g.stroke();
+    g.restore();
   }
   g.restore();
 }
 
-/** 可推箱:一只系着丝带的糖果盒,推得动、也能垫脚 */
+/** 可推箱:软木糖果箱 —— 木纹板缝 + 四角角铁,推得动、也能垫脚 */
 function drawCrate(g: CanvasRenderingContext2D, gs: GadgetState): void {
   const r = gadgetRect(gs);
   const w = r.x1 - r.x0;
@@ -360,16 +418,43 @@ function drawCrate(g: CanvasRenderingContext2D, gs: GadgetState): void {
   g.fillStyle = GADGET_ART.crate.body;
   roundRect(g, r.x0, r.y0, w, h, 6);
   g.fill();
+  // 三块横板:两道板缝 + 每块板一条浅浅的木纹波线
+  g.strokeStyle = shade(GADGET_ART.crate.body, -16);
+  g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(r.x0 + 2, r.y0 + h / 3);
+  g.lineTo(r.x1 - 2, r.y0 + h / 3);
+  g.moveTo(r.x0 + 2, r.y0 + (h * 2) / 3);
+  g.lineTo(r.x1 - 2, r.y0 + (h * 2) / 3);
+  g.stroke();
+  g.strokeStyle = withAlpha(shade(GADGET_ART.crate.edge, -12), 0.5);
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let i = 0; i < 3; i++) {
+    const gy = r.y0 + (h * (i + 0.5)) / 3;
+    g.moveTo(r.x0 + w * 0.16, gy);
+    g.quadraticCurveTo(r.x0 + w * 0.5, gy + (i % 2 === 0 ? 2 : -2), r.x1 - w * 0.16, gy);
+  }
+  g.stroke();
   g.strokeStyle = GADGET_ART.crate.edge;
   g.lineWidth = 2;
+  roundRect(g, r.x0, r.y0, w, h, 6);
   g.stroke();
-  g.strokeStyle = GADGET_ART.crate.tie;
-  g.lineWidth = 3;
+  // 四角角铁:小 L 形,箱子一下子「结实」起来
+  g.strokeStyle = shade(GADGET_ART.crate.edge, -22);
+  g.lineWidth = 2.4;
+  const arm = Math.min(7, w * 0.22);
   g.beginPath();
-  g.moveTo(r.x0 + w / 2, r.y0);
-  g.lineTo(r.x0 + w / 2, r.y1);
-  g.moveTo(r.x0, r.y0 + h / 2);
-  g.lineTo(r.x1, r.y0 + h / 2);
+  for (const [cx, cy, dx, dy] of [
+    [r.x0 + 2, r.y0 + 2, 1, 1],
+    [r.x1 - 2, r.y0 + 2, -1, 1],
+    [r.x0 + 2, r.y1 - 2, 1, -1],
+    [r.x1 - 2, r.y1 - 2, -1, -1],
+  ] as const) {
+    g.moveTo(cx + dx * arm, cy);
+    g.lineTo(cx, cy);
+    g.lineTo(cx, cy + dy * arm);
+  }
   g.stroke();
   g.restore();
 }
@@ -416,7 +501,11 @@ function drawBrittle(g: CanvasRenderingContext2D, gs: GadgetState): void {
   g.restore();
 }
 
-/** 弹簧云:软软的一朵,刚弹过的那一下会扁一点点 */
+/**
+ * 弹簧云:软软的一朵,刚弹过的那一下会扁一点点。
+ * 云底下露出一小截螺旋圈 —— 圈数固定、总高随压缩缩短,**圈距自动变密**,
+ * 压缩量照旧只读 `gs.recharge / SPRING_RECHARGE`,一个字不改。
+ */
 function drawSpring(g: CanvasRenderingContext2D, gs: GadgetState, motion: boolean): void {
   const r = gadgetRect(gs);
   const w = r.x1 - r.x0;
@@ -431,6 +520,14 @@ function drawSpring(g: CanvasRenderingContext2D, gs: GadgetState, motion: boolea
   g.ellipse(r.x0 + w * 0.5, r.y0 + h * 0.2, w * 0.3, h * 1.9, 0, 0, Math.PI * 2);
   g.ellipse(r.x0 + w * 0.75, r.y0 + h * 0.4, w * 0.26, h * 1.5, 0, 0, Math.PI * 2);
   g.fill();
+  g.stroke();
+  // 螺旋圈叠在云面下半区:从底座往上排,压缩时同样的圈挤进更矮的高度里
+  g.strokeStyle = withAlpha(shade(GADGET_ART.spring.edge, -8), 0.9);
+  g.lineWidth = 1.8;
+  g.beginPath();
+  for (const cy of springCoilYs(r.y1 + 10, 22, squash)) {
+    g.ellipse(r.x0 + w * 0.5, cy, w * 0.18, 2.4, 0, 0, Math.PI * 2);
+  }
   g.stroke();
   g.restore();
 }
@@ -452,11 +549,17 @@ function drawWarp(g: CanvasRenderingContext2D, gs: GadgetState, t: number, motio
   g.strokeStyle = GADGET_ART.warp.ring;
   g.lineWidth = 2.5;
   g.stroke();
+  // 双色旋涡互为反色:泡泡蓝顺时针、反色琥珀逆时针,一眼认出「这是要转走的」
   const spin = motion ? t * 2.2 : 0;
-  g.strokeStyle = "rgba(255,255,255,.9)";
+  g.strokeStyle = withAlpha(PB_WARP_A, 0.95);
   g.lineWidth = 2;
   g.beginPath();
   g.arc(cx, cy, WARP_R * 0.55, spin, spin + Math.PI * 1.2);
+  g.stroke();
+  g.strokeStyle = withAlpha(PB_WARP_B, 0.6);
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(cx, cy, WARP_R * 0.34, Math.PI - spin, Math.PI - spin + Math.PI * 1.2);
   g.stroke();
   g.restore();
 }
@@ -489,7 +592,8 @@ interface Particle {
   y: number;
   vy: number;
   life: number;
-  text: string;
+  /** 修复员 G5:emoji 字形 → 矢量小图种类 */
+  art: SparkKind;
   size: number;
 }
 
@@ -549,20 +653,21 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
   lose: "oops",
 };
 
-const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
-  double: "🫧",
-  puff: "💨",
-  spring: "☁️",
-  crack: "✨",
-  warp: "🌀",
-  tumble: "💫",
-  catch: "🫧",
-  pop: "✨",
-  burst: "💨",
-  candy: "🍬",
-  hurt: "💫",
-  escape: "😵",
-  combo: "🌟",
+// 修复员 G5:飘字粒子从 13 只 emoji 换矢量小图(泡 / 风 / 云 / 星屑 / 旋涡 / 晕星 / 糖 / 大星)
+const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], SparkKind>> = {
+  double: "bubble",
+  puff: "gust",
+  spring: "cloud",
+  crack: "spark",
+  warp: "swirl",
+  tumble: "twinkle",
+  catch: "bubble",
+  pop: "spark",
+  burst: "gust",
+  candy: "candy",
+  hurt: "twinkle",
+  escape: "twinkle",
+  combo: "star",
 };
 
 /**
@@ -601,6 +706,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   let raf = 0;
   let lastTime = 0;
   let toastT = 0;
+  /** 过关那一刻的时间戳(ms):>= 0 时画击掌合影;换场 / 重开就归 -1 */
+  let wonAt = -1;
   const particles: Particle[] = [];
   const inputs: Input[] = [emptyInput(), emptyInput()];
   const sfxAt = new Map<SoundName, number>();
@@ -614,13 +721,38 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   wrap.appendChild(style);
 
   // ---- HUD ----
+  // 对战里左右两枚计分卡各带一枚兄弟头像徽章(程序化小画布,非位图);
+  // 合作模式徽章收起来,卡片照旧写心和糖
   const hud = el("div", "pfb-hud");
   const leftChip = el("span", "pfb-chip");
+  const leftBadge = el("canvas", "pfb-badge");
+  const leftTxt = el("span");
+  leftChip.append(leftBadge, leftTxt);
   const bar = el("div", "pfb-bar");
   const barFill = el("div", "pfb-bar-fill");
   const barTxt = el("span", "pfb-bar-txt");
   bar.append(barFill, barTxt);
   const rightChip = el("span", "pfb-chip");
+  const rightBadge = el("canvas", "pfb-badge");
+  const rightTxt = el("span");
+  rightChip.append(rightBadge, rightTxt);
+
+  /** 头像徽章:直接用 broBody 骨架画一位小噗噗(不落影、常态表情) */
+  function paintBadge(cv: HTMLCanvasElement, pi: number): void {
+    cv.width = 34;
+    cv.height = 48;
+    const bctx = cv.getContext("2d");
+    if (!bctx) return;
+    bctx.translate(17, 44);
+    paintBro(bctx, BRO_GEOMS[pi % BRO_GEOMS.length], {
+      facing: 1,
+      sway: 0,
+      mouth: { kind: "idle" },
+      grounded: false,
+    });
+  }
+  paintBadge(leftBadge, 0);
+  paintBadge(rightBadge, 1);
   const timerChip = el("span", "pfb-chip");
   const extraChip = el("span", "pfb-chip");
   const pauseBtn = el("button", "pfb-btn");
@@ -664,7 +796,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       btn.type = "button";
       btn.style.gridColumn = String(k.col);
       btn.style.gridRow = String(k.row);
-      btn.setAttribute("aria-label", `${padCount === 2 ? BROS[pi].name : ""}${k.aria}`);
+      btn.setAttribute("aria-label", `${padCount === 2 ? BRO_NAMES[pi] : ""}${k.aria}`);
       pad.appendChild(btn);
       padButtons.push({ btn, player: pi, act: k.act });
     }
@@ -727,7 +859,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const room = bottomLimit() - boxRect.top - below - VIEW_PAD;
     // 比场地本身还高只会多出两条天空,不如把余量留给别人
     const aspect = ARENA_W / ARENA_H;
-    const h = Math.round(Math.max(VIEW_MIN, Math.min(room, availW / aspect)));
+    const cap = room > 0 ? room : VIEW_MIN;
+    const h = Math.round(Math.max(96, Math.min(cap, availW / aspect)));
     // 场地是等比缩放居中画的,画框比它宽多少,左右就空多少;
     // 干脆把画框收到跟场地一样宽,圆角正好贴着围墙
     const w = Math.round(Math.min(availW, h * aspect));
@@ -887,7 +1020,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (sound) playThrottled(sound, now);
       const art = PARTICLE_FOR_EVENT[ev.kind];
       if (art) {
-        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
+        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, art, size: 18 });
         if (particles.length > 40) particles.shift();
       }
     }
@@ -895,9 +1028,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
   // ---- 渲染 ----
   function drawBro(ctx: CanvasRenderingContext2D, p: World["players"][number], pi: number): void {
-    const c = BROS[pi % BROS.length];
+    const geom = BRO_GEOMS[pi % BRO_GEOMS.length];
     const blink = p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 0;
-    const w = PLAYER_W;
     const h = PLAYER_H;
     ctx.save();
     ctx.globalAlpha = blink ? 0.45 : 1;
@@ -916,57 +1048,15 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (squash > 0.001) ctx.scale(1 + squash, 1 - squash);
     }
 
-    // 小脚
-    ctx.fillStyle = c.dark;
-    ctx.beginPath();
-    ctx.ellipse(-w * 0.24, -2, w * 0.19, 5, 0, 0, Math.PI * 2);
-    ctx.ellipse(w * 0.24, -2, w * 0.19, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 圆滚滚的身体
-    ctx.fillStyle = c.body;
-    ctx.beginPath();
-    ctx.ellipse(0, -h * 0.5, w * 0.52, h * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = c.belly;
-    ctx.beginPath();
-    ctx.ellipse(0, -h * 0.4, w * 0.3, h * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 眼睛与腮红
-    ctx.fillStyle = c.eye;
-    ctx.beginPath();
-    ctx.arc(p.facing * 3 - 5, -h * 0.66, 2.6, 0, Math.PI * 2);
-    ctx.arc(p.facing * 3 + 5, -h * 0.66, 2.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#FFFFFF";
-    ctx.beginPath();
-    ctx.arc(p.facing * 3 - 5.8, -h * 0.69, 0.9, 0, Math.PI * 2);
-    ctx.arc(p.facing * 3 + 4.2, -h * 0.69, 0.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,150,180,.55)";
-    ctx.beginPath();
-    ctx.ellipse(-w * 0.32, -h * 0.5, 3.4, 2.4, 0, 0, Math.PI * 2);
-    ctx.ellipse(w * 0.32, -h * 0.5, 3.4, 2.4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 嘴:正在吹泡泡就鼓一个小泡,正在攒那一口气就把腮帮子鼓起来
-    if (p.blowCd > 0.24) {
-      ctx.fillStyle = "rgba(255,255,255,.85)";
-      ctx.beginPath();
-      ctx.arc(p.facing * (w * 0.55), -h * 0.5, 5 + (p.blowCd - 0.24) * 14, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (p.puff.pending) {
-      ctx.fillStyle = c.dark;
-      ctx.beginPath();
-      ctx.ellipse(p.facing * 4, -h * 0.46, 3.4 + windupProgress(p.puff) * 1.6, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = c.eye;
-      ctx.beginPath();
-      ctx.ellipse(p.facing * 3, -h * 0.46, 2.6, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 皮肤全在 visual13 的 paintBro 里:骨架同一副,识别件按 BRO_KITS 长。
+    // 嘴部三态的时序照旧读 blowCd(0.24 窗口)与 windupProgress,只是画法升级。
+    const moving = Math.abs(p.vx) > 20 && p.bounds.phase !== "tumble";
+    paintBro(ctx, geom, {
+      facing: p.facing,
+      sway: swayAngle(world.time * 1000, moving, !motion),
+      mouth: mouthState(p.blowCd, windupProgress(p.puff), p.puff.pending !== null),
+      grounded: p.onGround && p.bounds.phase !== "tumble",
+    });
     ctx.restore();
   }
 
@@ -979,15 +1069,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   function drawPuffRing(ctx: CanvasRenderingContext2D, p: World["players"][number]): void {
     if (!p.puff.pending) return;
     const ring = puffRing(p.x, p.y, PLAYER_H, PLAYER_W / 2, p.facing);
-    const t = windupProgress(p.puff);
-    ctx.save();
-    ctx.globalAlpha = 0.3 + 0.55 * t;
-    ctx.strokeStyle = "rgba(150,214,242,.95)";
-    ctx.lineWidth = 2 + t * 1.5;
-    ctx.beginPath();
-    ctx.ellipse(ring.cx, ring.cy, ((ring.x1 - ring.x0) / 2) * (0.35 + 0.65 * t), (ring.y1 - ring.y0) / 2 * (0.35 + 0.65 * t), 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    // 提示功能不变:几何与从小到大的时序照旧由 windupProgress 说了算;
+    // 描边升级成彩虹渐变,内圈 3 颗星尘打转,reduced 只留渐变描边
+    paintPuffRing(ctx, ring, windupProgress(p.puff), world.time * 1000, !motion);
   }
 
   /**
@@ -1028,10 +1112,22 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx.beginPath();
     ctx.ellipse(0, -h * 0.42, w * 0.5, h * 0.46, 0, 0, Math.PI * 2);
     ctx.fill();
+    // 流挂圆珠:黏液从身子下缘坠出两颗小珠,「黏糊糊」立起来
+    ctx.beginPath();
+    ctx.arc(-w * 0.22, -h * 0.06, 2.4, 0, Math.PI * 2);
+    ctx.arc(w * 0.16, -h * 0.03, 1.8, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = c.body;
     ctx.beginPath();
     ctx.ellipse(0, -h * 0.48, w * 0.46, h * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
+    // 光泽:左上 45° 一弯月牙高光,黏液才有「湿」的质感
+    ctx.strokeStyle = "rgba(255,255,255,.62)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(-w * 0.06, -h * 0.52, w * 0.3, -Math.PI * 0.82, -Math.PI * 0.42);
+    ctx.stroke();
     // 追追怪头上一对小角
     if (m.kind === "chaser") {
       ctx.fillStyle = c.dark;
@@ -1046,10 +1142,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     }
     ctx.fillStyle = c.face;
     if (m.dizzy > 0) {
-      ctx.font = "10px system-ui,sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("××", 0, -h * 0.5);
+      // 修复员 G5:「××」字形 → 眩晕星 2 颗绕头(300ms 相位;reduced 定格)
+      drawDizzyStars(ctx, 0, -h * 0.62, 9, world.time * 1000, !motion);
     } else {
       ctx.beginPath();
       ctx.arc(m.dir * 2 - 4, -h * 0.56, 2.2, 0, Math.PI * 2);
@@ -1062,26 +1156,34 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx.restore();
   }
 
-  function drawBubble(ctx: CanvasRenderingContext2D, b: World["bubbles"][number]): void {
+  /** 破泡的渐隐与半径曲线沿用 1.2:这里只算数,画法交给薄膜三段式 */
+  function bubbleFade(b: World["bubbles"][number]): { fade: number; r: number } {
     const fade = b.popped ? Math.max(0, 1 + b.life / 0.35) : 1;
+    return { fade, r: BUBBLE_R * (b.popped ? 1 + (1 - fade) * 0.6 : 1) };
+  }
+
+  /** 第一段:薄膜 + 描边。裹着的东西随后画在膜上,薄膜不遮内容物 */
+  function drawBubble(ctx: CanvasRenderingContext2D, b: World["bubbles"][number]): void {
+    const { fade, r } = bubbleFade(b);
     if (fade <= 0) return;
-    const r = BUBBLE_R * (b.popped ? 1 + (1 - fade) * 0.6 : 1);
     ctx.save();
     ctx.globalAlpha = fade;
-    const grad = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.35, r * 0.2, b.x, b.y, r);
-    grad.addColorStop(0, "rgba(255,255,255,.95)");
-    grad.addColorStop(1, b.hold ? "rgba(255,196,224,.62)" : "rgba(178,226,250,.55)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-    ctx.fill();
+    bubbleFilm(ctx, b.x, b.y, r, b.hold ? PB_BUBBLE_HOLD : PB_COLORS.pbBubble);
     ctx.strokeStyle = b.hold ? "rgba(226,116,159,.9)" : "rgba(120,180,220,.85)";
     ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,.9)";
     ctx.beginPath();
-    ctx.arc(b.x - r * 0.36, b.y - r * 0.4, r * 0.2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** 第三段:月牙高光(2400ms 巡回,reduced 静止)+ 彩虹缘(半径 < 6 自动省略) */
+  function drawBubbleGloss(ctx: CanvasRenderingContext2D, b: World["bubbles"][number]): void {
+    const { fade, r } = bubbleFade(b);
+    if (fade <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    bubbleGloss(ctx, b.x, b.y, r, sheenAngle(world.time * 1000, !motion));
     ctx.restore();
   }
 
@@ -1138,27 +1240,29 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const offX = (cw - ARENA_W * scale) / 2;
     const offY = (ch - ARENA_H * scale) / 2;
 
-    // 天空铺满整块画布:场地按等比缩放居中,两边多出来的地方接着画同一片天,
-    // 不会露出一条突兀的色带
+    // ① 天空铺满整块画布:场地按等比缩放居中,两边多出来的地方接着画同一片天,
+    // 不会露出一条突兀的色带。三套淡色天空(晨 / 昼 / 暮)按关卡序号轮换
     g.setTransform(1, 0, 0, 1, 0, 0);
+    const skyTone = skyForLevel(world.def.index);
     const sky = g.createLinearGradient(0, 0, 0, ch);
-    sky.addColorStop(0, pal.sky0);
-    sky.addColorStop(1, pal.sky1);
+    sky.addColorStop(0, skyTone);
+    sky.addColorStop(1, shade(skyTone, 55));
     g.fillStyle = sky;
     g.fillRect(0, 0, cw, ch);
     g.setTransform(scale, 0, 0, scale, offX, offY);
 
-    // 远景:几朵不动的糖云
-    g.fillStyle = pal.far;
-    g.globalAlpha = 0.5;
-    for (let i = 0; i < 5; i++) {
-      const cx = 60 + i * 130;
-      const cy = 54 + ((i * 37) % 50);
-      g.beginPath();
-      g.ellipse(cx, cy, 42, 17, 0, 0, Math.PI * 2);
-      g.fill();
+    // ② 两层软云视差:远层 0.15×、近层 0.3× 滚速;reduced 时静止在原位
+    const cloudSpan = ARENA_W + 160;
+    for (const layer of [0, 1] as const) {
+      const off = cloudScroll(layer, world.time, cloudSpan, !motion);
+      const tint = cloudTint(skyTone, layer);
+      for (let i = 0; i < 4; i++) {
+        const baseX = (i * cloudSpan) / 4 + (layer === 0 ? 30 : 118);
+        const cx = ((((baseX - off) % cloudSpan) + cloudSpan) % cloudSpan) - 80;
+        const cy = layer === 0 ? 40 + ((i * 37) % 30) : 82 + ((i * 53) % 36);
+        paintCloud(g, cx, cy, layer === 0 ? 26 : 36, tint);
+      }
     }
-    g.globalAlpha = 1;
 
     // 天花板与左右墙
     g.fillStyle = pal.deckSoft;
@@ -1170,20 +1274,26 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
     // 地板。1.2 的对战场和上升气流里有真的坑,坑那一段不画地板 ——
     // 底下透出来的就是天,小朋友一眼看得出「这儿是空的,别走过去」
+    // (修复员装饰件:顶条上再压一道 shade(deck,+18) 亮边,镇住「平涂感」)
     for (const span of floorSpans()) {
       g.fillStyle = pal.deckSoft;
       g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, FLOOR_H);
       g.fillStyle = pal.deck;
       g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, 5);
+      g.fillStyle = shade(pal.deck, 18);
+      g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, 1.5);
     }
 
-    // 浮台
+    // 浮台(顶条同一道亮边)
     for (const pl of world.def.platforms) {
       g.fillStyle = pal.deckSoft;
       roundRect(g, pl.x, pl.y, pl.w, 13, 6);
       g.fill();
       g.fillStyle = pal.deck;
       roundRect(g, pl.x, pl.y, pl.w, 5, 3);
+      g.fill();
+      g.fillStyle = shade(pal.deck, 18);
+      roundRect(g, pl.x + 1, pl.y, pl.w - 2, 1.5, 1);
       g.fill();
     }
 
@@ -1193,10 +1303,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     // 上升气流:脚底下那条一直往上追的气流线
     drawClimbLine(g);
 
+    // 修复员 S6:糖果从 17px 裸 emoji 换成自绘四型(圆糖 / 棒棒糖 / 纸杯 / 团子),
+    // 轮换下标与坐标不动,纸角 / 木棍 / 竹签把糖果剪影与泡泡拉开
     for (let i = 0; i < world.candies.length; i++) {
       const c = world.candies[i];
       if (c.taken) continue;
-      emojiAt(g, CANDY_ART[i % CANDY_ART.length], c.x, c.y, 17);
+      drawCandy(g, CANDY_KINDS[i % CANDY_KINDS.length], c.x, c.y);
     }
 
     for (const m of world.monsters) {
@@ -1204,31 +1316,44 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       drawGoo(g, m);
     }
 
-    for (let i = 0; i < world.players.length; i++) {
-      const p = world.players[i];
-      if (p.respawnT > 0) continue;
-      if (p.trapped) continue;
-      drawBro(g, p, i);
-      drawPuffRing(g, p);
-      drawTumbleRing(g, p);
-    }
-
-    // 泡泡最后画,裹着的东西画在里面
+    // ⑤ 泡泡在人之下:膜 → 泡内物 → 光,三段画完薄膜不遮内容物
     for (const b of world.bubbles) {
       drawBubble(g, b);
-      if (b.popped || !b.hold) continue;
-      if (b.hold.kind === "monster") {
-        const m = world.monsters[b.hold.id];
-        if (m) drawGoo(g, m);
-      } else {
-        const p = world.players[b.hold.id];
-        if (p) drawBro(g, p, b.hold.id);
+      if (!b.popped && b.hold) {
+        if (b.hold.kind === "monster") {
+          const m = world.monsters[b.hold.id];
+          if (m) drawGoo(g, m);
+        } else {
+          const p = world.players[b.hold.id];
+          if (p) drawBro(g, p, b.hold.id);
+        }
+      }
+      drawBubbleGloss(g, b);
+    }
+
+    // ⑥ 兄弟二人;过关那一刻换成击掌合影(两帧 step,reduced 静止),
+    // 摔出平台的打转、失败面板都轮不到它 —— 只有 won 这一个分支
+    const celebrating = shouldHighFive(world.status, wonAt);
+    if (celebrating) {
+      paintHighFive(g, ARENA_W / 2, FLOOR_Y - 2, highFiveFrame(now - wonAt, !motion));
+    } else {
+      for (let i = 0; i < world.players.length; i++) {
+        const p = world.players[i];
+        if (p.respawnT > 0) continue;
+        if (p.trapped) continue;
+        drawBro(g, p, i);
+      }
+      // ⑦ 攒气环与星尘是功能件,永远画在角色上层
+      for (const p of world.players) {
+        if (p.respawnT > 0 || p.trapped) continue;
+        drawPuffRing(g, p);
+        drawTumbleRing(g, p);
       }
     }
 
     for (const pt of particles) {
       g.globalAlpha = Math.max(0, Math.min(1, pt.life));
-      emojiAt(g, pt.text, pt.x, pt.y, pt.size);
+      drawEventSpark(g, pt.art, pt.x, pt.y, pt.size * 0.5);
     }
     g.globalAlpha = 1;
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -1237,9 +1362,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   function refreshHud(): void {
     if (world.rivalry) {
       leftChip.className = "pfb-chip pfb-chip-a";
-      leftChip.textContent = `🌸 朵朵 ${world.players[0]?.pops ?? 0}`;
+      leftBadge.style.display = "";
+      leftTxt.textContent = `${BRO_NAMES[0]} ${world.players[0]?.pops ?? 0}`;
       rightChip.className = "pfb-chip pfb-chip-b";
-      rightChip.textContent = `⭐ 星星 ${world.players[1]?.pops ?? 0}`;
+      rightBadge.style.display = "";
+      rightTxt.textContent = `${BRO_NAMES[1]} ${world.players[1]?.pops ?? 0}`;
       const target = Math.max(1, world.def.roundTarget);
       const lead = Math.max(world.players[0]?.pops ?? 0, world.players[1]?.pops ?? 0);
       barFill.style.width = `${Math.min(100, (lead / target) * 100)}%`;
@@ -1247,9 +1374,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       barTxt.textContent = `🏆 ${lead}/${target} 分`;
     } else {
       leftChip.className = "pfb-chip";
-      leftChip.textContent = `❤️ ${"♥".repeat(Math.max(0, world.hearts))}`;
+      leftBadge.style.display = "none";
+      leftTxt.textContent = `❤️ ${"♥".repeat(Math.max(0, world.hearts))}`;
       rightChip.className = "pfb-chip";
-      rightChip.textContent = `🍬 ${world.candiesTaken}`;
+      rightBadge.style.display = "none";
+      rightTxt.textContent = `🍬 ${world.candiesTaken}`;
       const done = world.monsterTotal > 0 ? world.cleared / world.monsterTotal : 1;
       barFill.style.width = `${Math.round(done * 100)}%`;
       barTxt.textContent = `咕噜怪 ${world.cleared}/${world.monsterTotal}`;
@@ -1290,6 +1419,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       }
       if (world.status !== "playing") {
         ended = true;
+        if (world.status === "won") wonAt = ts;
         releaseAll();
         opts.onEnd(world);
       }
@@ -1305,6 +1435,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
+      // 视觉账本一并归零:粒子、吐司计时、击掌时间戳
+      particles.length = 0;
+      toastT = 0;
+      wonAt = -1;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("pointerup", onWindowPointerUp);
@@ -1317,6 +1451,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     swap(def, keep) {
       world = createWorld(def, { players: opts.players, hearts: keep?.hearts });
       particles.length = 0;
+      wonAt = -1;
       ended = false;
       paused = false;
       clearVeil();
@@ -1601,7 +1736,7 @@ function mountVersus(
   const head = el("div", "pfb-head");
   const back = el("button", "pfb-btn", "🗺️ 回关卡");
   back.type = "button";
-  const rivalName = botLevel ? BOT_PROFILES[botLevel].name : BROS[1].name;
+  const rivalName = botLevel ? BOT_PROFILES[botLevel].name : BRO_NAMES[1];
   const title = el(
     "div",
     "pfb-head-title",
@@ -1613,7 +1748,7 @@ function mountVersus(
   root.append(style, head, fieldHost);
   host.appendChild(root);
 
-  const names: [string, string] = [BROS[0].name, rivalName];
+  const names: [string, string] = [BRO_NAMES[0], rivalName];
   let match: MatchState = newMatch();
   let field: Field | null = null;
   let awarded = false;

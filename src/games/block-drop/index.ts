@@ -66,6 +66,29 @@ import {
   type EndlessKind
 } from "./levels";
 import { AI_TIER_LABELS, choosePlacement, type AiTier } from "./ai";
+import { makeCollectBurst, type CollectBurst } from "../../art/kit";
+import {
+  ALARM_SEC,
+  RAINBOW_SEC,
+  SHOT_SEC,
+  WELL_THEMES,
+  WELL_WALL,
+  drawCellSprite,
+  drawClearFx,
+  drawGarbageAlarm,
+  drawRainbowEdge,
+  drawRowGlow,
+  drawSentStar,
+  drawWellBackground,
+  makeClearBlossom,
+  paintGhostCell,
+  paintHoldCanvas,
+  paintNextCanvas,
+  paintTrophy,
+  themeForLevel,
+  type ClearParticle,
+  type WellTheme
+} from "./art";
 
 /** 消行开花动画的时长(秒):150–250ms,不允许瞬删 */
 export const CLEAR_ANIM_SEC = 0.22;
@@ -83,6 +106,30 @@ export function acceptsRepeat(key: string): boolean {
   return REPEATABLE_KEYS.has(key.length === 1 ? key.toLowerCase() : key);
 }
 
+/** 井画布显示高度的下限:比这还矮 20 行就真看不清了,剩下的交给舞台滚动兜底 */
+export const WELL_DISPLAY_MIN = 180;
+/** N-74 双人叠井时每口井再矮的下限:180×2 仍把井顶卷出 412 */
+export const WELL_DUO_MIN = 120;
+
+/**
+ * 井画布该「显示」多高(null = 原生高度就装得下,一个字都不用写)。
+ *
+ * 20 行的井按格子边长长高(24px 一格连墙 488px),CSS 里只有 `max-width:100%`
+ * 按宽缩——竖屏 360×640 上目标行 + 名牌 + 井 + 触屏按钮排加起来 ~640px,
+ * 而 `.game-stage` 的可视高只有 ~520px:按钮排(手机上唯一的操作入口)整排
+ * 掉在裁切线以下;横屏 640×360 更是井本身只剩上半截。
+ * 只钳 CSS 显示尺寸:backing store(canvas.width/height)与所有判定一个数不动,
+ * 触屏手势按相对位移(onMove 的 dx/dy)换算,缩放不影响手感。
+ */
+export function wellDisplayPx(nativeH: number, roomPx: number, min = WELL_DISPLAY_MIN): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
 const CSS = `
 .bd-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EEF4FF,#F9FBFF);
   border-radius:16px;padding:10px;user-select:none;}
@@ -92,10 +139,20 @@ const CSS = `
 .bd-seats{display:flex;flex-direction:column;gap:10px;align-items:center;}
 .bd-seats.bd-split{flex-direction:column;}
 .bd-seat{display:flex;gap:8px;align-items:flex-start;justify-content:center;max-width:100%;}
+.bd-stack{display:flex;flex-direction:column;gap:4px;align-items:center;min-width:0;}
+.bd-name{border-radius:999px;padding:2px 12px;font-size:14px;font-weight:900;color:#fff;}
+.bd-name-p1{background:linear-gradient(180deg,#ff9dbe,#f2789f);box-shadow:0 2px 5px rgba(242,120,159,.35);}
+.bd-name-p2{background:linear-gradient(180deg,#7fb1ee,#5c83c4);box-shadow:0 2px 5px rgba(92,131,196,.35);}
 .bd-canvas{border-radius:12px;background:#F4F7FF;touch-action:none;display:block;max-width:100%;height:auto;}
+.bd-cv-p1{box-shadow:0 0 0 3px #ffb3d2,0 6px 14px rgba(242,120,159,.28);}
+.bd-cv-p2{box-shadow:0 0 0 3px #a9c8f2,0 6px 14px rgba(92,131,196,.3);}
 .bd-side{display:flex;flex-direction:column;gap:6px;min-width:64px;}
 .bd-mini{background:#ffffffcc;border-radius:10px;padding:4px 6px;font-size:16px;font-weight:800;color:#3f5b8a;
   text-align:center;overflow-wrap:anywhere;line-height:1.4;}
+.bd-mini-t{font-size:14px;font-weight:800;color:#54709b;}
+.bd-mini-cv{display:block;margin:2px auto 0;max-width:100%;}
+.bd-over-cv{display:block;margin:0 auto 6px;}
+.bd-over-badges{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
 .bd-pad{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
 .bd-btn{min-width:56px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:15px;
   font-weight:900;cursor:pointer;background:#C9DBF7;color:#2f4a75;box-shadow:0 3px 0 #A2BEE8;padding:0 10px;}
@@ -105,19 +162,41 @@ const CSS = `
 .bd-msg{text-align:center;min-height:20px;color:#3f5b8a;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .bd-modebar,.bd-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.bd-modebar[hidden]{display:none;}
 .bd-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f5b8a;text-align:center;overflow-wrap:anywhere;}
-.bd-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
+.bd-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7fa5e0,#5c83c4);box-shadow:0 4px 0 #47679f;}
 .bd-open:active{transform:translateY(2px);box-shadow:0 2px 0 #47679f;}
 .bd-mode{max-width:820px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
 .bd-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;}
-.bd-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
+.bd-back{border:none;border-radius:999px;padding:7px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffd9;color:#5c83c4;box-shadow:0 3px 0 rgba(100,130,190,.3);}
 .bd-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(130,150,200,.25);}
 .bd-over-t{font-size:21px;font-weight:900;color:#3f5b8a;margin-bottom:8px;}
 .bd-over-s{font-size:16px;font-weight:700;color:#54709b;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
-@media (min-width:760px){
+@media (min-width:640px){
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+}
+/* N-50 闯关七键 419;N-74 双人井被卷。先锁 wrap 再分栏,键 sticky */
+@media (max-height:500px){
+  .bd-wrap{max-height:calc(100dvh - 76px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .bd-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(238,244,255,.35),#F9FBFF);}
+  .bd-canvas{max-height:min(220px,52dvh);}
+}
+@media (max-height:840px) and (min-height:501px){
+  .bd-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(238,244,255,.35),#F9FBFF);}
+  .bd-canvas{max-height:min(280px,56dvh);}
+}
+@media (min-width:640px) and (max-height:500px){
+  .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+  .bd-canvas{max-height:min(260px,62dvh);}
+}
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+  .bd-canvas{max-height:min(320px,62dvh);}
 }
 @media (max-width:360px){
   .bd-badge{padding:4px 8px;}
@@ -174,6 +253,10 @@ interface SeatOpts {
   onSend: (lines: number) => void;
   onDone: (r: SeatResult) => void;
   cellPx: number;
+  /** 井壁主题(战役按关卡分段换皮);不给就是木箱花园 */
+  theme?: WellTheme;
+  /** 对战席位卡:P1 粉 / P2 蓝;不给就不挂名牌 */
+  tag?: "p1" | "p2";
 }
 
 /**
@@ -229,24 +312,63 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
   let slam = 0;
   let ghostOn = true;
 
+  // ---- 1.3 纯视觉状态:开花粒子 / 彩虹描边 / 垃圾警报 / 尘土 / 飞星 ----
+  let clearDur = CLEAR_ANIM_SEC;
+  let clearFx: ClearParticle[] = [];
+  let rainbow = 0;
+  let alarm = 0;
+  const dust: CollectBurst[] = [];
+  const shots: { age: number }[] = [];
+  let holdKey = "";
+  let nextKey = "";
+  const theme = opts.theme ?? WELL_THEMES[0];
+
   const seat = document.createElement("div");
   seat.className = "bd-seat";
+  const stack = document.createElement("div");
+  stack.className = "bd-stack";
   const canvas = document.createElement("canvas");
   canvas.className = "bd-canvas";
   const cell = Math.max(22, Math.round(opts.cellPx));
-  canvas.width = COLS * cell;
-  canvas.height = VISIBLE_ROWS * cell;
+  canvas.width = COLS * cell + WELL_WALL.side * 2;
+  canvas.height = VISIBLE_ROWS * cell + WELL_WALL.bottom;
   canvas.setAttribute("aria-label", `${opts.name} 的场地`);
+  if (opts.tag) {
+    const plate = document.createElement("div");
+    plate.className = `bd-name bd-name-${opts.tag}`;
+    plate.textContent = opts.name;
+    stack.appendChild(plate);
+    canvas.classList.add(`bd-cv-${opts.tag}`);
+  }
+  stack.appendChild(canvas);
   const side = document.createElement("div");
   side.className = "bd-side";
   const holdBox = document.createElement("div");
   holdBox.className = "bd-mini";
+  const holdTitle = document.createElement("div");
+  holdTitle.className = "bd-mini-t";
+  holdTitle.textContent = "暂存";
+  const holdCv = document.createElement("canvas");
+  holdCv.className = "bd-mini-cv bd-hold-cv";
+  holdCv.width = 52;
+  holdCv.height = 34;
+  holdBox.append(holdTitle, holdCv);
   const nextBox = document.createElement("div");
   nextBox.className = "bd-mini";
+  const nextTitle = document.createElement("div");
+  nextTitle.className = "bd-mini-t";
+  nextTitle.textContent = "下一个";
+  // 窄屏(≤360px)预览 2 个,宽屏 3 个
+  const nextN = typeof window !== "undefined" && window.innerWidth <= 380 ? 2 : 3;
+  const nextCv = document.createElement("canvas");
+  nextCv.className = "bd-mini-cv bd-next-cv";
+  nextCv.width = 52;
+  nextCv.height = nextN * 30;
+  nextBox.append(nextTitle, nextCv);
   const statBox = document.createElement("div");
   statBox.className = "bd-mini";
   side.append(holdBox, nextBox, statBox);
-  seat.append(canvas, side);
+  seat.append(stack, side);
   host.appendChild(seat);
 
   function cells(): Cell[] {
@@ -314,6 +436,24 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     score += dist * 2;
     lastMoveWasRotate = false;
     slam = soft ? 0 : SLAM_ANIM_SEC;
+    if (!soft) {
+      // 落点喷 4–6 粒尘土,配合 slam 下沉一起当「落地冲击」
+      const cs = cells();
+      let maxY = 0;
+      let minX = COLS;
+      let maxX = 0;
+      for (const c of cs) {
+        maxY = Math.max(maxY, c.y);
+        minX = Math.min(minX, c.x);
+        maxX = Math.max(maxX, c.x);
+      }
+      const gx = WELL_WALL.side + (px + (minX + maxX) / 2 + 0.5) * cell;
+      const gy = Math.min(
+        canvas.height - WELL_WALL.bottom - 2,
+        (landing + maxY + 1 - (ROWS - VISIBLE_ROWS)) * cell
+      );
+      dust.push(makeCollectBurst({ x: gx, y: gy, count: 5, color: "#cfd6e4" }));
+    }
     place();
   }
 
@@ -357,12 +497,19 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
       if (n >= 4) quads += 1;
       if (spin !== "none") tspins += 1;
       clearRows = cleared.rows;
-      clearAnim = soft ? 0.06 : CLEAR_ANIM_SEC;
+      clearDur = soft ? 0.06 : CLEAR_ANIM_SEC;
+      clearAnim = clearDur;
+      clearFx = makeClearBlossom(cleared.rows, COLS, soft);
+      if (n >= 4 && !soft) rainbow = RAINBOW_SEC;
       opts.sfx(n >= 4 || spin !== "none" ? "win" : "coin");
       const send = garbageFor(n, spin, isB2BMove(n, spin) && b2b);
       const cut = cancelGarbage(incoming, send);
       incoming = cut.incoming;
-      if (cut.outgoing > 0) opts.onSend(cut.outgoing);
+      if (cut.outgoing > 0) {
+        opts.onSend(cut.outgoing);
+        // 发出去的垃圾行:井顶飞一颗星弹,纯视觉
+        if (!soft) shots.push({ age: 0 });
+      }
       // 消行动画放完再把新块放出来
       pendingBoard = cleared.board;
     } else {
@@ -427,6 +574,12 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     if (over) return;
     elapsed += dt;
     if (slam > 0) slam = Math.max(0, slam - dt);
+    if (rainbow > 0) rainbow = Math.max(0, rainbow - dt);
+    if (alarm > 0) alarm = Math.max(0, alarm - dt);
+    for (const b of dust) b.step(dt);
+    for (let i = dust.length - 1; i >= 0; i--) if (dust[i].done()) dust.splice(i, 1);
+    for (const s of shots) s.age += dt;
+    while (shots.length > 0 && shots[0].age >= SHOT_SEC) shots.shift();
     if (clearAnim > 0) {
       clearAnim = Math.max(0, clearAnim - dt);
       if (clearAnim === 0) {
@@ -435,6 +588,7 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
           pendingBoard = null;
         }
         clearRows = [];
+        clearFx = [];
         if (incoming > 0) {
           board = addGarbage(board, incoming, Math.floor(rand() * COLS) % COLS);
           incoming = 0;
@@ -461,27 +615,12 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     if (st.locked) place();
   }
 
+  /** 画一个果冻格:真浏览器走 7 色预渲染贴图,签名保持 1.2 的样子 */
   function drawCell(g: CanvasRenderingContext2D, x: number, y: number, color: string, alpha = 1, mark = ""): void {
     const vy = y - (ROWS - VISIBLE_ROWS);
     if (vy < 0 || vy >= VISIBLE_ROWS) return;
-    const gx = x * cell;
-    const gy = vy * cell;
     g.globalAlpha = alpha;
-    g.fillStyle = color;
-    const r = Math.max(3, cell * 0.22);
-    g.beginPath();
-    g.roundRect(gx + 1, gy + 1, cell - 2, cell - 2, r);
-    g.fill();
-    g.strokeStyle = "#ffffffaa";
-    g.lineWidth = 1.5;
-    g.stroke();
-    if (mark && cell >= 24) {
-      g.fillStyle = "#00000055";
-      g.font = `700 ${Math.round(cell * 0.42)}px system-ui, sans-serif`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(mark, gx + cell / 2, gy + cell / 2);
-    }
+    drawCellSprite(g, WELL_WALL.side + x * cell, vy * cell, cell, color, mark);
     g.globalAlpha = 1;
   }
 
@@ -491,49 +630,81 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     const sink = slam > 0 ? Math.round((slam / SLAM_ANIM_SEC) * 3) : 0;
     g.setTransform(1, 0, 0, 1, 0, sink);
     g.clearRect(0, -sink, canvas.width, canvas.height + sink);
-    g.fillStyle = "#F4F7FF";
-    g.fillRect(0, -sink, canvas.width, canvas.height + sink);
+    // 花园积木箱:渐变井内 + 远景云 / 星 + 网格 + 三面井壁与螺钉
+    drawWellBackground(g, canvas.width, canvas.height, cell, theme);
 
-    g.strokeStyle = "#E2E9F7";
-    g.lineWidth = 1;
-    for (let c = 1; c < COLS; c++) {
-      g.beginPath();
-      g.moveTo(c * cell, 0);
-      g.lineTo(c * cell, canvas.height);
-      g.stroke();
-    }
-    for (let r = 1; r < VISIBLE_ROWS; r++) {
-      g.beginPath();
-      g.moveTo(0, r * cell);
-      g.lineTo(canvas.width, r * cell);
-      g.stroke();
-    }
+    // 消行动画进度 0→1(三段:泛金光 → 开花 → 行压扁)
+    const p = clearAnim > 0 ? 1 - clearAnim / Math.max(0.001, clearDur) : 0;
 
     for (let r = 0; r < board.length; r++) {
-      const flashing = clearRows.includes(r);
+      const flashing = clearAnim > 0 && clearRows.includes(r);
+      if (!flashing) {
+        for (let c = 0; c < COLS; c++) {
+          const v = board[r][c];
+          if (v === 0) continue;
+          drawCell(g, c, r, INDEX_COLOR[v] ?? INDEX_COLOR[8], 1, INDEX_MARK[v] ?? "");
+        }
+        continue;
+      }
+      const vy = r - (ROWS - VISIBLE_ROWS);
+      if (vy < 0 || vy >= VISIBLE_ROWS) continue;
+      if (soft) {
+        // 弱动效:保留 1.2 的单色轻闪,不压扁不开花
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c] !== 0) drawCell(g, c, r, "#FFF0C2", 0.35 + 0.65 * (1 - p), "");
+        }
+        continue;
+      }
+      // 70% 起整行视觉压扁(落格逻辑照旧,只是画矮了)
+      const squash = p < 0.7 ? 1 : Math.max(0.04, 1 - (p - 0.7) / 0.3);
+      const cy = vy * cell + cell / 2;
+      g.save();
+      g.translate(0, cy);
+      g.scale(1, squash);
+      g.translate(0, -cy);
       for (let c = 0; c < COLS; c++) {
         const v = board[r][c];
-        if (v === 0) continue;
-        if (flashing) {
-          const t = clearAnim / Math.max(0.001, CLEAR_ANIM_SEC);
-          drawCell(g, c, r, soft ? "#FFF0C2" : "#FFFFFF", 0.35 + 0.65 * t, "");
-        } else {
-          drawCell(g, c, r, INDEX_COLOR[v] ?? "#C9CEDB", 1, INDEX_MARK[v] ?? "");
-        }
+        if (v !== 0) drawCell(g, c, r, INDEX_COLOR[v] ?? INDEX_COLOR[8], 1, "");
       }
+      const glow = p < 0.3 ? p / 0.3 : Math.max(0, 1 - (p - 0.3) / 0.5);
+      drawRowGlow(g, WELL_WALL.side, vy * cell, COLS * cell, cell, glow);
+      g.restore();
     }
 
     if (!over && clearAnim === 0) {
       if (ghostOn) {
+        // 影子改为「只描边 + 内部斜纹」,与实体块形成形态差
         const gy = dropPosition(board, cells(), px, py);
-        for (const c of cells()) drawCell(g, c.x + px, c.y + gy, PIECE_COLORS[cur], 0.28, "");
+        for (const c of cells()) {
+          const vy = c.y + gy - (ROWS - VISIBLE_ROWS);
+          if (vy < 0 || vy >= VISIBLE_ROWS) continue;
+          paintGhostCell(g, WELL_WALL.side + (c.x + px) * cell, vy * cell, cell, PIECE_COLORS[cur]);
+        }
       }
       for (const c of cells()) drawCell(g, c.x + px, c.y + py, PIECE_COLORS[cur], 1, PIECE_MARKS[cur]);
     }
+
+    // 开花粒子 → 硬降尘土 → 垃圾警示 → 飞星 → 彩虹描边,全部纯视觉
+    if (clearFx.length > 0 && p > 0) drawClearFx(g, clearFx, p, cell, WELL_WALL.side, ROWS - VISIBLE_ROWS);
+    for (const b of dust) b.draw(g);
+    g.globalAlpha = 1;
+    if (incoming > 0) drawGarbageAlarm(g, canvas.width, canvas.height, cell, incoming, soft ? 0 : alarm / ALARM_SEC);
+    for (const s of shots) drawSentStar(g, canvas.width, s.age / SHOT_SEC);
+    if (rainbow > 0) drawRainbowEdge(g, canvas.width, canvas.height, 1 - rainbow / RAINBOW_SEC);
     g.setTransform(1, 0, 0, 1, 0, 0);
 
-    holdBox.textContent = `暂存 ${held ?? "—"}`;
-    nextBox.textContent = `下一个 ${queue.peek(5).join(" ")}`;
+    // 侧栏:暂存 / 下一个画成真形状的迷你果冻块,只在内容变化时重画
+    const hk = `${held ?? "-"}|${holdLocked}`;
+    if (hk !== holdKey) {
+      holdKey = hk;
+      paintHoldCanvas(holdCv, held, holdLocked);
+    }
+    const preview = queue.peek(nextN);
+    const nk = preview.join("");
+    if (nk !== nextKey) {
+      nextKey = nk;
+      paintNextCanvas(nextCv, preview);
+    }
     statBox.textContent = `${lines} 行 · ${score} 分${incoming > 0 ? ` · 待落 ${incoming}` : ""}`;
   }
 
@@ -545,7 +716,10 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     step,
     draw,
     receive(n: number) {
-      incoming += Math.max(0, Math.round(n));
+      const add = Math.max(0, Math.round(n));
+      incoming += add;
+      // 收到垃圾:井壁红光脉动 + 底部警示斜纹(soft 只留静态斜纹)
+      if (add > 0 && !soft) alarm = ALARM_SEC;
     },
     state: () => state(false),
     move,
@@ -663,7 +837,8 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
 
   // 触屏手势:左右滑动挪、下滑软降、上滑硬降、点一下转
   humanSeats.forEach(({ i }) => {
-    const canvas = seatsHost.querySelectorAll("canvas")[i] as HTMLCanvasElement | undefined;
+    // 只认主场地画布:侧栏的暂存 / 下一个迷你画布不吃手势
+    const canvas = seatsHost.querySelectorAll(".bd-canvas")[i] as HTMLCanvasElement | undefined;
     if (!canvas) return;
     let sx = 0;
     let sy = 0;
@@ -779,6 +954,74 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
   };
   window.addEventListener("keydown", onKeyDown);
 
+  // ---- 井的显示高度:量真实可视高再钳(见 wellDisplayPx 的注释) ----
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(game-stage 类,定高会裁内容)的下沿;量不到返回 NaN(测试桩 / 独立挂载) */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; node && i < 8; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        // 滚动口是 padding box:clientHeight 量得出就用它(白边一并扣掉)
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  function fitWells(): void {
+    if (destroyed) return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    if (typeof wrap.getBoundingClientRect !== "function" || typeof seatsHost.getBoundingClientRect !== "function") return;
+    const list = Array.from(seatsHost.querySelectorAll(".bd-canvas")) as HTMLCanvasElement[];
+    if (list.length === 0) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」,不然缩完装得下就以为本来就装得下
+    for (const c of list) {
+      if (!c.style) return;
+      c.style.height = "";
+      c.style.width = "";
+    }
+    // 井底下还有多高的「家当」(按钮排 + 提示行):这些高度不随井的显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(seatsHost.getBoundingClientRect()));
+    const tops = list.map((c) => (typeof c.getBoundingClientRect === "function" ? c.getBoundingClientRect().top : Number.NaN));
+    const stacked = list.length > 1 && Number.isFinite(tops[0]) && Number.isFinite(tops[1]) && Math.abs(tops[0] - tops[1]) > 40;
+    const share = stacked ? list.length : 1;
+    const minH = list.length > 1 ? WELL_DUO_MIN : WELL_DISPLAY_MIN;
+    const baseTop = stacked ? Math.min(...tops.filter((t) => Number.isFinite(t))) : Number.NaN;
+    for (const c of list) {
+      if (typeof c.getBoundingClientRect !== "function") continue;
+      const top = stacked && Number.isFinite(baseTop) ? baseTop : c.getBoundingClientRect().top;
+      if (!Number.isFinite(top)) continue;
+      const px = wellDisplayPx(c.height, (clip - top - below - 4) / share, minH);
+      if (px !== null) {
+        c.style.height = `${px}px`;
+        // 宽交给内在比例(canvas 是 replaced 元素),max-width:100% 仍旧兜着窄屏
+        c.style.width = "auto";
+      }
+    }
+  }
+
+  fitWells();
+  // 挂载那一刻可能还没上屏,量不到位置;下一帧补量一次
+  const fitRaf = typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => fitWells()) : 0;
+  window.addEventListener("resize", fitWells);
+  offs.push(() => {
+    window.removeEventListener("resize", fitWells);
+    if (fitRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
+  });
+
   function frame(ts: number): void {
     if (destroyed) return;
     const dt = last === 0 ? 1 / 60 : Math.min(0.05, (ts - last) / 1000);
@@ -821,6 +1064,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         pieceBudget: cfg.pieceBudget,
         targetLines: cfg.targetLines,
         cellPx: 24,
+        theme: themeForLevel(ctx.level),
         sfx: ctx.sfx,
         onSend: () => undefined,
         onDone: () => undefined
@@ -895,13 +1139,45 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     onBack();
   });
 
-  function showOver(title: string, sub: string, again: string): void {
+  function showOver(
+    title: string,
+    sub: string,
+    again: string,
+    deco?: { gold: boolean; badges: string[] }
+  ): void {
     table?.destroy();
     table = null;
     stage.innerHTML = "";
     const box = document.createElement("div");
     box.className = "bd-over";
-    box.innerHTML = `<div class="bd-over-t">${title}</div><div class="bd-over-s">${sub}</div>`;
+    if (deco) {
+      // 结算奖杯:赢了是金杯,惜败也有银杯参与奖
+      const cv = document.createElement("canvas");
+      cv.className = "bd-over-cv";
+      cv.width = 120;
+      cv.height = 92;
+      const g2 = cv.getContext("2d");
+      if (g2) paintTrophy(g2, 60, 46, 36, deco.gold);
+      box.appendChild(cv);
+    }
+    const t = document.createElement("div");
+    t.className = "bd-over-t";
+    t.textContent = title;
+    const s = document.createElement("div");
+    s.className = "bd-over-s";
+    s.textContent = sub;
+    box.append(t, s);
+    if (deco && deco.badges.length > 0) {
+      const row = document.createElement("div");
+      row.className = "bd-over-badges";
+      for (const b of deco.badges) {
+        const chip = document.createElement("span");
+        chip.className = "bd-badge";
+        chip.textContent = b;
+        row.appendChild(chip);
+      }
+      box.appendChild(row);
+    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "bd-open";
@@ -984,6 +1260,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           pieceBudget: 0,
           targetLines: cfg.targetLines,
           cellPx: 26,
+          theme: kind === "marathon" ? WELL_THEMES[3] : WELL_THEMES[2],
           sfx: (n) => api.play(n),
           onSend: () => undefined,
           onDone: () => undefined
@@ -999,7 +1276,11 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           kind === "sprint"
             ? `40 行用了 ${Math.round(r.sec)} 秒,消了 ${r.lines} 行。`
             : `${overLine(r.lines, r.score)} 最好成绩 ${best}。`,
-          "🔁 再来一局"
+          "🔁 再来一局",
+          {
+            gold: kind === "sprint" ? !r.toppedOut && r.lines >= 40 : r.score >= best,
+            badges: [`✨ 最大连消 ${r.bestCombo}`, `🌸 消行 ${r.lines}`, `🎯 得分 ${r.score}`]
+          }
         );
       }
     });
@@ -1017,6 +1298,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         {
           name: "朵朵",
           human: "duo",
+          tag: "p1",
           seed,
           bag: [...PIECE_IDS],
           startLevel: cfg.startLevel,
@@ -1031,6 +1313,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         {
           name: AI_TIER_LABELS[tier],
           tier: cfg.tier,
+          tag: "p2",
           seed: seed + 1,
           bag: [...PIECE_IDS],
           startLevel: cfg.startLevel,
@@ -1051,7 +1334,11 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         showOver(
           won ? "这一局赢下来啦！" : "这一局到此为止",
           `你消了 ${me.lines} 行、拿了 ${me.score} 分,对手消了 ${foe.lines} 行。`,
-          "🔁 再打一场"
+          "🔁 再打一场",
+          {
+            gold: won,
+            badges: [`✨ 最大连消 ${me.bestCombo}`, `🌸 我消了 ${me.lines} 行`, `🤖 对手 ${foe.lines} 行`]
+          }
         );
       }
     });
@@ -1067,6 +1354,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         {
           name: "朵朵",
           human: "duo",
+          tag: "p1",
           seed,
           bag: [...PIECE_IDS],
           startLevel: 0,
@@ -1081,6 +1369,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         {
           name: "星星",
           human: "star",
+          tag: "p2",
           seed: seed + 1,
           bag: [...PIECE_IDS],
           startLevel: 0,
@@ -1097,7 +1386,11 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         showOver(
           "这一局结束啦",
           `朵朵消了 ${rs[0].lines} 行,星星消了 ${rs[1].lines} 行。再来一局吧！`,
-          "🔁 再来一局"
+          "🔁 再来一局",
+          {
+            gold: true,
+            badges: [`🌸 朵朵 ${rs[0].lines} 行`, `⭐ 星星 ${rs[1].lines} 行`]
+          }
         );
       }
     });
@@ -1187,7 +1480,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,井字区能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先看半透明的影子确认落点,再让方块掉下去。",
       grandMessage: "188 关全部拿下,叠叠杯冠军就是你！",
       guideTitle: "方块叠叠乐 · 摆砖笔记"

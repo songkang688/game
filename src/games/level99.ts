@@ -19,7 +19,7 @@ import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
 import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
 // 契约文件只有常量与纯逻辑,没有弹窗 UI,静态 import 不会把 dialog 代码拖进游戏 chunk
-import { clampJumpTarget, isRootOpen, rootRemainMinutes, rootRemainMs } from "../ui/root12Contract";
+import { clampJumpTarget, isRootOpen, isRootPermanent, rootRemainMinutes, rootRemainMs, rootStatusLine } from "../ui/root12Contract";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -115,6 +115,45 @@ export function mapColumns(width: number): number {
   if (width <= 560) return 6;
   if (width <= 760) return 7;
   return 8;
+}
+
+/**
+ * 竞技场画布逻辑高按壳卡缺口等比补足(trio-r4 遗留的 orb-arena / snake-royale 卡底留白)。
+ * 画布显示宽被容器定死(width:100%),只能改逻辑高来消化竖向缺口;
+ * gapPx<0(矮横屏内容溢出)时也允许收一点。钳在 [min(原高,240), 960]:
+ * 下限不许把并排/分屏原本更矮的画布反向抬高,上限防止竖屏拉成一根面条。
+ */
+export function fitPaneH(paneH: number, paneW: number, displayW: number, gapPx: number, rows: number): number {
+  if (!(displayW > 0) || !(rows > 0) || !Number.isFinite(gapPx)) return paneH;
+  const delta = (gapPx / rows) * (paneW / displayW);
+  const lo = Math.min(paneH, 240);
+  return Math.max(lo, Math.min(960, Math.round(paneH + delta)));
+}
+
+/**
+ * 进关时量一次壳卡(.game-stage)底部缺口,把成排画布的逻辑高补足;
+ * 拿不到壳卡或量不出宽(单测的 jsdom)就原样返回。rows 按画布 top 去重:
+ * 竖排分屏各占一行要平分缺口,横排并排只算一行。
+ */
+export function fitPanesToStage(
+  wrap: HTMLElement,
+  canvases: HTMLCanvasElement[],
+  paneW: number,
+  paneH: number
+): number {
+  // 单测的 FakeEl/jsdom 没有 closest 或量不出尺寸,这些环境一律原样返回
+  if (typeof wrap.closest !== "function") return paneH;
+  const card = wrap.closest(".game-stage");
+  const first = canvases[0];
+  if (!card || !first || typeof first.getBoundingClientRect !== "function") return paneH;
+  const displayW = first.getBoundingClientRect().width;
+  if (!(displayW > 0)) return paneH;
+  // 16px = 壳卡圆角边框 + l99-stage 内边距的呼吸量
+  const gap = card.getBoundingClientRect().bottom - 16 - wrap.getBoundingClientRect().bottom;
+  const rows = new Set(canvases.map((c) => Math.round(c.getBoundingClientRect().top))).size || 1;
+  const fitted = fitPaneH(paneH, paneW, displayW, gap, rows);
+  if (fitted !== paneH) for (const c of canvases) c.height = fitted;
+  return fitted;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,8 +465,13 @@ export function jumpTargetLevel(raw: string, total: number = TOTAL_LEVELS): numb
   return n === null ? null : n - 1;
 }
 
-/** 直达控件旁边那行小字 */
-export function rootJumpNote(remainMs: number): string {
+/**
+ * 直达控件旁边那行小字（N-38）。
+ * 永久开启走 rootStatusLine，不再把远未来时间戳换算成「4193047370 分钟」。
+ * 限时态仍报剩余分钟，文案格式与修前一致。
+ */
+export function rootJumpNote(remainMs: number, nowMs: number = Date.now()): string {
+  if (isRootPermanent(nowMs)) return rootStatusLine(nowMs);
   return `管理员权限还剩 ${rootRemainMinutes(remainMs)} 分钟`;
 }
 
@@ -438,6 +482,31 @@ export function nodeAriaLabel(level: number, stars: number, state: "locked" | "s
   if (state === "skipped") return `第 ${n} 关，已跳过，可以回来挑战`;
   if (stars > 0) return `第 ${n} 关，已通关 ${stars} 星`;
   return `第 ${n} 关，还没通关`;
+}
+
+/** N-39：当前关格子是否整格落在视口内（top≥0 且 bottom≤视口高） */
+export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewportH: number): boolean {
+  return Number.isFinite(rect.top) && Number.isFinite(rect.bottom) && Number.isFinite(viewportH)
+    && viewportH > 0 && rect.bottom > rect.top && rect.top >= 0 && rect.bottom <= viewportH;
+}
+
+/** N-100 续：scrollIntoView(center) 后若「继续」在滚动盒上方，把 scrollTop 拉回到 CTA 贴顶。 */
+export function scrollAdjustToRevealCta(viewTop: number, ctaTop: number, scrollTop: number): number {
+  if (!Number.isFinite(viewTop) || !Number.isFinite(ctaTop) || !Number.isFinite(scrollTop)) return scrollTop;
+  if (ctaTop >= viewTop) return scrollTop;
+  return Math.max(0, scrollTop + (ctaTop - viewTop));
+}
+
+/**
+ * N-100：矮横屏进场锚定的目标滚距。
+ * scrollIntoView({block:"center"}) 把「开始冒险 ▶」头行与工具行卷出 915×412 视口
+ * （17 款 tab 折行款同病）；头行/工具行由 CSS sticky 钉在 .l99-view 顶之后，
+ * 这里算出「当前关贴着钉住两行的下沿」需要的滚距——调用方取 min(居中滚距, 本值)，
+ * 只减不增：竖屏 / 平板本来滚得少，一个像素都不会动。
+ */
+export function entryAnchorTop(nodeContentTop: number, pinnedH: number, gap = 8): number {
+  if (!Number.isFinite(nodeContentTop) || !Number.isFinite(pinnedH)) return 0;
+  return Math.max(0, Math.round(nodeContentTop - Math.max(0, pinnedH) - gap));
 }
 
 /**
@@ -466,37 +535,60 @@ export function buildFallbackGuide(gameId: string, chapters: Chapter[], title?: 
   };
 }
 
-function starRowHTML(stars: number): string {
+/**
+ * 12×12 内联 SVG 星形(S-2):以前是 ★ 字符,10–12px 时只剩一团糊点。
+ * 宽高用 1em 跟着容器 font-size 走,节点格 12px、关内顶栏 14px、结算页 34px 三处共用;
+ * fill 走 currentColor,亮灭仍由 .l99-star / .l99-star-on 的 color 决定,双态对比不变。
+ */
+const STAR_SVG =
+  `<svg viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true" focusable="false">` +
+  `<path fill="currentColor" d="M6 .6 7.5 4l3.9.3-3 2.6.9 3.9L6 8.7l-3.3 2.1.9-3.9-3-2.6L4.5 4Z"/></svg>`;
+
+export function starRowHTML(stars: number): string {
   let s = "";
   for (let i = 0; i < 3; i++) {
-    s += `<span class="l99-star${i < stars ? " l99-star-on" : ""}">★</span>`;
+    s += `<span class="l99-star${i < stars ? " l99-star-on" : ""}" aria-hidden="true">${STAR_SVG}</span>`;
   }
   return s;
 }
 
 const L99_CSS = `
 .l99-wrap{max-width:680px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  user-select:none;-webkit-user-select:none;position:relative;}
-.l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);}
+  user-select:none;-webkit-user-select:none;position:relative;width:100%;height:100%;min-height:0;
+  display:flex;flex-direction:column;box-sizing:border-box;}
+/* 平板 768/1024：卡略拉宽、格约 100px；760 仍走 7 列。矮横屏(<600h)保持 680，不抬高格子。 */
+@media (min-width:760px) and (min-height:600px){.l99-wrap{max-width:760px;}}
+.l99-view{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  touch-action:pan-y;overscroll-behavior:contain;}
+.l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);
+  flex:0 0 auto;box-sizing:border-box;max-width:100%;}
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 /* 「🚩 0/188 关」「⭐ 0/564」是孩子要读的进度,不是按钮也不是格子数字,按正文 16px 走 */
 .l99-chip{background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:16px;
   line-height:1.4;color:#7a5da8;box-shadow:0 2px 6px rgba(150,130,200,.2);}
 .l99-chip-skip{color:#6d6580;background:#efedf5;}
 .l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
+  min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
 .l99-continue:active{transform:translateY(2px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin:0 0 8px;}
 .l99-tool{border:none;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
+  min-height:44px;font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
 .l99-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .l99-tool-skip{background:#efe9fb;color:#665390;}
-.l99-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:none;}
-.l99-tabs::-webkit-scrollbar{display:none;}
-.l99-tab{flex:0 0 auto;border:none;border-radius:14px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
+.l99-tabs{display:flex;gap:3px;flex-wrap:wrap;padding:2px 0 6px;max-width:100%;align-items:center;}
+.l99-wrap .l99-tabs{padding-inline:0;}
+.l99-tab{flex:0 0 auto;border:none;border-radius:12px;padding:0;min-width:36px;min-height:44px;
+  display:inline-flex;align-items:center;justify-content:center;gap:3px;font-size:14px;font-weight:800;cursor:pointer;
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
-.l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
+.l99-tab:not(.l99-tab-on){width:36px;overflow:hidden;}
+/* N-119：当前章页签加厚（行内仍刷章节色；只加重描边与投影，不改徽章收纳） */
+.l99-tab.l99-tab-on{padding:0 8px;color:#4a3480;outline:3px solid #ffffff;
+  box-shadow:0 4px 0 rgba(120,80,180,.32),0 8px 16px rgba(140,120,200,.32);}
 .l99-tab.l99-tab-lock{opacity:.55;}
+.l99-tab-emoji{font-size:18px;line-height:1;}
+.l99-tab-name{font-size:13px;font-weight:800;max-width:4.6em;overflow:hidden;text-overflow:ellipsis;}
+.l99-tab-lockmark{font-size:11px;line-height:1;flex:0 0 auto;}
 /* 下面几行都是讲给孩子听的说明文字,按 mobileText.MIN_BODY_PX 走 16px:
    360px 手机上量过,13px / 12px 的小字在选关地图里根本看不清。 */
 .l99-chapdesc{font-size:16px;line-height:1.45;font-weight:700;color:#77619b;text-align:center;
@@ -509,9 +601,16 @@ const L99_CSS = `
   font-family:inherit;padding:0;}
 .l99-node:active{transform:scale(.94);}
 .l99-node-num{font-size:17px;font-weight:900;color:#6b5a90;line-height:1;}
-.l99-node-stars{font-size:11px;line-height:1;letter-spacing:1px;}
-.l99-star{color:#e3ddef;}
-.l99-star-on{color:#ffb937;text-shadow:0 1px 2px rgba(200,120,0,.35);}
+/* 星是 1em 的 SVG(见 STAR_SVG):这里的 font-size 就是星的边长,12px 起步别再往下压 */
+.l99-node-stars{font-size:12px;line-height:1;display:inline-flex;gap:2px;}
+.l99-star{color:#e3ddef;display:inline-flex;}
+.l99-star svg{display:block;}
+.l99-star-on{color:#ffb937;filter:drop-shadow(0 1px 1px rgba(200,120,0,.35));}
+/* N-119：章节色走节点行内 background；CSS 叠高光。三星用 :has 金边，不改 DOM */
+.l99-node:not(.l99-node-lock):not(.l99-node-skip){
+  box-shadow:inset 0 10px 14px rgba(255,255,255,.46),inset 0 -8px 12px rgba(80,40,120,.08),0 3px 8px rgba(140,130,190,.18);}
+.l99-node:not(.l99-node-lock):not(.l99-node-skip):has(.l99-star:nth-child(3).l99-star-on){
+  box-shadow:inset 0 8px 12px rgba(255,255,255,.4),0 0 0 3px #F2C14A,0 4px 12px rgba(196,140,20,.32);}
 .l99-node-cur{outline:3px solid #ff8fc0;animation:l99pulse 1.4s ease infinite;}
 .l99-node-cur .l99-node-num{color:#b52e72;}
 @keyframes l99pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -522,35 +621,38 @@ const L99_CSS = `
 .l99-node-flag{font-size:15px;line-height:1;filter:grayscale(1);opacity:.75;}
 .l99-node:focus-visible,.l99-tab:focus-visible,.l99-tool:focus-visible,.l99-continue:focus-visible,
 .l99-back:focus-visible,.l99-ov-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.l99-admin-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;width:100%;}
 .l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
-.l99-jump-input{width:76px;min-height:38px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
+.l99-jump-input{width:76px;min-height:44px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
   font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
 .l99-jump-note{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;}
 .l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .l99-maphint{margin-top:12px;text-align:center;font-size:16px;line-height:1.45;font-weight:700;
   color:#77619b;overflow-wrap:anywhere;word-break:break-word;}
-.l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
-.l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;}
+.l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);
+  flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;}
+.l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;flex:0 0 auto;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
-  background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
+  min-height:44px;background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
-.l99-beststars{font-size:12px;letter-spacing:1px;}
-.l99-stage{padding:10px;}
+.l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
+.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}
 .l99-ov-big{font-size:56px;line-height:1;}
 .l99-ov-buddy{width:104px;height:104px;object-fit:contain;pointer-events:none;
   filter:drop-shadow(0 6px 10px rgba(180,120,180,.28));animation:l99buddy .5s cubic-bezier(.34,1.56,.64,1);}
 .l99-ov-buddy-round{border-radius:50%;border:3px solid #fff;object-fit:cover;width:84px;height:84px;
   box-shadow:0 5px 12px rgba(150,120,200,.3);}
 @keyframes l99buddy{from{transform:scale(.3) rotate(-8deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
-.l99-ov-stars{font-size:34px;letter-spacing:6px;}
+.l99-ov-stars{font-size:34px;display:flex;justify-content:center;gap:6px;}
 .l99-ov-title{font-size:23px;font-weight:900;color:#8a5aa8;}
 .l99-ov-sub{font-size:16px;font-weight:700;color:#77619b;line-height:1.6;max-width:320px;}
-.l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex:0 0 auto;}
 .l99-ov-btn{border:none;border-radius:18px;padding:12px 26px;font-size:17px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
+  min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
 .l99-ov-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-ov-btn.l99-ov-ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 5px 0 #34498a;}
 .l99-ov-btn.l99-ov-ghost:active{box-shadow:0 2px 0 #34498a;}
@@ -558,12 +660,78 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-grid{gap:6px;}
   .l99-node-num{font-size:15px;}
-  .l99-node-stars{font-size:10px;}
+}
+@media (max-height:740px){
+  .l99-stagebar{padding:6px 8px;gap:6px;}
+  .l99-stagetitle{font-size:14px;}
+  .l99-stage{padding:6px;}
+  /* 矮屏只收外边距,字号不动:说明文字的 16px 红线(mobileText.test)矮屏也算数 */
+  .l99-jump-note{font-size:16px;margin:0;}
+  .l99-map{padding:10px;}
+  .l99-head{margin-bottom:6px;}
+}
+/* 平板横屏 1024×768 高 768，不命中 740。500 原文与 740 原文一字不改。 */
+@media (max-height:840px) and (min-height:741px){
+  .l99-stagebar{padding:6px 8px;gap:6px;}
+  .l99-stagetitle{font-size:14px;}
+  .l99-stage{padding:6px;}
+  .l99-jump-note{font-size:16px;margin:0;}
+  .l99-map{padding:10px;}
+  .l99-head{margin-bottom:6px;}
+}
+/* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
+   给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
+@media (max-height:500px){
+  /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。
+     N-118:不再用 100dvh-136px 硬钳——那 136px 在 915×412 留下底部盲区,
+     触摸滚不到最后一行。高度交给 .l99-host>.l99-wrap 的 flex 吃满壳卡余高。 */
+  .l99-view{overscroll-behavior:contain;}
+  .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
+  .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
+    overflow-x:auto;gap:6px;margin:0;}
+  .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
+  .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
+  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;min-height:44px;}
+  /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
+  .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
+  .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
+  /* N-100:tab 折行款进场,当前关 scrollIntoView 居中会把「开始冒险 ▶」头行与
+     🎯/📖/⏭️ 工具行卷出视口(17 款同病)。两行钉在 .l99-view 顶,滚多远都初见在屏;
+     进场滚距另由 entryAnchorTop 钳到工具行下沿。margin 换成 padding,流内高度不变。 */
+  .l99-map>.l99-head{position:sticky;top:0;z-index:5;margin-bottom:0;padding-bottom:6px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.2);}
+  .l99-map>.l99-tools{position:sticky;top:50px;z-index:4;margin-bottom:0;padding-bottom:8px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.16);}
+  /* N-204：915×412 过关 overlay 内容略高于 320，钮贴底。收 padding/头像，钮列钉底，
+     仍 overflow-y:auto + pan-y。不改 ov-btn 44/48、showOverlay、冷静期。 */
+  .l99-overlay{padding:10px 12px;gap:8px;justify-content:flex-start;}
+  .l99-ov-buddy{width:72px;height:72px;}
+  .l99-ov-buddy-round{width:64px;height:64px;}
+  .l99-ov-stars{font-size:26px;}
+  .l99-ov-title{font-size:18px;}
+  .l99-ov-sub{margin:0;font-size:16px;}
+  .l99-ov-btns{margin-top:auto;padding-bottom:4px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .l99-map>.l99-head{position:sticky;top:0;z-index:5;margin-bottom:0;padding-bottom:6px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.2);}
+  .l99-map>.l99-tools{position:sticky;top:50px;z-index:4;margin-bottom:0;padding-bottom:8px;
+    background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.16);}
+}
+@media (min-width:1000px){
+  .l99-wrap{max-width:min(960px, 94vw);}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
 }
+/* N-63:showMap(true) 的 scrollIntoView 会把 .game-stage 一起卷走,
+   挂在地图上面的模式条(保龄双人对战等) top 变负。舞台改由内部 .l99-view 滚,
+   模式条留在 flex 顶。四处 showMap(true) 与 N-39 聚焦都不改。 */
+.game-stage.game-stage--l99{overflow-y:hidden;display:flex;flex-direction:column;}
+.l99-host{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;height:100%;overflow:hidden;}
+.l99-host>.l99-wrap{flex:1 1 auto;min-height:0;}
 `;
 
 export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy: () => void } {
@@ -589,18 +757,49 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   style.textContent = L99_CSS;
   wrap.appendChild(style);
   const view = document.createElement("div");
+  view.className = "l99-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
+  pinL99Host();
+
+  function pinL99Host(): void {
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    const stage = closest?.(".game-stage") ?? null;
+    stage?.classList?.add("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && n !== stage) {
+      n.classList?.add("l99-host");
+      n = n.parentElement;
+    }
+  }
+
+  function unpinL99Host(): void {
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    closest?.(".game-stage")?.classList?.remove("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && !n.classList?.contains("game-stage")) {
+      n.classList?.remove("l99-host");
+      n = n.parentElement;
+    }
+  }
 
   function viewportWidth(): number {
     const w = (globalThis as { innerWidth?: number }).innerWidth;
     return typeof w === "number" && w > 0 ? w : 480;
   }
 
+  /** N-118:列数按地图容器宽,不按 innerWidth——max-width 680/760 的格子不该用 915 视口去排 8 列。 */
+  function mapLayoutWidth(): number {
+    const map = view.querySelector(".l99-map") as { clientWidth?: number } | null;
+    const cw = map?.clientWidth || wrap.clientWidth;
+    if (typeof cw === "number" && cw > 0) return cw;
+    return viewportWidth();
+  }
+
   const onResize = (): void => {
     const grid = view.querySelector(".l99-grid");
-    if (grid instanceof HTMLElement) {
-      grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    if (grid && typeof (grid as HTMLElement).style !== "undefined") {
+      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(mapLayoutWidth())},1fr)`;
     }
   };
   (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", onResize);
@@ -654,6 +853,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     const note = document.createElement("span");
     note.className = "l99-jump-note";
     note.textContent = rootJumpNote(rootRemainMs());
+    input.title = note.textContent;
     const jump = (): void => {
       const target = jumpTargetLevel(input.value, total);
       if (target === null) return;
@@ -673,14 +873,21 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     host.appendChild(box);
   }
 
-  function attachSkip(host: HTMLElement, level: number, after: (level: number) => void): void {
+  function attachSkip(
+    host: HTMLElement,
+    level: number,
+    after: (level: number) => void,
+    compact = false
+  ): void {
     const request = getLevelExtras().requestSkip;
     const rootOn = !skipNeedsParentAuth();
     if ((!request && !rootOn) || level >= total) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "l99-tool l99-tool-skip";
-    btn.textContent = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    const full = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    btn.textContent = compact && rootOn ? "⏭️ 跳过" : full;
+    btn.setAttribute("aria-label", full);
     btn.title = rootOn ? "管理员权限开着,可以直接跳过这一关" : "需要家长确认才能跳过这一关";
     btn.addEventListener("click", () => {
       api.play("tap");
@@ -770,18 +977,38 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     desc.className = "l99-chapdesc";
     const grid = document.createElement("div");
     grid.className = "l99-grid";
-    grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${mapColumns(mapLayoutWidth())},1fr)`;
     const furthestChapter = chapterOf(opts.chapters, furthest);
 
     opts.chapters.forEach((ch, ci) => {
       const tab = document.createElement("button");
       tab.type = "button";
       const locked = ci > furthestChapter;
-      tab.className = `l99-tab${ci === viewChapter ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
-      tab.style.background = ci === viewChapter ? ch.color : "";
-      tab.textContent = `${ch.emoji} ${ch.name}${locked ? " 🔒" : ""}`;
+      const on = ci === viewChapter;
+      tab.className = `l99-tab${on ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
+      tab.style.background = on ? ch.color : "";
+      // N-117:非当前章只露 emoji,当前章 emoji+名;锁标独立节点给 rootUnlock 摘。
+      const emojiEl = document.createElement("span");
+      emojiEl.className = "l99-tab-emoji";
+      emojiEl.setAttribute("aria-hidden", "true");
+      emojiEl.textContent = ch.emoji;
+      tab.appendChild(emojiEl);
+      if (on) {
+        const nameEl = document.createElement("span");
+        nameEl.className = "l99-tab-name";
+        nameEl.textContent = ch.name;
+        tab.appendChild(nameEl);
+      }
+      if (locked) {
+        const lockEl = document.createElement("span");
+        lockEl.className = "l99-tab-lockmark";
+        lockEl.setAttribute("aria-hidden", "true");
+        lockEl.textContent = "🔒";
+        tab.appendChild(lockEl);
+      }
       tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", ci === viewChapter ? "true" : "false");
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+      tab.setAttribute("aria-label", `${ch.emoji} ${ch.name}${locked ? "，未解锁" : ""}`);
       tab.addEventListener("click", () => {
         api.play("tap");
         viewChapter = ci;
@@ -856,14 +1083,57 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     view.appendChild(map);
 
     if (focusCurrent) {
-      const cur = grid.querySelector(".l99-node-cur");
-      if (cur instanceof HTMLElement) {
+      const cur = grid.querySelector(".l99-node-cur") as {
+        scrollIntoView?: (opts: { block: string }) => void;
+        focus?: () => void;
+      } | null;
+      // 认有没有 focus,不写 instanceof HTMLElement:node 单测环境没有这个全局,初次 showMap(true) 会整库红
+      if (cur) {
         try {
           cur.scrollIntoView?.({ block: "center" });
         } catch {
           // 老浏览器不支持 options 就算了
         }
         cur.focus?.();
+        // N-63:scrollIntoView 会连 .game-stage 一起滚,模式条飞到负 top。
+        // 滚条已经交给 .l99-view,舞台顶归零;hop-pads 当前关仍在地图盒里。
+        // 不写 wrap.closest:node 单测桩没有 closest,初次 showMap(true) 会整库红
+        let p: { className?: unknown; scrollTop?: number; parentElement?: unknown } | null = wrap;
+        while (p) {
+          if (typeof p.className === "string" && p.className.includes("game-stage")) {
+            if (typeof p.scrollTop === "number" && p.scrollTop > 0) p.scrollTop = 0;
+            break;
+          }
+          p = (p.parentElement as typeof p) ?? null;
+        }
+      }
+      // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
+      const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;
+      if (stageEl) stageEl.scrollTop = 0;
+      // N-100:矮横屏头行/工具行已 sticky 钉顶,这里再把居中滚距钳到
+      // 「当前关贴工具行下沿」,免得当前关躲进钉住的两行背后。只减不增;
+      // 高 >500px 或没滚动(jsdom/单测桩 scrollTop=0)直接跳过,零变化。
+      const vh = (globalThis as { innerHeight?: number }).innerHeight;
+      const curEl = cur as { getBoundingClientRect?: () => { top: number } } | null;
+      if (
+        typeof vh === "number" && vh > 0 && vh <= 500 && curEl &&
+        typeof view.scrollTop === "number" && view.scrollTop > 0 &&
+        typeof curEl.getBoundingClientRect === "function" &&
+        typeof view.getBoundingClientRect === "function"
+      ) {
+        const nodeContentTop = curEl.getBoundingClientRect().top - view.getBoundingClientRect().top + view.scrollTop;
+        const pinnedH = (head.offsetHeight || 0) + (tools.offsetHeight || 0);
+        view.scrollTop = Math.min(view.scrollTop, entryAnchorTop(nodeContentTop, pinnedH));
+      }
+      // N-100 续：钉顶后「继续」仍可能落在 .l99-view 裁切线以上（915×412 实测 top=-27）。
+      // 不改 block:center / 四处 showMap(true)；只把滚动盒再拉到 CTA 贴顶，同样只减不增。
+      const ctaBox = view.querySelector(".l99-continue") as {
+        getBoundingClientRect?: () => { top: number };
+      } | null;
+      const vr = view.getBoundingClientRect?.();
+      const cr = ctaBox?.getBoundingClientRect?.();
+      if (vr && cr && typeof view.scrollTop === "number") {
+        view.scrollTop = scrollAdjustToRevealCta(vr.top, cr.top, view.scrollTop);
       }
     }
   }
@@ -912,7 +1182,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       buttons.push({ label: "下一关 ▶", onClick: () => startLevel(level + 1) });
     }
     buttons.push({ label: "🔁 再玩一次", ghost: true, onClick: () => startLevel(level) });
-    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap() });
+    buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) });
 
     const buddy = level % 2 === 0 ? AVATAR_URLS.duoduoCheer : AVATAR_URLS.xingxingRun;
     const buddyAlt = level % 2 === 0 ? "朵朵在为你庆祝" : "星星在为你欢呼";
@@ -943,7 +1213,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
        <div class="l99-ov-sub">${word}</div>`,
       [
         { label: "🔁 再试本关", onClick: () => startLevel(level) },
-        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap() }
+        { label: "🗺️ 回地图", ghost: true, onClick: () => showMap(true) }
       ]
     );
     speak(settleSpeechLine("lose", level, word));
@@ -972,7 +1242,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     back.textContent = "🗺️ 选关";
     back.addEventListener("click", () => {
       api.play("tap");
-      showMap();
+      showMap(true);
     });
     const title = document.createElement("div");
     title.className = "l99-stagetitle";
@@ -986,11 +1256,19 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     barTools.className = "l99-tools";
     barTools.style.margin = "0";
     attachGuide(barTools, () => currentLevel + 1);
-    attachSkip(barTools, level, (skipped) => {
+    const afterSkip = (skipped: number): void => {
       if (skipped + 1 < total) startLevel(skipped + 1);
       else showMap(true);
-    });
-    attachRootJump(barTools, () => level);
+    };
+    if (rootJumpVisible()) {
+      const admin = document.createElement("div");
+      admin.className = "l99-admin-row";
+      attachSkip(admin, level, afterSkip, true);
+      attachRootJump(admin, () => level);
+      if (admin.childElementCount > 0) barTools.appendChild(admin);
+    } else {
+      attachSkip(barTools, level, afterSkip, false);
+    }
     if (barTools.childElementCount > 0) bar.appendChild(barTools);
     stageWrap.appendChild(bar);
 
@@ -1019,7 +1297,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     }
   }
 
-  showMap();
+  showMap(true);
 
   return {
     destroy() {
@@ -1031,6 +1309,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         "resize",
         onResize
       );
+      unpinL99Host();
       wrap.remove();
     }
   };

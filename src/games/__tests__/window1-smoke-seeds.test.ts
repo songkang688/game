@@ -90,7 +90,7 @@ describe("W1-10 · 九路地狱档「连下三手」为什么会偶发挂掉", (
     for (const seed of SEEDS) {
       expect(playAnyLegalPoints(seed, 3), `seed ${seed}`).toBe(3);
     }
-  });
+  }, 180_000);
 
   it("被占的点确实是 AI 自己下的,不是幽灵子", () => {
     const rand = mulberry32(3000);

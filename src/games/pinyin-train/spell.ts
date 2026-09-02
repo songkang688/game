@@ -13,6 +13,7 @@ import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
 import type { SpellTask } from "./levels";
 import { markTone, plainSyllable, spell } from "./pinyin";
+import { TICKET_CSS, buildScene } from "./scene";
 
 // ---------------------------------------------------------------------------
 // 纯逻辑（不碰 DOM，单测直接调）
@@ -201,9 +202,55 @@ const CSS = `
   .pyt-slot{min-width:68px;}
   .pyt-view{font-size:${PINYIN_FONT_MIN + 8}px;}
 }
+@media (max-height:500px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(150px,34%) minmax(0,1fr);grid-auto-rows:auto;
+    min-height:0;height:100%;padding:8px;gap:6px;align-items:stretch;}
+  .pyt-top{grid-column:1/-1;}
+  .pyt-loco{display:none;}
+  .pyt-scene{grid-column:1;grid-row:2/-1;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-slots,.pyt-view,.pyt-say-row,.pyt-yard,.pyt-bottom{grid-column:2;}
+  .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
+  .pyt-yard{min-height:0;overflow-y:auto;}
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
 @media (prefers-reduced-motion:reduce){
   .pyt-wobble{animation:none;}
   .pyt-loco{transition:none;}
+}
+/* N-34 配方 G:矮横屏火车画布左、车厢+票排右;min-height:380 在 412 高档会把票挤下线 */
+@media (max-height:500px){
+  .pyt-spell{min-height:0;padding:8px;gap:6px;}
+  .pyt-loco{padding:6px 10px;gap:6px;}
+  .pyt-loco-emoji,.pyt-loco-word{font-size:26px;}
+  .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .pyt-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pyt-top{grid-column:1/-1;grid-row:1;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-loco{grid-column:2;grid-row:2;}
+  .pyt-slots{grid-column:2;grid-row:3;}
+  .pyt-view{grid-column:2;grid-row:4;}
+  .pyt-say-row{grid-column:2;grid-row:5;position:static;}
+  .pyt-yard{grid-column:2;grid-row:6;}
+  .pyt-bottom{grid-column:2;grid-row:7;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pyt-spell{display:grid;grid-template-columns:minmax(200px,36%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:8px 12px;align-items:start;}
+  .pyt-top{grid-column:1/-1;grid-row:1;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pyt-loco{grid-column:2;grid-row:2;}
+  .pyt-slots{grid-column:2;grid-row:3;}
+  .pyt-view{grid-column:2;grid-row:4;}
+  .pyt-say-row{grid-column:2;grid-row:5;position:static;}
+  .pyt-yard{grid-column:2;grid-row:6;}
+  .pyt-bottom{grid-column:2;grid-row:7;}
 }
 `;
 
@@ -239,7 +286,8 @@ export function runSpell(opts: SpellOptions): PlayHandle {
   wrap.style.background = theme.bg;
 
   const styleEl = doc.createElement("style");
-  styleEl.textContent = CSS;
+  // 车票皮肤排在本款样式之后：同特异度下车票的锯齿与类别色边条要压过白底
+  styleEl.textContent = CSS + TICKET_CSS;
   wrap.appendChild(styleEl);
 
   const top = doc.createElement("div");
@@ -262,6 +310,10 @@ export function runSpell(opts: SpellOptions): PlayHandle {
   locoWord.style.color = theme.accent;
   loco.append(locoEmoji, locoWord);
   wrap.appendChild(loco);
+
+  // 火车舞台（纯视觉）：拼对一节挂一节，列车本身就是进度条
+  const scene = buildScene({ target: tasks.length });
+  wrap.appendChild(scene.el);
 
   const slotsEl = doc.createElement("div");
   slotsEl.className = "pyt-slots";
@@ -298,9 +350,10 @@ export function runSpell(opts: SpellOptions): PlayHandle {
   sayRow.className = "pyt-say-row";
   const sayBtn = doc.createElement("button");
   sayBtn.type = "button";
-  sayBtn.className = "pyt-say";
+  // 站台广播喇叭皮肤（pyt-horn 只换背景，不动任何接线）
+  sayBtn.className = "pyt-say pyt-horn";
   sayBtn.style.color = theme.accent;
-  sayBtn.textContent = "🔈 再听一遍";
+  sayBtn.textContent = "📢 再听一遍";
   sayBtn.hidden = true;
   sayRow.appendChild(sayBtn);
   wrap.appendChild(sayRow);
@@ -484,7 +537,8 @@ export function runSpell(opts: SpellOptions): PlayHandle {
       for (const v of values) {
         const btn = doc.createElement("button");
         btn.type = "button";
-        btn.className = "pyt-chip";
+        // 车票三色助记：声母橙 / 韵母青 / 声调红——颜色即语法，题面与判定不动
+        btn.className = `pyt-chip pyt-ticket pyt-tk-${kind}`;
         btn.textContent = v.text;
         if (v.sub) {
           const small = doc.createElement("small");
@@ -537,6 +591,9 @@ export function runSpell(opts: SpellOptions): PlayHandle {
     }
     if (judgeSpell(pick, task)) {
       ctx.sfx("win");
+      // 纯视觉：一节写着这个音节的车厢滑入挂上；整列挂满就鸣笛发车
+      scene.hook(task.target);
+      if (index + 1 >= tasks.length) later(() => scene.depart(), 420);
       loco.classList.add("pyt-loco-go");
       msgEl.textContent = `拼对啦！${task.word} 读 ${task.target}`;
       speak(`${task.word}，${task.target}`);
@@ -557,6 +614,8 @@ export function runSpell(opts: SpellOptions): PlayHandle {
     ctx.sfx("oops");
     updateHud();
     wobble();
+    // 纯视觉：车厢轻晃不脱钩 + 站牌「再听一遍」
+    scene.wobble();
     if (wrong > maxWrong) {
       ended = true;
       msgEl.textContent = "这几节车厢有点难挂～";
@@ -588,6 +647,7 @@ export function runSpell(opts: SpellOptions): PlayHandle {
       doc.removeEventListener("pointercancel", onPointerUp);
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      scene.destroy();
       wrap.remove();
     },
   };

@@ -43,6 +43,17 @@ import {
   type ChartNote,
   type MoleKind,
 } from "./rhythm";
+import {
+  MP_TIMING,
+  dropPose,
+  gearFor,
+  gearSvgFor,
+  holeInnerHtml,
+  moleFaceSvg,
+  nightSceneSvg,
+  orchardSceneSvg,
+  torchFlamesHtml,
+} from "./visual";
 
 interface HoleState {
   kind: MoleKind | null;
@@ -58,51 +69,126 @@ interface HoleState {
   dropping: boolean;
 }
 
+// 1.3 视觉升级:样式表必须是纯字面量(360px 窄屏 QA 从源码抠 CSS),
+// 色值 / 时长 / z 序的唯一口径在 visual.ts,视觉单测负责两边对账。
+// 洞热区几何(aspect-ratio 1 / min 56px / grid gap 12px)与升降时序
+// (mpUp .18s / translateY 6px→22px)沿用 1.2 原文,一个字没动。
 const CSS = `
-.mp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAF6D8, #F7EFD8); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.mp-wrap { --mp-grass: #B8E39B; --mp-soil-back: #A87B4F; --mp-soil-front: #C89B6C; --mp-hole: radial-gradient(ellipse at 50% 38%, #5A4636 0%, #3E3226 78%); --mp-mole: #D9A06B; --mp-board: #4A3B2E; --mp-torch: rgba(255,200,120,.4); --mp-peek-ms: 150ms; --mp-fly-ms: 260ms; --mp-bonk-ms: 180ms; --mp-sway-ms: 900ms; --mp-pop-ms: 120ms; --mp-flame-ms: 700ms; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #DFF3C0, var(--mp-grass)); border-radius: 16px; padding: 12px; user-select: none; position: relative; overflow: hidden; }
+.mp-scene { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.mp-scene svg { display: block; width: 100%; height: 100%; }
+.mp-wrap > :not(.mp-scene) { position: relative; z-index: 1; }
 .mp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.mp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 6px rgba(170,150,90,.25); font-size: 14px; }
+.mp-badge { background: #fff; border: 1px solid rgba(150,130,70,.2); border-radius: 12px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 0 rgba(150,130,70,.18); font-size: 14px; white-space: nowrap; }
+/* 连击倍率升档:数字跳一下(scale 1.2 → 1) */
+.mp-badge .mp-mult { color: #E8763B; font-weight: 900; display: inline-block; }
+.mp-badge .mp-mult.mp-pop { animation: mpPop var(--mp-pop-ms) ease-out; }
+@keyframes mpPop { from { transform: scale(1.2); } to { transform: scale(1); } }
 .mp-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #C8E06E, #8FBB4E); border-radius: 8px; transition: width .3s; }
-.mp-quiz { text-align: center; font-weight: 900; font-size: 16px; color: #5B5EA6; background: #fff; border-radius: 14px; padding: 6px 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(120,120,200,.22); }
-.mp-quiz b { font-size: 21px; color: #C2456F; }
+.mp-quiz { text-align: center; font-weight: 900; font-size: 16px; color: #F5EAD1; background: var(--mp-board); border: 3px solid #C89B6C; border-radius: 14px; padding: 6px 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(90,80,50,.3); }
+.mp-quiz b { font-size: 21px; color: #FFD75E; font-family: "Comic Sans MS", "Chalkboard SE", "Segoe Print", cursive; }
 .mp-combo { height: 9px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mp-combofill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFC46B, #F0714A); border-radius: 8px; transition: width .2s; }
 .mp-combo.mp-combo-on .mp-combofill { background: linear-gradient(90deg, #FF9A3C, #E8452C); animation: mpBlaze .5s ease infinite alternate; }
 @keyframes mpBlaze { from { opacity: .7; } to { opacity: 1; } }
 .mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.mp-hole { aspect-ratio: 1; min-width: 56px; min-height: 56px; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: radial-gradient(circle at 50% 62%, #9A7B4F 0 42%, #C9A876 46% 60%, #E4D3AE 64%); display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
+.mp-hole { aspect-ratio: 1; min-width: 56px; min-height: 56px; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: none; position: relative; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
 .mp-hole:active { transform: scale(.93); }
 /* 命中不震屏,只让洞口轻轻下沉三帧 */
 .mp-hole.mp-sink { transform: translateY(3px) scale(.97); }
-.mp-hole .mp-face { transform: translateY(6px); animation: mpUp .18s ease; }
+/* 洞内六层装饰:全部 pointer-events:none,点击永远落在按钮本体上 */
+.mp-hole > span { position: absolute; pointer-events: none; }
+.mp-pit { left: 9%; right: 9%; top: 36%; bottom: 10%; border-radius: 50%; background: var(--mp-hole); z-index: 1; box-shadow: inset 0 4px 7px rgba(0,0,0,.38); }
+.mp-mound-back { left: 5%; right: 5%; top: 30%; height: 20%; border-radius: 50%; background: var(--mp-soil-back); z-index: 2; }
+.mp-lift { left: 13%; right: 13%; top: 0; bottom: 24%; overflow: hidden; z-index: 3; }
+.mp-gear { left: 16%; right: 16%; top: 0; height: 48%; z-index: 4; display: flex; align-items: flex-start; justify-content: center; }
+.mp-mound-front { left: 2%; right: 2%; bottom: 2%; height: 26%; border-radius: 50% 50% 44% 44% / 96% 96% 52% 52%; background: linear-gradient(180deg, var(--mp-soil-front), #B08355 92%); z-index: 5; box-shadow: 0 -2px 3px rgba(90,70,40,.25); }
+.mp-fx { inset: 0; z-index: 6; display: flex; align-items: flex-end; justify-content: center; }
+.mp-hole .mp-face { position: absolute; left: 4%; right: 4%; top: 6%; bottom: 0; display: flex; align-items: flex-end; justify-content: center; transform: translateY(6px); animation: mpUp .18s ease; }
+.mp-hole .mp-face svg { width: 92%; height: auto; }
 /* 缩回中:还能擦边打到,所以要看得见它在往下走 */
 .mp-hole .mp-face-drop { transform: translateY(22px); opacity: .55; }
-.mp-hole .mp-card { font-size: clamp(15px, 5.4vw, 24px); font-weight: 900; color: #4A4A7A; background: #FFF8E4; border-radius: 10px; padding: 3px 7px; box-shadow: 0 2px 5px rgba(90,80,50,.3); }
 @keyframes mpUp { from { transform: translateY(26px); opacity: .4; } to { transform: translateY(6px); opacity: 1; } }
+/* 装备层:盾抱胸前、安全帽扣头顶、小黑板举过头;第一下敲中装备抛物线飞走 */
+.mp-gear-shield { top: 30%; height: 42%; }
+.mp-gear-hat { top: -2%; height: 36%; }
+.mp-gear-board { top: -8%; height: 58%; }
+/* 算术小黑板出题时轻摆 ±3° */
+.mp-gear-board svg { transform-box: fill-box; transform-origin: 50% 6%; animation: mpSway var(--mp-sway-ms) ease-in-out infinite alternate; }
+@keyframes mpSway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+.mp-gear.mp-gear-fly { animation: mpGearFly var(--mp-fly-ms) ease-out forwards; }
+@keyframes mpGearFly { from { transform: translate(0, 0) rotate(0deg); opacity: 1; } 55% { transform: translate(30%, -55%) rotate(26deg); opacity: 1; } to { transform: translate(52%, -14%) rotate(52deg); opacity: 0; } }
+/* 冒头预告:出洞前 150ms,前沿土堆抖两下 + 洞口弹起两粒土 */
+.mp-hole.mp-peek .mp-mound-front { animation: mpPeek var(--mp-peek-ms) steps(4) 1; }
+@keyframes mpPeek { 0%, 50%, 100% { transform: translateX(0); } 25%, 75% { transform: translateX(2px); } }
+.mp-hole.mp-peek .mp-fx::after { content: ""; position: absolute; bottom: 30%; left: 48%; width: 4px; height: 4px; border-radius: 50%; background: var(--mp-soil-back); box-shadow: -9px -3px 0 -1px var(--mp-soil-front), 9px -5px 0 -1px var(--mp-soil-front); animation: mpDust var(--mp-peek-ms) ease-out 1; }
+@keyframes mpDust { from { transform: translateY(3px); opacity: 0; } 40% { opacity: 1; } to { transform: translateY(-5px); opacity: 0; } }
+/* 被敲反馈帧:压扁 0.8 倍回弹(ease-out-back)+ 星星圈,画在反馈层,热区不动 */
+.mp-bonk { position: absolute; left: 13%; right: 13%; top: 0; bottom: 24%; display: flex; align-items: flex-end; justify-content: center; animation: mpBonkPop var(--mp-bonk-ms) cubic-bezier(.34,1.56,.64,1); }
+.mp-bonk svg { width: 92%; height: auto; }
+@keyframes mpBonkPop { from { transform: translateY(4px) scale(1.06, .8); } to { transform: translateY(0) scale(1, 1); } }
+/* 夜场火把:双层火苗错相摇曳,reduced 时静止 */
+.mp-scene .mp-flame { position: absolute; top: 6px; width: 24px; height: 40px; }
+.mp-flame-l { left: 10px; }
+.mp-flame-r { right: 10px; }
+.mp-flame [data-part="flame-outer"] { transform-box: fill-box; transform-origin: 50% 88%; animation: mpFlame var(--mp-flame-ms) ease-in-out infinite alternate; }
+.mp-flame [data-part="flame-inner"] { transform-box: fill-box; transform-origin: 50% 82%; animation: mpFlame var(--mp-flame-ms) ease-in-out infinite alternate-reverse; }
+@keyframes mpFlame { from { transform: rotate(-4deg) scaleY(.96); } to { transform: rotate(4deg) scaleY(1.04); } }
 .mp-wrap.mp-night { background: linear-gradient(180deg, #2B2C46, #3C3A55); }
 .mp-wrap.mp-night .mp-badge { background: #4B4A6B; color: #FFF0C0; }
 .mp-wrap.mp-night .mp-msg { color: #FFE9A8; }
 .mp-wrap.mp-night .mp-hole { filter: brightness(.32); }
-.mp-wrap.mp-night .mp-hole.mp-lit { filter: none; box-shadow: 0 0 16px 7px rgba(255,240,170,.8); }
-.mp-msg { text-align: center; min-height: 20px; color: #8A7A3E; font-weight: 700; margin-top: 10px; font-size: 14px; }
+.mp-wrap.mp-night .mp-hole.mp-lit { filter: none; box-shadow: 0 0 0 3px var(--mp-torch), 0 0 18px 8px var(--mp-torch); }
+.mp-msg { text-align: center; min-height: 20px; color: #6E6430; font-weight: 700; margin-top: 10px; font-size: 14px; }
 .mp-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
-.mp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8FBB4E, #6F9C36); box-shadow: 0 4px 0 #567A28; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mp-bar-modes[hidden] { display: none; }
+.mp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8FBB4E, #6F9C36); box-shadow: 0 4px 0 #567A28; min-height: 44px; }
 .mp-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #567A28; }
 .mp-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .mp-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.mp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6F8C42; box-shadow: 0 3px 0 rgba(110,150,60,.3); }
+.mp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6F8C42; box-shadow: 0 3px 0 rgba(110,150,60,.3); min-height: 44px; }
 .mp-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,150,60,.3); }
 .mp-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6F8C42; box-shadow: 0 2px 6px rgba(130,170,90,.25); }
 .mp-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(150,170,110,.25); }
 .mp-over-t { font-size: 22px; font-weight: 900; color: #6F8C42; margin-bottom: 8px; }
 .mp-over-s { font-size: 15px; font-weight: 700; color: #8A7A3E; line-height: 1.6; margin-bottom: 14px; }
 @media (max-width: 380px) { .mp-board { gap: 12px; } .mp-badge { font-size: 14px; padding: 4px 8px; } }
+/* C-5 / U-8:3×3 洞格按余高反推,915 与平板横屏都能看见三排。
+   写在下面 C-5 两栏档之前:915×412 仍走已验收的两栏方案。 */
+@media (max-height: 500px) {
+  .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
+}
+/* 1024×768 实测 240 预算仍让第三排切出舞台 58px;500 档 240 原文不动 */
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
+  .mp-board { max-width: min(100%, calc(100dvh - 320px)); margin: 0 auto; gap: 8px; }
+}
+/* C-5:915×412 九洞 250~894(root×167 更差),洞径被 3 列全宽驱动撑到 207px。
+   矮横屏改两栏:徽章/算式/进度条挪左栏,九洞盘上顶,盘宽按「视口高 − 盘顶那摞」反推——
+   洞径 ≈ (盘宽 − 2×gap) ÷ 3 ≥ 44px。390×844 竖屏不吃这一档,谱面/判定零触碰。 */
+@media (max-height:500px) and (min-width:640px) {
+  .mp-wrap { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 10px; align-items: start; padding: 10px; }
+  .mp-wrap > :not(.mp-scene):not(.mp-board) { grid-column: 1; }
+  .mp-board { grid-column: 2; grid-row: 1 / span 6; gap: 8px; width: clamp(148px, calc(100dvh - 142px), 320px); }
+  .mp-hole { min-width: 44px; min-height: 44px; font-size: clamp(24px, 8dvh, 44px); }
+  .mp-top { margin-bottom: 6px; }
+  .mp-msg { text-align: left; }
+}
 @media (prefers-reduced-motion: reduce) {
   .mp-hole .mp-face { animation: none; }
   .mp-hole.mp-sink { transform: none; }
   .mp-combo.mp-combo-on .mp-combofill { animation: none; }
+  .mp-hole.mp-peek .mp-mound-front { animation: none; }
+  .mp-hole.mp-peek .mp-fx::after { display: none; }
+  .mp-gear.mp-gear-fly { animation: none; opacity: 0; }
+  .mp-bonk { animation: none; }
+  .mp-gear-board svg { animation: none; }
+  .mp-flame [data-part="flame-outer"], .mp-flame [data-part="flame-inner"] { animation: none; }
+  .mp-badge .mp-mult.mp-pop { animation: none; }
 }
+.mp-open, .mp-back { min-height: 40px; }
+.mp-open, .mp-back { min-height: 44px; }
 `;
 
 interface RoundOpts {
@@ -152,8 +238,10 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
   const wrap = document.createElement("div");
   wrap.className = `mp-wrap${cfg.night ? " mp-night" : ""}`;
+  // 场景层互斥:白天草地果园,夜场月牙星子剪影 + 两支自绘火把;都点不到(pointer-events:none)
   wrap.innerHTML = `
     <style>${CSS}</style>
+    <div class="mp-scene">${cfg.night ? nightSceneSvg() + torchFlamesHtml() : orchardSceneSvg()}</div>
     <div class="mp-top">
       <span class="mp-badge mp-score">🔨 0 / ${cfg.target}</span>
       <span class="mp-badge mp-time">⏰ ${cfg.duration}s</span>
@@ -188,36 +276,101 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     }, ms);
   }
 
+  // 每个洞六层装饰(暗部→后沿土堆→地鼠层→装备层→前沿土堆→反馈层),
+  // 全部 pointer-events:none;按钮本体就是热区,几何与 1.2 完全一致。
+  // C-5:矮横屏九洞盘的「盘顶那摞」(壳头 + 徽章 + 算式)高度随 root 直达工具行浮动,
+  // CSS 常量猜不准(root×167 更差)。按盘顶实测 top 反推盘宽:宽 = 视口高 − top − 8,
+  // 三行洞(min 44px)整盘进屏;竖屏/量不到 top(测试桩)时清空交回 CSS 档,谱面判定零触碰。
+  function fitBoard(): void {
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    if (!(vh > 0 && vh <= 500 && vw >= 640)) {
+      boardEl.style.width = "";
+      return;
+    }
+    const top = Math.round(boardEl.getBoundingClientRect?.()?.top ?? 0);
+    if (top <= 0) return;
+    boardEl.style.width = `${Math.max(148, Math.min(320, vh - top - 8))}px`;
+  }
+  fitBoard();
+  later(fitBoard, 60);
+  window.addEventListener("resize", fitBoard);
+
   const holeEls: HTMLButtonElement[] = [];
+  const liftEls: HTMLElement[] = [];
+  const gearEls: HTMLElement[] = [];
+  const fxEls: HTMLElement[] = [];
   for (let i = 0; i < 9; i++) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "mp-hole";
+    btn.innerHTML = holeInnerHtml();
     btn.addEventListener("click", () => onHole(i));
     boardEl.appendChild(btn);
     holeEls.push(btn);
+    liftEls.push(btn.querySelector(".mp-lift") as HTMLElement);
+    gearEls.push(btn.querySelector(".mp-gear") as HTMLElement);
+    fxEls.push(btn.querySelector(".mp-fx") as HTMLElement);
   }
 
   function blazing(): boolean {
     return blazeUntil > Date.now();
   }
 
+  /** 装备层正在播「飞走」动画的洞:动画播完前 renderGear 不许覆盖它 */
+  const gearFlying = Array.from({ length: 9 }, () => false);
+
+  function renderGear(i: number): void {
+    if (gearFlying[i]) return;
+    const h = holes[i];
+    const gear = h.kind && !h.dropping ? gearFor(h.kind, h.hits) : null;
+    gearEls[i].className = `mp-gear${gear ? ` mp-gear-${gear}` : ""}`;
+    gearEls[i].innerHTML = gear ? gearSvgFor(gear, h.card?.expr ?? "") : "";
+  }
+
   function renderHole(i: number): void {
     const h = holes[i];
     if (!h.kind) {
-      holeEls[i].innerHTML = "";
+      liftEls[i].innerHTML = "";
+      renderGear(i);
       return;
     }
     const dropCls = h.dropping ? " mp-face-drop" : "";
-    if (h.kind === "quiz" && h.card) {
-      holeEls[i].innerHTML = `<span class="mp-face mp-card${dropCls}">${h.card.expr}</span>`;
-      return;
+    const pose = h.dropping ? dropPose(h.kind) : "up";
+    liftEls[i].innerHTML = `<span class="mp-face${dropCls}">${moleFaceSvg(h.kind, pose)}</span>`;
+    renderGear(i);
+  }
+
+  /** 第一下敲中护盾/帽子:装备抛物线飞走——只动装备层,地鼠层一根毛不动 */
+  function flyGear(i: number): void {
+    gearFlying[i] = true;
+    gearEls[i].classList.add("mp-gear-fly");
+    later(() => {
+      gearFlying[i] = false;
+      gearEls[i].classList.remove("mp-gear-fly");
+      renderGear(i);
+    }, MP_TIMING.gearFlyMs);
+  }
+
+  /** 被敲反馈帧:压扁 0.8 倍 + 吐舌笑 + 星星圈,画在反馈层,一小会儿就收 */
+  function bonkFx(i: number, kind: MoleKind): void {
+    fxEls[i].innerHTML = `<span class="mp-bonk">${moleFaceSvg(kind, "bonked")}</span>`;
+    later(() => {
+      fxEls[i].innerHTML = "";
+    }, MP_TIMING.bonkHoldMs);
+  }
+
+  /** 冒头预告:谱面里 150ms 内要上场的洞,土粒先抖两下(只加视觉类,不动谱面) */
+  let peekCursor = 0;
+  function scanPeek(): void {
+    while (peekCursor < chart.length && chart[peekCursor].at <= clockMs + MP_TIMING.peekMs) {
+      const note = chart[peekCursor++];
+      if (note.at > clockMs && holes[note.hole].kind === null) {
+        const el = holeEls[note.hole];
+        el.classList.add("mp-peek");
+        later(() => el.classList.remove("mp-peek"), MP_TIMING.peekMs + 40);
+      }
     }
-    if ((h.kind === "shield" || h.kind === "hat") && h.hits > 0) {
-      holeEls[i].innerHTML = `<span class="mp-face${dropCls}">🐹</span>`;
-      return;
-    }
-    holeEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS[h.kind].emoji}</span>`;
   }
 
   function renderTorch(): void {
@@ -226,10 +379,14 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     holeEls.forEach((el, i) => el.classList.toggle("mp-lit", lit.has(i)));
   }
 
+  let lastMult = 1;
   function renderTop(): void {
     scoreEl.textContent = `🔨 ${score} / ${cfg.target}`;
     timeEl.textContent = `⏰ ${timeLeft}s`;
-    styleEl.textContent = `✨ 手感 ${styleScore} · ×${comboMultiplier(streak)}`;
+    // 倍率升档那一次给 mp-pop:元素新插入时动画自动播一遍,120ms 跳完即收
+    const mult = comboMultiplier(streak);
+    styleEl.innerHTML = `✨ 手感 ${styleScore} · <b class="mp-mult${mult > lastMult ? " mp-pop" : ""}">×${mult}</b>`;
+    lastMult = mult;
     if (heartEl) heartEl.textContent = "💗".repeat(Math.max(0, 3 - mistakes)) + "🤍".repeat(Math.min(3, mistakes));
     fillEl.style.width = `${Math.min(100, (score / cfg.target) * 100)}%`;
     if (quizNumEl) quizNumEl.textContent = String(quizNow);
@@ -283,6 +440,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   function tick(): void {
     if (ended || destroyed) return;
     clockMs += TICK_MS;
+    scanPeek();
     while (cursor < chart.length && chart[cursor].at <= clockMs) spawnNote(chart[cursor++]);
     holes.forEach((h, i) => {
       if (!h.kind) return;
@@ -358,8 +516,10 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
     if (h.kind === "quiz") {
       const card = h.card;
+      const wasCorrect = card?.correct === true;
+      if (wasCorrect) bonkFx(i, "quiz");
       hideMole(i);
-      if (card?.correct) {
+      if (wasCorrect && card) {
         opts.sfx("pop");
         msgEl.textContent = `🧮 ${card.expr} = ${quizNow}，算得真准！`;
         award(judge, 1);
@@ -375,6 +535,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
       h.hits = 1;
       opts.sfx("tap");
       msgEl.textContent = h.kind === "hat" ? "🎩 帽子飞啦，再补一下！" : "🪖 头盔掀掉啦，再补一下！";
+      flyGear(i);
       renderHole(i);
       return;
     }
@@ -392,6 +553,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
               : "";
     msgEl.textContent = `${kindLine}${kindLine ? " · " : ""}${JUDGE_LABEL[judge]}`;
     sink(i);
+    bonkFx(i, h.kind);
     hideMole(i);
     award(judge, spec.base);
   }
@@ -430,6 +592,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     destroy() {
       destroyed = true;
       ended = true;
+      window.removeEventListener("resize", fitBoard);
       bag.clearAll();
       wrap.remove();
     },

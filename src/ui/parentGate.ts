@@ -5,6 +5,7 @@
  * 1.1 起算术门本身搬到了 `parentAuth.ts`(basic 档),这里只负责调用与面板。
  */
 import { save } from "../engine/save";
+import { backupToVault, getVault, readEnvelope, restoreFromVault } from "../engine/vault";
 import { playSound } from "../engine/audio";
 import { loadGames } from "../engine/loader";
 import { showDialog } from "./dialogs";
@@ -28,10 +29,10 @@ function showParentPanel(): void {
   const list = document.createElement("ul");
   list.className = "parent-list";
   const items = [
-    `🌸 「一朵一星」1.2 有 ${loadGames().length} 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。`,
+    `🌸 「一朵一星」1.3 有 ${loadGames().length} 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。`,
     "🎨 所有游戏均为原创同类型玩法,不使用任何商业 IP。",
     "🚫 无广告、无内购、无联网账号。",
-    "💾 星星和进度只保存在本机(localStorage),不上传。",
+    "💾 星星和进度只存在你自己的设备上,从不上传;还会自动多存一份到应用外面的文件,卸载重装也不丢(见下方「卸载也不丢」)。",
     "⏰ 建议每次游玩不超过 20 分钟,保护眼睛哦。"
   ];
   for (const text of items) {
@@ -99,7 +100,50 @@ function showParentPanel(): void {
       setFeedback(result.error, true);
     }
   });
-  importArea.append(importInput, importConfirmBtn);
+  // 手机上让家长粘贴一长串备份文本太难为人了,给一个直接选备份文件的口子
+  const importFileBtn = document.createElement("button");
+  importFileBtn.type = "button";
+  importFileBtn.className = "btn btn--ghost";
+  importFileBtn.textContent = "📄 选择备份文件";
+
+  const importFileInput = document.createElement("input");
+  importFileInput.type = "file";
+  importFileInput.accept = ".txt,.json,text/plain,application/json";
+  importFileInput.hidden = true;
+  importFileInput.setAttribute("aria-label", "选择进度备份文件");
+
+  importFileBtn.addEventListener("click", () => {
+    playSound("tap");
+    importFileInput.click();
+  });
+  importFileInput.addEventListener("change", () => {
+    const file = importFileInput.files?.[0];
+    if (!file) return;
+    void file
+      .text()
+      .then((text) => {
+        // 自动备份写出去的是带时间戳的信封,手动导出的是裸备份文本,两种都收
+        const envelope = readEnvelope(text);
+        const result = save.importAll(envelope ? envelope.payload : text);
+        if (result.ok) {
+          playSound("win");
+          setFeedback(`导入成功,${result.count} 项进度都回来啦 ✓`);
+          importArea.hidden = true;
+        } else {
+          playSound("oops");
+          setFeedback(result.error, true);
+        }
+      })
+      .catch(() => {
+        playSound("oops");
+        setFeedback("这个文件读不出来,换一个试试吧", true);
+      })
+      .finally(() => {
+        importFileInput.value = "";
+      });
+  });
+
+  importArea.append(importInput, importConfirmBtn, importFileBtn, importFileInput);
 
   const exportBtn = document.createElement("button");
   exportBtn.type = "button";
@@ -152,7 +196,7 @@ function showParentPanel(): void {
   });
 
   backupRow.append(exportBtn, importBtn);
-  content.append(backupRow, importArea, feedback, buildSkipSection());
+  content.append(backupRow, importArea, feedback, buildVaultSection(), buildSkipSection());
 
   showDialog({
     className: "dialog--parent",
@@ -160,6 +204,144 @@ function showParentPanel(): void {
     dismissible: true,
     buttons: [{ label: "关闭", kind: "ghost", onClick: () => undefined }]
   });
+}
+
+/**
+ * 「卸载也不丢」一段:把进度自动多存一份到应用外面的文件里。
+ *
+ * 三种设备说法不一样,按实际能用的通道给不同的话术:
+ *  - 桌面安装版 / 安卓包:开箱就在写,家长只需要知道存在哪儿;
+ *  - 桌面浏览器:要家长亲手选一次文件夹(浏览器的规矩,必须有用户手势);
+ *  - 手机浏览器:选不了文件夹,只能引导用上面的导出/导入。
+ */
+function buildVaultSection(): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "parent-vault";
+
+  const heading = document.createElement("h3");
+  heading.className = "dialog-title";
+  heading.textContent = "卸载也不丢";
+  box.appendChild(heading);
+
+  const note = document.createElement("p");
+  note.className = "dialog-text";
+  box.appendChild(note);
+
+  const status = document.createElement("p");
+  status.className = "dialog-text";
+  box.appendChild(status);
+
+  const row = document.createElement("div");
+  row.className = "dialog-buttons";
+  box.appendChild(row);
+
+  const connectBtn = document.createElement("button");
+  connectBtn.type = "button";
+  connectBtn.className = "btn btn--primary";
+  connectBtn.textContent = "📁 选择存档文件夹";
+
+  const backupBtn = document.createElement("button");
+  backupBtn.type = "button";
+  backupBtn.className = "btn btn--ghost";
+  backupBtn.textContent = "💾 立即备份一次";
+
+  const restoreBtn = document.createElement("button");
+  restoreBtn.type = "button";
+  restoreBtn.className = "btn btn--ghost";
+  restoreBtn.textContent = "♻️ 从备份恢复";
+
+  const vault = getVault();
+
+  function setStatus(text: string, isError = false): void {
+    status.textContent = text;
+    status.style.color = isError ? "#c0392b" : "var(--pink-deep)";
+  }
+
+  function render(): void {
+    if (vault.kind === "none") {
+      note.textContent =
+        "这台设备的浏览器不支持自动存到文件夹。请用上面的「导出进度」存一份备份文件,换设备或重装后再「导入进度」。";
+      row.hidden = true;
+      status.hidden = true;
+      return;
+    }
+    if (vault.kind === "electron" || vault.kind === "capacitor") {
+      note.textContent =
+        "进度会自动多存一份到应用外面的文件里。卸载或重装本应用都不会删掉它,重新装好打开就自动接回来。";
+      connectBtn.hidden = true;
+    } else {
+      note.textContent =
+        "选一个文件夹(建议放在「文档」里),进度会自动写进去。浏览器数据被清掉或换台机器时,重新选同一个文件夹就能接回来。";
+    }
+    void vault.ready().then((ok) => {
+      setStatus(ok ? `正在自动备份到:${vault.location}` : "还没开启,点下面的按钮选个文件夹吧。");
+      backupBtn.disabled = !ok;
+      restoreBtn.disabled = !ok;
+    });
+  }
+
+  connectBtn.addEventListener("click", () => {
+    playSound("tap");
+    void vault.connect().then((ok) => {
+      if (!ok) {
+        setStatus("没有选好文件夹,再试一次吧。", true);
+        return;
+      }
+      playSound("win");
+      void backupToVault().then((written) => {
+        setStatus(
+          written ? `好啦,正在自动备份到:${vault.location}` : `已记住文件夹,但这次没写进去,请检查文件夹权限。`,
+          !written
+        );
+        backupBtn.disabled = false;
+        restoreBtn.disabled = false;
+      });
+    });
+  });
+
+  backupBtn.addEventListener("click", () => {
+    playSound("tap");
+    backupBtn.disabled = true;
+    void backupToVault().then((ok) => {
+      backupBtn.disabled = false;
+      setStatus(ok ? `已存好:${vault.location}` : "这次没写进去,请检查文件夹还在不在。", !ok);
+    });
+  });
+
+  let confirming = false;
+  restoreBtn.addEventListener("click", () => {
+    if (!confirming) {
+      confirming = true;
+      restoreBtn.textContent = "再点一次用备份覆盖现在的进度";
+      return;
+    }
+    confirming = false;
+    restoreBtn.textContent = "♻️ 从备份恢复";
+    playSound("tap");
+    void restoreFromVault(true).then((result) => {
+      if (result.ok) {
+        playSound("win");
+        const when = result.savedAt ? `(${result.savedAt.slice(0, 10)} 存的)` : "";
+        setStatus(`恢复成功,${result.count} 项进度都回来啦 ${when}✓`);
+      } else {
+        playSound("oops");
+        setStatus(vaultErrorText(result.reason, result.error), true);
+      }
+    });
+  });
+
+  row.append(connectBtn, backupBtn, restoreBtn);
+  render();
+  return box;
+}
+
+/** 把恢复失败的原因翻译成家长看得懂的一句话 */
+function vaultErrorText(reason: string, detail?: string): string {
+  if (reason === "no-vault") return "还没开启自动备份。";
+  if (reason === "no-file") return "那个位置还没有备份文件。";
+  if (reason === "bad-file") return "备份文件看不懂,可能被改过或不是本应用的。";
+  if (reason === "import-failed") return detail ?? "备份没能读进来。";
+  return "暂时恢复不了,请稍后再试。";
 }
 
 /** id → 中文名;拿不到游戏清单时退回用 id 显示 */

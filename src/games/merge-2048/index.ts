@@ -44,6 +44,7 @@ import {
   type MergeResult
 } from "./levels";
 import guide from "./guide";
+import { darkenHex, flowerSVG, starBadgeSVG, starTier, STAR_TIER_NAMES, tileFaceCSS, trophySVG } from "./art";
 
 /** 一块方块滑到位要多久(毫秒)。规格要求 80–140ms,不许瞬变 */
 export const MOVE_MS = 110;
@@ -55,6 +56,24 @@ export const BORN_MS = 100;
 export const SWIPE_MIN = 26;
 /** 假人两步之间歇多久,别快得看不清 */
 export const AI_BEAT_MS = 420;
+/** 合并星屑飞散多久(纯视觉,叠在 MERGE_MS 之上,不动棋盘节奏) */
+export const SHARD_MS = 300;
+/** 加分飘字上浮多久 */
+export const FLOAT_MS = 500;
+/** 里程碑「星级升格」卡停留多久 */
+export const MILE_MS = 800;
+/** 星屑粒子对象池上限:一块盘同时在飞的星屑不超过这么多 */
+export const SHARD_POOL_MAX = 24;
+/** 首次合成这些数值时弹升格卡 */
+export const MILESTONES = [256, 512, 1024, 2048] as const;
+
+/** 合并爽感分三档:越大的合并越隆重 */
+export function mergeFxTier(value: number): "small" | "mid" | "big" {
+  return value >= 1024 ? "big" : value >= 128 ? "mid" : "small";
+}
+
+/** 每一档迸几颗星屑 */
+export const SHARD_COUNTS = { small: 3, mid: 6, big: 8 } as const;
 
 const PALETTE: Record<number, [string, string]> = {
   2: ["#FFF6DA", "#8A7A45"],
@@ -92,25 +111,104 @@ export function tileRingPx(value: number): number {
   return Math.min(7, Math.max(2, Math.round(Math.log2(Math.max(2, value)))) - 1);
 }
 
+/**
+ * 给一个块元素穿上「星星宝石」的外观:
+ * 对角渐变底 + 底部深色厚度边(伪 3D)+ 白圈(圈粗随数值,1.2 的色弱双通道保留)
+ * + 右上角星级角标(第三条辨识通道)。盘上的块和结算面板的大块宝石共用这一套。
+ */
+export function dressTile(el: HTMLElement, value: number, cellPx: number): void {
+  const [bg, fg] = tileColors(value);
+  el.style.background = tileFaceCSS(bg);
+  el.style.color = fg;
+  el.style.boxShadow = `inset 0 0 0 ${tileRingPx(value)}px #ffffffcc, 0 2px 0 ${darkenHex(bg, 0.26)}`;
+  el.style.fontSize = `${tileFontPx(value, cellPx)}px`;
+  el.textContent = String(value);
+  el.setAttribute("aria-label", String(value));
+  const tier = starTier(value);
+  if (tier > 0) {
+    const badge = document.createElement("span");
+    badge.className = "mg-tstar";
+    badge.setAttribute("data-tier", String(tier));
+    badge.setAttribute("aria-hidden", "true");
+    const px = Math.max(10, Math.round(cellPx * 0.22));
+    badge.style.width = `${px}px`;
+    badge.style.height = `${px}px`;
+    badge.innerHTML = starBadgeSVG(tier, px);
+    el.appendChild(badge);
+  }
+}
+
 export const MG_CSS = `
-.mg-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEC,#FFF6FA);
+.mg-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;position:relative;
+  background:radial-gradient(circle 2px at 12% 7%,#FFE9A8 0 2px,transparent 3px),
+  radial-gradient(circle 2px at 87% 5%,#FFF3C8 0 2px,transparent 3px),
+  radial-gradient(circle 1.5px at 71% 11%,#FFE9A8 0 1.5px,transparent 2.5px),
+  radial-gradient(circle 2px at 32% 4%,#F8D8FF 0 2px,transparent 3px),
+  radial-gradient(circle 3px at 12% 18%,#FFD75E14 0 60%,transparent 61%),
+  radial-gradient(circle 2px at 88% 72%,#D0A9F512 0 60%,transparent 61%),
+  linear-gradient(180deg,#EFE4FB 0%,#FFF7E6 52%,#FFEFC9 100%);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
+.mg-wrap::before,.mg-wrap::after{content:"";position:absolute;width:12px;height:12px;background:#FFD75E;
+  clip-path:polygon(50% 0,63% 36%,100% 38%,70% 60%,80% 96%,50% 74%,20% 96%,30% 60%,0 38%,37% 36%);
+  pointer-events:none;opacity:.8;}
+.mg-wrap::before{top:5px;left:12px;}
+.mg-wrap::after{top:9px;right:16px;background:#F8C8DC;}
 .mg-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;}
-.mg-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#7a5f2e;
+.mg-badge{position:relative;background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#7a5f2e;
   box-shadow:0 2px 6px rgba(190,165,110,.28);overflow-wrap:anywhere;min-width:0;}
 .mg-seats{display:flex;flex-direction:column;gap:12px;align-items:center;}
 .mg-seat{display:flex;flex-direction:column;gap:6px;align-items:center;max-width:100%;min-width:0;}
 .mg-name{font-size:var(--mt-body,16px);font-weight:900;color:#7a5f2e;overflow-wrap:anywhere;}
-.mg-board{position:relative;border-radius:14px;background:#F3E7CD;touch-action:none;flex:0 0 auto;}
-.mg-hole{position:absolute;border-radius:10px;background:#FBF3E2;}
-.mg-hole.mg-block{background:#F0B9C8;box-shadow:inset 0 0 0 3px #E08FA6;}
-.mg-flower{position:absolute;display:flex;align-items:center;justify-content:center;font-size:18px;pointer-events:none;}
+.mg-board{position:relative;border-radius:18px;touch-action:none;flex:0 0 auto;border:8px solid transparent;
+  background:radial-gradient(circle,#8A5B2B 34%,#C9975C 46%,transparent 54%) left 1px top 1px/9px 9px no-repeat border-box,
+  radial-gradient(circle,#8A5B2B 34%,#C9975C 46%,transparent 54%) right 1px top 1px/9px 9px no-repeat border-box,
+  radial-gradient(circle,#8A5B2B 34%,#C9975C 46%,transparent 54%) left 1px bottom 1px/9px 9px no-repeat border-box,
+  radial-gradient(circle,#8A5B2B 34%,#C9975C 46%,transparent 54%) right 1px bottom 1px/9px 9px no-repeat border-box,
+  linear-gradient(180deg,#F7ECD3,#EFDDBB) padding-box,
+  linear-gradient(160deg,#C89B5A,#8F6431) border-box;
+  box-shadow:0 4px 10px rgba(140,100,50,.28);}
+.mg-hole{position:absolute;border-radius:10px;background:#FBF3E2;
+  box-shadow:inset 0 1px 0 rgba(120,90,40,.22),inset 0 2px 5px rgba(150,110,55,.18);}
+.mg-hole.mg-block{background:linear-gradient(180deg,#F0B9C8 0 44%,#E39FB4 44% 48%,#F0B9C8 48% 70%,#E39FB4 70% 74%,#F2BFCD 74% 100%);
+  box-shadow:inset 0 0 0 3px #E08FA6;}
+.mg-flower{position:absolute;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.mg-flower svg{display:block;}
 .mg-tile{position:absolute;border-radius:10px;display:flex;align-items:center;justify-content:center;
   font-weight:900;line-height:1;transition:transform ${MOVE_MS}ms ease-out;will-change:transform;}
+.mg-tstar{position:absolute;top:-4px;right:-4px;display:block;pointer-events:none;
+  filter:drop-shadow(0 1px 1px rgba(120,80,20,.35));}
+.mg-tstar svg{display:block;width:100%;height:100%;}
+.mg-tile.mg-goal::after{content:"";position:absolute;inset:-2px;border-radius:12px;pointer-events:none;
+  box-shadow:0 0 14px 3px #FFD75E;animation:mgglow 2s ease-in-out infinite;}
+@keyframes mgglow{0%,100%{opacity:.25}50%{opacity:.9}}
 .mg-tile.mg-pop{animation:mgpop ${MERGE_MS}ms ease-out;}
 .mg-tile.mg-born{animation:mgborn ${BORN_MS}ms ease-out;}
 @keyframes mgpop{0%{transform:var(--mg-at) scale(1)}45%{transform:var(--mg-at) scale(1.18)}100%{transform:var(--mg-at) scale(1)}}
 @keyframes mgborn{from{opacity:.2}to{opacity:1}}
+.mg-shard{position:absolute;width:10px;height:10px;background:#FFD75E;pointer-events:none;z-index:3;
+  clip-path:polygon(50% 0,63% 36%,100% 38%,70% 60%,80% 96%,50% 74%,20% 96%,30% 60%,0 38%,37% 36%);
+  animation:mgshard ${SHARD_MS}ms ease-out forwards;}
+@keyframes mgshard{from{transform:translate(0,0) scale(1);opacity:1}to{transform:translate(var(--mg-dx,0),var(--mg-dy,0)) scale(.3);opacity:0}}
+.mg-burst{position:absolute;border-radius:50%;border:3px solid #FFD75E;pointer-events:none;z-index:2;opacity:0;
+  animation:mgburst 380ms ease-out;}
+@keyframes mgburst{0%{transform:scale(.4);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+.mg-flash{position:absolute;inset:0;border-radius:12px;pointer-events:none;z-index:2;opacity:0;
+  background:radial-gradient(circle,#FFE9A899 0%,#FFD75E33 55%,transparent 75%);animation:mgflash 320ms ease-out;}
+@keyframes mgflash{0%{opacity:1}100%{opacity:0}}
+.mg-board.mg-shake{animation:mgshake 200ms ease-in-out;}
+@keyframes mgshake{0%,100%{transform:translateX(0)}25%{transform:translateX(2px)}75%{transform:translateX(-2px)}}
+.mg-float{position:absolute;pointer-events:none;z-index:4;font-weight:900;font-size:16px;color:#A66B00;
+  text-shadow:0 1px 0 #FFF6DA,0 0 6px #FFE9A8;animation:mgfloat ${FLOAT_MS}ms ease-out forwards;}
+@keyframes mgfloat{from{transform:translate(-50%,0);opacity:1}to{transform:translate(-50%,-26px);opacity:0}}
+.mg-mile{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;background:#fffbe9f2;
+  border-radius:14px;padding:8px 14px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;
+  box-shadow:0 4px 12px rgba(150,110,40,.35),inset 0 0 0 2px #FFD75E;animation:mgmile ${MILE_MS}ms ease-out forwards;}
+.mg-mile-n{font-size:16px;font-weight:900;color:#8a6a16;}
+@keyframes mgmile{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}18%{transform:translate(-50%,-50%) scale(1.06);opacity:1}
+  30%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.mg-over-art{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:8px;}
+.mg-over-gem{position:relative;width:64px;height:64px;border-radius:12px;display:inline-flex;
+  align-items:center;justify-content:center;font-weight:900;line-height:1;}
 .mg-pad{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
 .mg-btn{min-width:56px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:18px;
   font-weight:900;cursor:pointer;background:#FBE3B4;color:#7a5518;box-shadow:0 3px 0 #E3C280;padding:0 10px;}
@@ -123,6 +221,8 @@ export const MG_CSS = `
 .mg-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .mg-modebar,.mg-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mg-modebar[hidden]{display:none;}
 .mg-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5f2e;text-align:center;overflow-wrap:anywhere;}
 .mg-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;min-height:44px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E8A93C,#CE8C22);box-shadow:0 4px 0 #A96F17;}
@@ -142,10 +242,31 @@ export const MG_CSS = `
   .mg-badge{padding:4px 8px;}
   .mg-btn{min-width:48px;padding:0 6px;}
 }
+/* N-62:四向贴底;盘面预算多扣一排键,避免 392 切底 */
+@media (max-height:500px){
+  .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+  .mg-msg{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
+}
+/* U-x(#107):501–840 中间档钉键并按余高钳盘宽 */
+@media (max-height:840px) and (min-height:501px){
+  .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+  .mg-board{max-width:min(100%, calc(100dvh - 260px));margin-inline:auto;}
+}
+/* N-124:平板横屏 768 不命中 500 档;粗指针中间档只抬触区+钉键,不动上面 500 规则 */
+@media (max-height:820px) and (pointer:coarse){
+  .mg-open,.mg-back,.mg-btn{min-height:44px;}
+  .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+}
 @media (prefers-reduced-motion:reduce){
   .mg-tile{transition:none;}
   .mg-tile.mg-pop{animation:none;}
   .mg-tile.mg-born{animation:none;}
+  .mg-tile.mg-goal::after{animation:none;opacity:.3;}
+  .mg-shard,.mg-burst,.mg-flash,.mg-float,.mg-mile{animation:none;display:none;}
+  .mg-board.mg-shake{animation:none;}
 }
 `;
 
@@ -380,7 +501,10 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
       if (blocked) {
         const flower = document.createElement("div");
         flower.className = "mg-flower";
-        flower.textContent = "🌺";
+        flower.setAttribute("data-art", "flower");
+        flower.setAttribute("role", "img");
+        flower.setAttribute("aria-label", "这格被花占着,滑不进去");
+        flower.innerHTML = flowerSVG(Math.max(14, Math.round(cell * 0.62)));
         flower.style.left = `${x}px`;
         flower.style.top = `${y}px`;
         flower.style.width = `${cell}px`;
@@ -392,18 +516,142 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
 
   let views: TileView[] = [];
 
+  // -------------------------------------------------------------------------
+  // 合并爽感(纯视觉,叠在 mg-pop 之上,不碰 MOVE_MS/MERGE_MS 的节奏)
+  // -------------------------------------------------------------------------
+
+  /** 特效的收尾定时器:destroy 时一把清掉,免得盘子撤了星屑还在飞 */
+  const fxTimers: number[] = [];
+  const shardPool: HTMLElement[] = [];
+  let shardsMade = 0;
+  /** 这一盘里已经庆祝过的里程碑数值 */
+  const celebrated = new Set<number>();
+
+  function fxLater(fn: () => void, ms: number): void {
+    fxTimers.push(window.setTimeout(fn, ms));
+  }
+
+  function centerOf(r: number, c: number): [number, number] {
+    const [x, y] = at(r, c);
+    return [x + cell / 2, y + cell / 2];
+  }
+
+  /** 从对象池里拿一颗星屑;池子见底且总数到顶就不再造新的 */
+  function takeShard(): HTMLElement | null {
+    const pooled = shardPool.pop();
+    if (pooled) return pooled;
+    if (shardsMade >= SHARD_POOL_MAX) return null;
+    shardsMade += 1;
+    const s = document.createElement("div");
+    s.className = "mg-shard";
+    return s;
+  }
+
+  function spawnShards(cx: number, cy: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const s = takeShard();
+      if (!s) return;
+      const ang = (Math.PI * 2 * i) / count + Math.random() * 0.8;
+      const dist = cell * (0.45 + Math.random() * 0.35);
+      s.style.left = `${Math.round(cx - 5)}px`;
+      s.style.top = `${Math.round(cy - 5)}px`;
+      s.style.setProperty("--mg-dx", `${Math.round(Math.cos(ang) * dist)}px`);
+      s.style.setProperty("--mg-dy", `${Math.round(Math.sin(ang) * dist)}px`);
+      view.appendChild(s);
+      fxLater(() => {
+        s.remove();
+        shardPool.push(s);
+      }, SHARD_MS + 40);
+    }
+  }
+
+  function spawnBurst(cx: number, cy: number): void {
+    const b = document.createElement("div");
+    b.className = "mg-burst";
+    const d = Math.round(cell * 0.9);
+    b.style.width = `${d}px`;
+    b.style.height = `${d}px`;
+    b.style.left = `${Math.round(cx - d / 2)}px`;
+    b.style.top = `${Math.round(cy - d / 2)}px`;
+    view.appendChild(b);
+    fxLater(() => b.remove(), 400);
+  }
+
+  function flashBoard(): void {
+    const f = document.createElement("div");
+    f.className = "mg-flash";
+    view.appendChild(f);
+    fxLater(() => f.remove(), 340);
+  }
+
+  function shakeBoard(): void {
+    view.classList.add("mg-shake");
+    fxLater(() => view.classList.remove("mg-shake"), 220);
+  }
+
+  function spawnFloat(cx: number, cy: number, gained: number): void {
+    if (gained <= 0) return;
+    const f = document.createElement("div");
+    f.className = "mg-float";
+    f.textContent = `+${gained}`;
+    f.style.left = `${Math.round(cx)}px`;
+    f.style.top = `${Math.round(cy - cell * 0.4)}px`;
+    view.appendChild(f);
+    fxLater(() => f.remove(), FLOAT_MS + 40);
+  }
+
+  /** 首次合成 256/512/1024/2048:中央弹一张「星级升格」卡,点一下可跳过 */
+  function maybeMilestone(value: number): void {
+    if (!opts.human) return;
+    if (!(MILESTONES as readonly number[]).includes(value) || celebrated.has(value)) return;
+    celebrated.add(value);
+    const card = document.createElement("div");
+    card.className = "mg-mile";
+    card.setAttribute("aria-hidden", "true");
+    const tier = starTier(value);
+    const art = document.createElement("div");
+    art.className = "mg-mile-star";
+    art.innerHTML = starBadgeSVG(tier, 44);
+    const label = document.createElement("div");
+    label.className = "mg-mile-n";
+    label.textContent = `${STAR_TIER_NAMES[tier]} · ${value}`;
+    card.append(art, label);
+    card.addEventListener("click", () => card.remove());
+    view.appendChild(card);
+    fxLater(() => card.remove(), MILE_MS);
+  }
+
+  /** 合并落地那一拍的全部视觉反馈,按最大合并值分档 */
+  function mergeFx(merges: PendingMove["merges"], gained: number): void {
+    let star = merges[0];
+    for (const m of merges) if (m.value > star.value) star = m;
+    for (const m of merges) {
+      const tier = mergeFxTier(m.value);
+      const [cx, cy] = centerOf(m.keep.row, m.keep.col);
+      spawnShards(cx, cy, SHARD_COUNTS[tier]);
+      if (tier === "mid") spawnBurst(cx, cy);
+      if (tier === "big") {
+        flashBoard();
+        shakeBoard();
+      }
+    }
+    const [fx, fy] = centerOf(star.keep.row, star.keep.col);
+    spawnFloat(fx, fy, gained);
+    maybeMilestone(star.value);
+  }
+
   function place(v: TileView, pop = false, born = false): void {
     const [x, y] = at(v.row, v.col);
     const t = `translate(${x}px, ${y}px)`;
     v.el.style.setProperty("--mg-at", t);
     v.el.style.transform = t;
-    const [bg, fg] = tileColors(v.value);
-    v.el.style.background = bg;
-    v.el.style.color = fg;
-    v.el.style.boxShadow = `inset 0 0 0 ${tileRingPx(v.value)}px #ffffffcc`;
-    v.el.style.fontSize = `${tileFontPx(v.value, cell)}px`;
-    v.el.textContent = String(v.value);
-    v.el.setAttribute("aria-label", String(v.value));
+    // 外观只在数值变化时重穿,滑行途中不重建角标
+    if (v.el.getAttribute("data-v") !== String(v.value)) {
+      v.el.setAttribute("data-v", String(v.value));
+      dressTile(v.el, v.value, cell);
+      // 达标块常态微光呼吸;弱动效时不加,静静待着
+      if (!soft && v.value >= 2048) v.el.classList.add("mg-goal");
+    }
     if (soft) return;
     if (pop) restartAnim(v.el, "mg-pop");
     if (born) restartAnim(v.el, "mg-born");
@@ -463,6 +711,8 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
       m.keep.value = m.value;
       place(m.keep, true);
     }
+    // 弱动效开关一关,星屑 / 飘字 / 升格卡全都不冒,只留分数更新
+    if (!soft && now.merges.length > 0) mergeFx(now.merges, now.res.score);
     views = now.survivors;
 
     const res = now.res;
@@ -563,6 +813,8 @@ function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     isOver: () => over,
     destroy() {
       over = true;
+      for (const t of fxTimers) window.clearTimeout(t);
+      fxTimers.length = 0;
       for (const v of views) v.el.remove();
       views = [];
       seat.remove();
@@ -802,10 +1054,53 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
 // 战役
 // ---------------------------------------------------------------------------
 
-/** 窄屏也塞得下的格子尺寸:盘面加上间隙不超过可用宽度 */
-export function cellPxFor(size: number, width: number, seats = 1): number {
+/**
+ * 窄屏也塞得下的格子尺寸:盘面加上间隙不超过可用宽度;
+ * 给了竖向预算(heightPx)时,盘面高度同样不许超——
+ * 横屏 640×360 上只按宽算会给出 116px 一格、4×4 盘面 494px 高,
+ * 而 `.game-stage` 的可视高只剩 ~280px:盘面下半截连同按钮排一起被裁掉。
+ * 竖向预算量不出来(Infinity / NaN / ≤0)时行为和从前一字不差。
+ */
+export function cellPxFor(size: number, width: number, seats = 1, heightPx = Number.POSITIVE_INFINITY): number {
   const usable = Math.max(200, Math.min(width, 520) - 24) / seats;
-  return Math.max(34, Math.floor((usable - (size + 1) * GAP) / size));
+  let cell = Math.floor((usable - (size + 1) * GAP) / size);
+  if (Number.isFinite(heightPx) && heightPx > 0) {
+    cell = Math.min(cell, Math.floor((heightPx - (size + 1) * GAP) / size));
+  }
+  return Math.max(34, cell);
+}
+
+/** 桌面上盘面以外的「家当」大约占的高度:目标行 + 名牌 + 方向按钮排 + 提示行 + 留白 */
+export const TABLE_CHROME_PX = 216;
+
+/**
+ * 盘面的竖向预算:量得到平台舞台(`.game-stage`,定高会裁内容)的下沿就用
+ * 「裁切线 − host 顶 − 桌面家当」;量不到(测试桩 / 还没上屏)就不设限,
+ * `cellPxFor` 随之退回「只按宽算」的老行为。
+ */
+export function boardHeightBudget(host: HTMLElement | null, chrome = TABLE_CHROME_PX): number {
+  if (!host || typeof host.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+  let clip = Number.NaN;
+  let node: HTMLElement | null = host.parentElement ?? null;
+  for (let i = 0; node && i < 8; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+      if (typeof node.getBoundingClientRect !== "function") break;
+      const r = node.getBoundingClientRect();
+      // 滚动口是 padding box:clientHeight 量得出就用它(白边一并扣掉)
+      const inner =
+        typeof node.clientHeight === "number" && node.clientHeight > 0
+          ? (node.clientTop || 0) + node.clientHeight
+          : r.height;
+      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) clip = r.top + inner;
+      break;
+    }
+    node = node.parentElement ?? null;
+  }
+  const top = host.getBoundingClientRect().top;
+  if (!Number.isFinite(clip) || !Number.isFinite(top)) return Number.POSITIVE_INFINITY;
+  const room = clip - top - chrome;
+  // 量出非正数说明还没排好版(或家当估大了):别把盘面钳没,交给舞台滚动兜底
+  return room > 0 ? room : Number.POSITIVE_INFINITY;
 }
 
 function viewportWidth(): number {
@@ -813,10 +1108,21 @@ function viewportWidth(): number {
   return typeof w === "number" && w > 0 ? w : 420;
 }
 
+/**
+ * 舞台真实可用宽。innerWidth 没扣壳层(舞台边框、选关容器、桌面 padding,合计约 60px),
+ * 直接进公式的话 390px 手机上盘面右列会被裁掉。
+ * 额外 -12:mg-wrap 两侧 padding(20)加 mg-board 边框(16)比 cellPxFor 预留的 24 多出来的部分。
+ */
+function stageWidth(stage: HTMLElement): number {
+  const w = stage.clientWidth;
+  return w > 0 ? w - 12 : viewportWidth() - 60;
+}
+
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = levelConfig(ctx.level);
   let settled = false;
   let foeReached = false;
+  const budget = boardHeightBudget(stage);
 
   const seats: SeatOpts[] = [
     {
@@ -826,7 +1132,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: cfg.stepLimit,
-      cell: cellPxFor(cfg.size, viewportWidth(), cfg.race ? 2 : 1),
+      cell: cellPxFor(cfg.size, stageWidth(stage), cfg.race ? 2 : 1, budget),
       sfx: ctx.sfx,
       onDone: () => undefined
     }
@@ -839,7 +1145,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       seed: cfg.seed,
       target: cfg.target,
       stepLimit: 0,
-      cell: Math.round(cellPxFor(cfg.size, viewportWidth(), 2) * 0.9),
+      cell: Math.round(cellPxFor(cfg.size, stageWidth(stage), 2, budget) * 0.9),
       sfx: () => undefined,
       onDone: (s) => {
         if (s.reached) foeReached = true;
@@ -943,12 +1249,25 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     return row;
   }
 
-  function showOver(title: string, sub: string, again: string): void {
+  function showOver(title: string, sub: string, again: string, best = 0): void {
     table?.destroy();
     table = null;
     stage.innerHTML = "";
     const box = document.createElement("div");
     box.className = "mg-over";
+    // 仪式感:小金杯 + 这一盘最大块的星星宝石大图
+    const art = document.createElement("div");
+    art.className = "mg-over-art";
+    art.setAttribute("aria-hidden", "true");
+    const cup = document.createElement("div");
+    cup.innerHTML = trophySVG(56);
+    art.appendChild(cup);
+    if (best >= 2) {
+      const gem = document.createElement("div");
+      gem.className = "mg-over-gem";
+      dressTile(gem, best, 64);
+      art.appendChild(gem);
+    }
     const t = document.createElement("div");
     t.className = "mg-over-t";
     t.textContent = title;
@@ -963,7 +1282,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       api.play("tap");
       start();
     });
-    box.append(t, s, btn);
+    box.append(art, t, s, btn);
     stage.appendChild(box);
   }
 
@@ -1034,7 +1353,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth()),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 1, boardHeightBudget(stage)),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
@@ -1046,7 +1365,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         showOver(
           "这一盘到此为止",
           `拿了 ${me.score} 分,最大的一块是 ${me.best},走了 ${me.steps} 步。最好成绩 ${best} 分。`,
-          "🔁 再来一盘"
+          "🔁 再来一盘",
+          me.best
         );
       }
     });
@@ -1057,6 +1377,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const cfg = versusConfig(tier, target);
     chip.textContent = `🤝 对手:${AI_TIER_LABELS[tier]} · 目标 ${cfg.target}`;
     let foeReached = false;
+    const budget = boardHeightBudget(stage);
     table = createTable(stage, {
       goalText: `比谁先合到 ${cfg.target}`,
       banner: `${AI_TIER_LABELS[tier]}:${AI_TIER_BLURBS[tier]}`,
@@ -1070,7 +1391,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1081,7 +1402,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: cfg.target,
           stepLimit: 0,
-          cell: cellPxFor(cfg.size, viewportWidth(), 2),
+          cell: cellPxFor(cfg.size, stageWidth(stage), 2, budget),
           sfx: () => undefined,
           onDone: (s) => {
             if (s.reached) foeReached = true;
@@ -1096,7 +1417,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         showOver(
           won ? "你先合到啦！" : "这一局到此为止",
           `你最大 ${me.best}、${me.steps} 步;对手最大 ${foe.best}。${won ? "排得真整齐！" : "换个顺序再来一盘。"}`,
-          "🔁 再打一场"
+          "🔁 再打一场",
+          me.best
         );
       }
     });
@@ -1105,6 +1427,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   function runDuo(seed: number): void {
     stage.innerHTML = "";
     chip.textContent = "👫 朵朵 WASD · 星星 方向键";
+    const budget = boardHeightBudget(stage);
     table = createTable(stage, {
       goalText: "两块盘一起叠,比谁的最大块更大",
       split: true,
@@ -1117,7 +1440,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2),
+          cell: cellPxFor(4, stageWidth(stage), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         },
@@ -1128,7 +1451,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           seed: seed + 1,
           target: 0,
           stepLimit: 0,
-          cell: cellPxFor(4, viewportWidth(), 2),
+          cell: cellPxFor(4, stageWidth(stage), 2, budget),
           sfx: (n) => api.play(n),
           onDone: () => undefined
         }
@@ -1141,7 +1464,12 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
             : a.best > b.best
               ? "朵朵这一盘的块更大！"
               : "星星这一盘的块更大！";
-        showOver("这一盘结束啦", `朵朵最大 ${a.best}、${a.score} 分;星星最大 ${b.best}、${b.score} 分。${line}`, "🔁 再来一盘");
+        showOver(
+          "这一盘结束啦",
+          `朵朵最大 ${a.best}、${a.score} 分;星星最大 ${b.best}、${b.score} 分。${line}`,
+          "🔁 再来一盘",
+          Math.max(a.best, b.best)
+        );
       }
     });
   }
@@ -1230,7 +1558,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "选一个角守住,只往两个方向滑,大块就不会乱跑。",
       grandMessage: "188 关全部合完,合成杯冠军就是你！",
       guide,

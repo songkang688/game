@@ -9,6 +9,7 @@
  */
 import {
   BLACK,
+  KING,
   PIECE_CN,
   WHITE,
   fileOf,
@@ -21,24 +22,42 @@ import {
   type Position,
 } from "./board";
 import type { SoundName } from "../level99";
+import { captureMarkSVG, petalSVG, pieceSVG, potSVG, sproutSVG } from "./art";
 import { inCheck, legalMoves, makeMove, toChinese, type Move } from "./moves";
 import { createGame, gameStatus, playMove, resign, type Game, type Status } from "./rules";
 import type { AiTier } from "./search";
-
-/** 国际通用的棋子符号；下面还会配一个中文角标，六种一眼能分开 */
-const GLYPH: Record<PieceType, [string, string]> = {
-  1: ["♙", "♟"],
-  2: ["♘", "♞"],
-  3: ["♗", "♝"],
-  4: ["♖", "♜"],
-  5: ["♕", "♛"],
-  6: ["♔", "♚"],
-};
 
 /** 走子滑行时长（毫秒）；规格要求 150–220ms */
 export const SLIDE_MS = 180;
 /** 关掉动画偏好时缩到这么短 */
 export const SLIDE_MS_REDUCED = 40;
+/** 升变「破土开花」的时长（毫秒）；`reduced` 时不播，直接换成新子 */
+export const BLOOM_MS = 440;
+/** 吃子花瓣飘散的收尾时长（毫秒） */
+export const CAPTURE_FX_MS = 640;
+
+/** N-66:双人同屏收方盘,不进 styles.css,单人/人机不加 .cg-duoplay */
+export const DUO_SHORT_CSS = `
+@media (max-height:500px){
+  .cg-wrap.cg-duoplay{max-height:100%;overflow:hidden;}
+  .cg-wrap.cg-duoplay .cg-frame{width:min(240px,52dvh);max-width:52dvh;margin:0 auto;}
+  .cg-wrap.cg-duoplay .cg-board{width:100%;margin-inline:0;}
+  .cg-wrap.cg-duoplay .cg-sq{min-width:0;min-height:0;}
+  .cg-wrap.cg-duoplay .cg-log{display:none;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .cg-wrap.cg-duoplay .cg-frame{width:min(360px,62dvh);max-width:62dvh;margin:0 auto;}
+  .cg-wrap.cg-duoplay .cg-tools{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(242,247,234,0.35),#eaf3e4);}
+}
+`;
+
+/** N-112:闯关盘末排 915 初见折下。.l99-host hidden,让 wrap 自滚,格子尺寸不砍(N-66 双人档不动)。 */
+export const SHORT_LAND_CSS = `
+@media (max-height:500px) and (min-width:640px){
+  .cg-wrap:not(.cg-duoplay){max-height:calc(100dvh - 88px);overflow-y:auto;}
+}
+`;
 
 export interface SeatPlan {
   name: string;
@@ -155,10 +174,14 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
   let slideFrame: number | null = null;
   const cleanups: Array<() => void> = [];
+  /** 吃子花瓣 / 升变开花的收尾定时器，destroy 时一并清掉 */
+  const fxTimers = new Set<ReturnType<typeof setTimeout>>();
 
-  const slideMs = prefersReducedMotion() ? SLIDE_MS_REDUCED : SLIDE_MS;
+  const reducedMotion = prefersReducedMotion();
+  const slideMs = reducedMotion ? SLIDE_MS_REDUCED : SLIDE_MS;
 
-  const wrap = el("div", "cg-wrap");
+  const duoPlay = opts.seats[0].ai === null && opts.seats[1].ai === null;
+  const wrap = el("div", duoPlay ? "cg-wrap cg-duoplay" : "cg-wrap");
   const head = el("div", "cg-head");
   const bannerEl = el("div", "cg-banner", banner);
   const tools = el("div", "cg-tools");
@@ -174,9 +197,19 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   const overlay = el("div", "cg-overlay");
   overlay.hidden = true;
 
+  // 木篱笆外框：棋盘装进 cg-frame，四角各摆一只小花盆（纯装饰，不占格、不吃点击）
+  const boardFrame = el("div", "cg-frame");
+  boardFrame.appendChild(boardEl);
+  for (const corner of ["tl", "tr", "bl", "br"]) {
+    const pot = el("span", `cg-pot cg-pot--${corner}`);
+    pot.setAttribute("aria-hidden", "true");
+    pot.innerHTML = potSVG();
+    boardFrame.appendChild(pot);
+  }
+
   logBox.append(logSummary, logList);
   head.append(bannerEl, tools);
-  wrap.append(head, seatBar, boardEl, tipEl, logBox, overlay);
+  wrap.append(head, seatBar, boardFrame, tipEl, logBox, overlay);
   host.appendChild(wrap);
 
   const squares: HTMLElement[] = [];
@@ -216,8 +249,20 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       const chip = el("span", `cg-seat${game.pos.turn === color && !game.result ? " cg-seat--on" : ""}`);
       chip.textContent = `${seat.emoji} ${seat.name}${color === WHITE ? "（白）" : "（黑）"}`;
       chip.style.background = seat.color;
+      // 座位头像：自己那一方的王，一眼认出谁执白谁执黑
+      const ava = el("span", "cg-seat-ava");
+      ava.setAttribute("aria-hidden", "true");
+      ava.innerHTML = pieceSVG(KING as PieceType, color === WHITE);
+      chip.appendChild(ava);
       seatBar.appendChild(chip);
     }
+  }
+
+  /** 边框内侧的坐标小字（a–h / 1–8），纯装饰，读屏走 aria-label */
+  function coordEl(cls: string, text: string): HTMLElement {
+    const c = el("span", cls, text);
+    c.setAttribute("aria-hidden", "true");
+    return c;
   }
 
   function renderBoard(): void {
@@ -226,7 +271,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     const checkSide = game.pos.turn;
     const checkSq = inCheck(game.pos, checkSide) ? kingSquare(game.pos, checkSide) : -1;
     boardEl.innerHTML = "";
-    for (const sq of order) {
+    for (let i = 0; i < order.length; i++) {
+      const sq = order[i];
       const b = squares[sq];
       const light = (fileOf(sq) + rankOf(sq)) % 2 === 1;
       const hit = hints.find((m) => m.to === sq);
@@ -243,10 +289,29 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
         const type = typeOf(piece) as PieceType;
         const white = piece > 0;
         const chip = el("span", `cg-piece ${white ? "cg-piece--w" : "cg-piece--b"}`);
-        chip.appendChild(el("span", "cg-piece-mark", GLYPH[type][white ? 0 : 1]));
+        // 棋子本体是手绘 SVG（花园居民），中文角标照旧保留
+        const mark = el("span", "cg-piece-mark");
+        mark.innerHTML = pieceSVG(type, white);
+        chip.appendChild(mark);
         chip.appendChild(el("span", "cg-piece-tag", PIECE_CN[type]));
+        // 被将的王头顶冒一个「!」气泡：形状通道，色弱也一眼看到
+        if (sq === checkSq) {
+          const alert = el("span", "cg-alert", "!");
+          alert.setAttribute("aria-hidden", "true");
+          chip.appendChild(alert);
+        }
         b.appendChild(chip);
       }
+      // 可走点=小绿芽、可吃=四角红三角：形状+颜色双通道（class 语义不变）
+      if (hit) {
+        const markEl = el("span", hit.captured !== 0 ? "cg-capmark" : "cg-sprout");
+        markEl.setAttribute("aria-hidden", "true");
+        markEl.innerHTML = hit.captured !== 0 ? captureMarkSVG() : sproutSVG();
+        b.appendChild(markEl);
+      }
+      // 坐标标注：显示行最下一排标 a–h、最左一列标 1–8，翻转时跟着格子走
+      if (i >> 3 === 7) b.appendChild(coordEl("cg-coord cg-coord--file", "abcdefgh"[fileOf(sq)]));
+      if ((i & 7) === 0) b.appendChild(coordEl("cg-coord cg-coord--rank", String(rankOf(sq) + 1)));
       b.setAttribute("aria-label", squareLabel(sq, hit, sq === checkSq));
       // 光标那一格用 aria-current 点名，读屏在 64 个同名按钮里才定得到位置
       if (sq === cursor) b.setAttribute("aria-current", "true");
@@ -279,8 +344,17 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     logList.innerHTML = "";
     const rows = game.history;
     for (let i = 0; i < rows.length; i += 2) {
-      const line = el("div", "cg-log-row");
+      // 最后一手所在的行淡金高亮；行首配白 / 黑小色点标走子方
+      const line = el("div", `cg-log-row${i + 2 >= rows.length ? " cg-log-row--last" : ""}`);
       line.textContent = `${Math.floor(i / 2) + 1}. ${rows[i].san}${rows[i + 1] ? ` ${rows[i + 1].san}` : ""}`;
+      const wdot = el("span", "cg-log-dot cg-log-dot--w");
+      wdot.setAttribute("aria-hidden", "true");
+      line.appendChild(wdot);
+      if (rows[i + 1]) {
+        const bdot = el("span", "cg-log-dot cg-log-dot--b");
+        bdot.setAttribute("aria-hidden", "true");
+        line.appendChild(bdot);
+      }
       logList.appendChild(line);
     }
     logSummary.textContent = `📜 记谱（${Math.ceil(rows.length / 2)} 回合）`;
@@ -321,6 +395,53 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     else run();
   }
 
+  /** 特效收尾定时器统一登记，destroy 时一并清空 */
+  function scheduleFx(fn: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      fxTimers.delete(id);
+      if (!closed) fn();
+    }, ms);
+    fxTimers.add(id);
+  }
+
+  /** 吃子：被吃的那颗缩小消失，化作三片花瓣飘出去（`reduced` 时不调用，直接消失） */
+  function captureFx(move: Move): void {
+    const fx = el("span", "cg-capture-fx");
+    fx.setAttribute("aria-hidden", "true");
+    const ghost = el("span", "cg-capture-ghost");
+    ghost.innerHTML = pieceSVG(typeOf(move.captured) as PieceType, move.captured > 0);
+    fx.appendChild(ghost);
+    for (let i = 0; i < 3; i++) {
+      const petal = el("span", `cg-petal cg-petal--c${i + 1}`);
+      petal.innerHTML = petalSVG(i);
+      fx.appendChild(petal);
+    }
+    squares[move.to].appendChild(fx);
+    scheduleFx(() => fx.remove(), CAPTURE_FX_MS);
+  }
+
+  /** 升变：0.4s「破土开花」——新子从底座里长出来，五片花瓣往四周撒（`reduced` 时不调用） */
+  function bloomFx(move: Move): void {
+    const target = squares[move.to];
+    const chip = target.children?.[0] as HTMLElement | undefined;
+    if (chip && typeof chip.className === "string" && chip.className.includes("cg-piece")) {
+      chip.className += " cg-piece--bloom";
+    }
+    const burst = el("span", "cg-bloom");
+    burst.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 5; i++) {
+      const petal = el("span", `cg-petal cg-petal--b${i + 1}`);
+      petal.innerHTML = petalSVG(i);
+      burst.appendChild(petal);
+    }
+    target.appendChild(burst);
+    scheduleFx(() => {
+      burst.remove();
+      const c = target.children?.[0] as HTMLElement | undefined;
+      if (c && typeof c.className === "string") c.className = c.className.replace(" cg-piece--bloom", "");
+    }, BLOOM_MS);
+  }
+
   // -------------------------------------------------------------------------
   // 走子
   // -------------------------------------------------------------------------
@@ -356,7 +477,10 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     opts.sfx(move.captured !== 0 ? "pop" : "tap");
     tip = toChinese(move, before);
     render();
-    animate(move);
+    // 升变走「破土开花」，其余照旧滑行；reduced 一律直接换、不加特效
+    if (move.promo !== 0 && !reducedMotion) bloomFx(move);
+    else animate(move);
+    if (move.captured !== 0 && !reducedMotion) captureFx(move);
     opts.onMoved?.(move, game);
     if (settleIfOver()) return true;
     scheduleAi();
@@ -411,8 +535,12 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     const row = el("div", "cg-promo-row");
     const white = game.pos.turn === WHITE;
     for (const type of [5, 4, 3, 2] as PieceType[]) {
-      const b = button("cg-promo-b", `${GLYPH[type][white ? 0 : 1]} ${PIECE_CN[type]}`);
+      const b = button("cg-promo-b", PIECE_CN[type]);
       b.setAttribute("aria-label", `升变成${PIECE_CN[type]}`);
+      const icon = el("span", "cg-promo-icon");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = pieceSVG(type, white);
+      b.appendChild(icon);
       b.addEventListener("click", () => {
         const pick = pendingPromo;
         pendingPromo = null;
@@ -598,6 +726,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
         clearTimeout(aiTimer);
         aiTimer = null;
       }
+      for (const id of fxTimers) clearTimeout(id);
+      fxTimers.clear();
       if (slideFrame !== null) {
         (globalThis as { cancelAnimationFrame?: (h: number) => void }).cancelAnimationFrame?.(slideFrame);
         slideFrame = null;

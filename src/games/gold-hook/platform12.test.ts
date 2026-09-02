@@ -62,10 +62,14 @@ function settleText(root: FakeEl): string {
   return panel === null ? "" : allText(panel);
 }
 
+/**
+ * 矿洞主画布(`gdh-cv`)。1.3 起 HUD 图标也是一块块小 canvas,
+ * 所以不能再拿「树里第一个 canvas」当游戏画布,得按类名认。
+ */
 function canvasOf(root: FakeEl): FakeEl | null {
   let hit: FakeEl | null = null;
   walk(root, (el) => {
-    if (!hit && el.tagName === "canvas") hit = el;
+    if (!hit && el.tagName === "canvas" && el.className.split(/\s+/).includes("gdh-cv")) hit = el;
   });
   return hit;
 }

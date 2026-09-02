@@ -5,16 +5,24 @@ import guide from "./guide";
 import {
   AI_BEAT_MS,
   BORN_MS,
+  FLOAT_MS,
   MERGE_MS,
   MG_CONSTS,
   MG_CSS,
+  MILE_MS,
+  MILESTONES,
   MOVE_MS,
   SAY_THROTTLE_MS,
+  SHARD_COUNTS,
+  SHARD_MS,
+  SHARD_POOL_MAX,
   SWIPE_MIN,
   cellPxFor,
   createSayThrottle,
   createTable,
+  dressTile,
   keyToDir,
+  mergeFxTier,
   meta,
   mount,
   moveAnnounce,
@@ -27,6 +35,7 @@ import {
   type SeatOpts,
   type SeatState
 } from "./index";
+import { darkenHex, flowerSVG, lightenHex, starBadgeSVG, starTier, tileFaceCSS, trophySVG } from "./art";
 
 // ---------------------------------------------------------------------------
 // 一份够用的 DOM 替身:仓库的单测跑在 node 环境里,不引 jsdom 也要能验 destroy
@@ -46,6 +55,8 @@ class FakeEl {
   style: Record<string, string> & { setProperty: (k: string, v: string) => void };
   attrs: Record<string, string> = {};
   listeners = new Map<string, Set<Handler>>();
+  /** 最近一次通过 innerHTML 塞进来的标记(SVG 素材走这条路,真 DOM 会解析,这里只记录) */
+  html = "";
   private text = "";
 
   constructor(tag: string) {
@@ -68,6 +79,7 @@ class FakeEl {
   }
 
   set innerHTML(v: string) {
+    this.html = v;
     this.children = [];
     this.text = v === "" ? "" : this.text;
   }
@@ -1137,5 +1149,393 @@ describe("文案红线", () => {
       expect(maxTile(board)).toBeLessThan(levelConfig(lv).target);
     }
     expect(maxTile(createBoard(4))).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约:星星宝石块 / 星空木盒 / SVG 花朵 / 合并爽感分级。
+// 只锁视觉表达,不碰任何胜负数值;旧用例一条没删。
+// ---------------------------------------------------------------------------
+
+/** 从 MG_CSS 里抠出一条选择器的规则体(与上文 ruleOf 同款,作用域不同只好再写一份) */
+function cssRule(selector: string): string {
+  const at = MG_CSS.indexOf(`${selector}{`);
+  if (at < 0) return "";
+  return MG_CSS.slice(at + selector.length + 1, MG_CSS.indexOf("}", at));
+}
+
+function withReducedMotion(run: () => void): void {
+  const g = globalThis as { matchMedia?: (q: string) => { matches: boolean } };
+  const saved = g.matchMedia;
+  try {
+    g.matchMedia = (q: string) => ({ matches: q === "(prefers-reduced-motion: reduce)" });
+    run();
+  } finally {
+    if (saved === undefined) delete g.matchMedia;
+    else g.matchMedia = saved;
+  }
+}
+
+describe("1.3 视觉契约 · 星星宝石块", () => {
+  beforeEach(installDom);
+  afterEach(removeDom);
+
+  function badgeOf(tile: FakeEl): FakeEl | undefined {
+    return tile.children.find((c) => c.className.split(" ").includes("mg-tstar"));
+  }
+
+  it("数值 ≥ 8 的块带星星角标,星级随档位升,2/4 没有星", () => {
+    const { host, t } = table([
+      seatOpts({
+        start: boardFrom([
+          [2, 4, 8, 16],
+          [32, 64, 128, 256],
+          [512, 1024, 2048, 0],
+          [0, 0, 0, 0]
+        ])
+      })
+    ]);
+    const want: Record<string, string | null> = {
+      "2": null,
+      "4": null,
+      "8": "1",
+      "16": "1",
+      "32": "2",
+      "64": "2",
+      "128": "3",
+      "256": "3",
+      "512": "4",
+      "1024": "4",
+      "2048": "5"
+    };
+    const tiles = host.byClass("mg-tile");
+    expect(tiles).toHaveLength(11);
+    for (const tile of tiles) {
+      const badge = badgeOf(tile);
+      const expected = want[tile.textContent];
+      if (expected === null) expect(badge).toBeUndefined();
+      else {
+        expect(badge?.getAttribute("data-tier")).toBe(expected);
+        expect(badge?.html).toContain("<svg");
+      }
+    }
+    t.destroy();
+  });
+
+  it("starTier 档位映射:2/4 无星,8/16 铜,32/64 银,128/256 金,512/1024 双金,2048+ 彩虹", () => {
+    expect(starTier(2)).toBe(0);
+    expect(starTier(4)).toBe(0);
+    expect(starTier(8)).toBe(1);
+    expect(starTier(16)).toBe(1);
+    expect(starTier(32)).toBe(2);
+    expect(starTier(64)).toBe(2);
+    expect(starTier(128)).toBe(3);
+    expect(starTier(256)).toBe(3);
+    expect(starTier(512)).toBe(4);
+    expect(starTier(1024)).toBe(4);
+    expect(starTier(2048)).toBe(5);
+    expect(starTier(8192)).toBe(5);
+  });
+
+  it("角标 SVG:五角星 + 高光点;双金星画两颗;彩虹星走渐变", () => {
+    expect(starBadgeSVG(0)).toBe("");
+    for (const tier of [1, 2, 3, 4, 5]) {
+      const svg = starBadgeSVG(tier);
+      expect(svg.startsWith("<svg")).toBe(true);
+      expect(svg).toContain("polygon");
+      expect(svg).toContain("circle");
+      expect(svg).toContain('aria-hidden="true"');
+    }
+    expect((starBadgeSVG(4).match(/<polygon/g) ?? []).length).toBe(2);
+    expect(starBadgeSVG(5)).toContain("linearGradient");
+    // 铜银金三档填色互不相同:形状之外颜色也分档
+    const fills = [1, 2, 3].map((t) => /polygon points="[^"]+" fill="(#\w{6})"/.exec(starBadgeSVG(t))?.[1]);
+    expect(new Set(fills).size).toBe(3);
+  });
+
+  it("块底是对角渐变 + 白圈 + 厚度边,不再是纯色纸", () => {
+    const { host, t } = table([
+      seatOpts({
+        start: boardFrom([
+          [8, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ])
+      })
+    ]);
+    const tile = host.byClass("mg-tile")[0];
+    expect(tile.style.background).toContain("gradient");
+    expect(tile.style.boxShadow).toContain(`inset 0 0 0 ${tileRingPx(8)}px`);
+    expect(tile.style.boxShadow).toContain("0 2px 0");
+    expect(tile.getAttribute("aria-label")).toBe("8");
+    t.destroy();
+  });
+
+  it("渐变工具产出合法色,基调仍是 tileColors 色表", () => {
+    expect(lightenHex("#808080", 0)).toBe("#808080");
+    expect(darkenHex("#808080", 0)).toBe("#808080");
+    expect(lightenHex("#000000", 1)).toBe("#ffffff");
+    expect(darkenHex("#ffffff", 1)).toBe("#000000");
+    for (const v of [2, 8, 128, 2048]) {
+      const css = tileFaceCSS(tileColors(v)[0]);
+      expect(css).toContain("linear-gradient");
+      expect(css).toContain(tileColors(v)[0]);
+    }
+  });
+
+  it("2048 达标块常态微光呼吸,弱动效时不加", () => {
+    const start = boardFrom([
+      [2048, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0]
+    ]);
+    const { host, t } = table([seatOpts({ start })]);
+    expect(host.byClass("mg-goal")).toHaveLength(1);
+    expect(MG_CSS).toContain("@keyframes mgglow");
+    t.destroy();
+    withReducedMotion(() => {
+      const { host: h2, t: t2 } = table([seatOpts({ start })]);
+      expect(h2.byClass("mg-goal")).toHaveLength(0);
+      t2.destroy();
+    });
+  });
+
+  it("dressTile 给结算宝石穿同一套外观(渐变 + 白圈 + 角标)", () => {
+    const gem = (globalThis as unknown as { document: { createElement: (t: string) => FakeEl } }).document.createElement("div");
+    dressTile(gem as unknown as HTMLElement, 2048, 64);
+    expect(gem.style.background).toContain("gradient");
+    expect(gem.style.boxShadow).toContain(`inset 0 0 0 ${tileRingPx(2048)}px`);
+    expect(gem.textContent).toBe("2048");
+    expect(gem.children.find((c) => c.className.includes("mg-tstar"))?.getAttribute("data-tier")).toBe("5");
+  });
+});
+
+describe("1.3 视觉契约 · 星空木盒与花坛", () => {
+  beforeEach(installDom);
+  afterEach(removeDom);
+
+  it("棋盘是木盒:8px 渐变描边 + 四角圆钉;洞有内凹暗线", () => {
+    const board = cssRule(".mg-board");
+    expect(board).toContain("border:8px");
+    expect(board).toContain("linear-gradient");
+    expect((board.match(/radial-gradient/g) ?? []).length).toBe(4);
+    const hole = cssRule(".mg-hole");
+    expect(hole).toContain("inset 0 1px 0");
+    expect(hole).toContain("inset 0 2px");
+  });
+
+  it("外框是黄昏星空:上紫下暖黄渐变 + 装饰星", () => {
+    const wrap = cssRule(".mg-wrap");
+    expect(wrap).toContain("linear-gradient(180deg,#EFE4FB");
+    expect((wrap.match(/radial-gradient/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(MG_CSS).toContain(".mg-wrap::before");
+    expect(MG_CSS).toContain("clip-path:polygon");
+  });
+
+  it("障碍格里是画出来的 SVG 花朵,不再是系统 emoji;土壤有纹理", () => {
+    const { host, t } = table([
+      seatOpts({
+        start: boardFrom([
+          [2, -1, 0],
+          [0, 0, 0],
+          [0, 0, 4]
+        ])
+      })
+    ]);
+    const flower = host.byClass("mg-flower")[0];
+    expect(flower.getAttribute("data-art")).toBe("flower");
+    expect(flower.textContent).not.toContain("🌺");
+    expect(flower.html).toContain("<svg");
+    expect(flower.getAttribute("aria-label")).toContain("花");
+    expect(cssRule(".mg-hole.mg-block")).toContain("gradient");
+    t.destroy();
+  });
+
+  it("flowerSVG:5 瓣粉花 + 黄芯 + 两片叶,零外链", () => {
+    const svg = flowerSVG(20);
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect((svg.match(/fill="#F48FB1"/g) ?? []).length).toBe(5);
+    expect((svg.match(/#7FBF6A|#5F9E4C/g) ?? []).length).toBe(2);
+    expect(svg).toContain("#FFCF4D");
+    expect(svg).not.toMatch(/https?:/);
+  });
+});
+
+describe("1.3 视觉契约 · 合并爽感分级", () => {
+  beforeEach(installDom);
+  afterEach(removeDom);
+
+  it("分档口径:≤64 小、128–512 中、≥1024 大;星屑 3/6/8,池上限 24", () => {
+    expect(mergeFxTier(4)).toBe("small");
+    expect(mergeFxTier(64)).toBe("small");
+    expect(mergeFxTier(128)).toBe("mid");
+    expect(mergeFxTier(512)).toBe("mid");
+    expect(mergeFxTier(1024)).toBe("big");
+    expect(mergeFxTier(2048)).toBe("big");
+    expect(SHARD_COUNTS).toEqual({ small: 3, mid: 6, big: 8 });
+    expect(SHARD_POOL_MAX).toBe(24);
+    expect(MILESTONES).toEqual([256, 512, 1024, 2048]);
+  });
+
+  it("小合并迸 3 颗星屑 + 加分飘字,动画完自动清干净", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const { host, t } = table([seatOpts()]);
+      pressKey("a");
+      tick(10);
+      expect(host.byClass("mg-shard")).toHaveLength(3);
+      const float = host.byClass("mg-float");
+      expect(float).toHaveLength(1);
+      expect(float[0].textContent).toBe("+4");
+      vi.advanceTimersByTime(SHARD_MS + FLOAT_MS + 200);
+      expect(host.byClass("mg-shard")).toHaveLength(0);
+      expect(host.byClass("mg-float")).toHaveLength(0);
+      t.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("中合并 6 颗星屑 + 一圈扩散光环", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const { host, t } = table([
+        seatOpts({
+          start: boardFrom([
+            [128, 128, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ])
+        })
+      ]);
+      pressKey("a");
+      tick(10);
+      expect(host.byClass("mg-shard")).toHaveLength(6);
+      expect(host.byClass("mg-burst")).toHaveLength(1);
+      vi.advanceTimersByTime(1000);
+      expect(host.byClass("mg-shard")).toHaveLength(0);
+      expect(host.byClass("mg-burst")).toHaveLength(0);
+      t.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("大合并 8 颗星屑 + 屏幕轻震一次 + 金色闪光,升格卡跟着弹", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const { host, t } = table([
+        seatOpts({
+          start: boardFrom([
+            [1024, 1024, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ])
+        })
+      ]);
+      pressKey("a");
+      tick(10);
+      expect(host.byClass("mg-shard")).toHaveLength(8);
+      expect(host.byClass("mg-flash")).toHaveLength(1);
+      expect(host.byClass("mg-board")[0].classList.contains("mg-shake")).toBe(true);
+      const mile = host.byClass("mg-mile");
+      expect(mile).toHaveLength(1);
+      expect(mile[0].byClass("mg-mile-n")[0].textContent).toContain("2048");
+      vi.advanceTimersByTime(MILE_MS + 400);
+      expect(host.byClass("mg-shard")).toHaveLength(0);
+      expect(host.byClass("mg-flash")).toHaveLength(0);
+      expect(host.byClass("mg-mile")).toHaveLength(0);
+      expect(host.byClass("mg-board")[0].classList.contains("mg-shake")).toBe(false);
+      t.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("升格卡点一下就收,同一数值一盘只弹一次", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const { host, t } = table([
+        seatOpts({
+          start: boardFrom([
+            [128, 128, 0, 0],
+            [0, 0, 0, 128],
+            [0, 0, 0, 128],
+            [0, 0, 0, 0]
+          ])
+        })
+      ]);
+      pressKey("a");
+      tick(10);
+      const card = host.byClass("mg-mile")[0];
+      expect(card.byClass("mg-mile-n")[0].textContent).toContain("256");
+      card.fire("click");
+      expect(host.byClass("mg-mile")).toHaveLength(0);
+      // 竖着的那对 128 往上合出第二个 256:同一里程碑一盘只弹一次
+      pressKey("w");
+      tick(10);
+      expect(host.byClass("mg-tile").filter((e) => e.textContent === "256").length).toBeGreaterThanOrEqual(2);
+      expect(host.byClass("mg-mile")).toHaveLength(0);
+      t.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("soft(弱动效)下星屑 / 光环 / 金闪 / 飘字 / 升格卡全为 0", () => {
+    withReducedMotion(() => {
+      const { host, t } = table([
+        seatOpts({
+          start: boardFrom([
+            [1024, 1024, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ])
+        })
+      ]);
+      pressKey("a");
+      tick(10);
+      expect(host.byClass("mg-tile").map((e) => e.textContent)).toContain("2048");
+      expect(host.byClass("mg-shard")).toHaveLength(0);
+      expect(host.byClass("mg-burst")).toHaveLength(0);
+      expect(host.byClass("mg-flash")).toHaveLength(0);
+      expect(host.byClass("mg-float")).toHaveLength(0);
+      expect(host.byClass("mg-mile")).toHaveLength(0);
+      expect(host.byClass("mg-board")[0].classList.contains("mg-shake")).toBe(false);
+      t.destroy();
+    });
+  });
+
+  it("合并后块的 aria-label 仍是数值文本", () => {
+    const { host, t } = table([seatOpts()]);
+    pressKey("a");
+    tick(10);
+    for (const tile of host.byClass("mg-tile")) {
+      expect(tile.getAttribute("aria-label")).toBe(tile.textContent);
+    }
+    t.destroy();
+  });
+
+  it("全部新增动画都接进了弱动效 CSS 开关", () => {
+    const at = MG_CSS.indexOf("@media (prefers-reduced-motion:reduce)");
+    const block = MG_CSS.slice(at);
+    for (const sel of [".mg-shard", ".mg-burst", ".mg-flash", ".mg-float", ".mg-mile", ".mg-goal", ".mg-shake"]) {
+      expect(block).toContain(sel);
+    }
+  });
+
+  it("结算仪式就绪:trophySVG 有金杯与底座,结算层样式齐全", () => {
+    const svg = trophySVG(56);
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain("#FFD75E");
+    expect(svg).toContain("<rect");
+    expect(svg).toContain("<polygon");
+    expect(MG_CSS).toContain(".mg-over-art");
+    expect(MG_CSS).toContain(".mg-over-gem");
   });
 });

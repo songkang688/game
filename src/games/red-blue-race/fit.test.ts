@@ -208,10 +208,13 @@ describe("红蓝跑道 · 两档收紧不许动热区", () => {
     }
   });
 
-  it("赛道条还留得住一个跑步的小人（头像 28px，赛道 44px）", () => {
+  it("赛道条还留得住一个跑步的小人（1.3 起是侧视 SVG 小人，量它的高和宽）", () => {
+    // 1.2 量的是头像圆片(.rbr-runner-img);1.3 换成侧视小人后量 .rbr-runner 本体,意图不变:
+    // 最狠一档的赛道条也必须装得下整个小人
     expect(px(rule(".rbr-tighter .rbr-lane"), "height")).toBeGreaterThan(
-      px(rule(".rbr-tighter .rbr-runner-img"), "width")
+      px(rule(".rbr-tighter .rbr-runner"), "height")
     );
+    expect(px(rule(".rbr-tighter .rbr-runner"), "width")).toBeGreaterThan(0);
   });
 });
 

@@ -13,6 +13,7 @@ export { meta };
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { TIERS, TIER_LABELS, TIER_SETUP, TIER_TIPS, chooseMove, type Tier } from "./ai";
+import { crestSVG } from "./art";
 import guide from "./guide";
 import {
   CHAPTERS,
@@ -33,25 +34,37 @@ const SHELL_CSS = `
   user-select:none;-webkit-user-select:none;}
 .jq-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
 .jq-title{font-size:19px;font-weight:900;color:#5c6b45;text-align:center;}
-.jq-sub{font-size:13px;font-weight:700;color:#6f7c59;text-align:center;line-height:1.6;max-width:330px;}
+.jq-sub{font-size:14px;font-weight:700;color:#6f7c59;text-align:center;line-height:1.6;max-width:330px;}
 .jq-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .jq-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8FBF63,#71A248);box-shadow:0 4px 0 #5c8639;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8FBF63,#71A248);box-shadow:0 4px 0 #5c8639;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .jq-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #5c8639;}
 .jq-mode.jq-b{background:linear-gradient(180deg,#5F8FD0,#4B76B4);box-shadow:0 4px 0 #3b5e92;}
 .jq-mode.jq-c{background:linear-gradient(180deg,#D89A54,#BC7F3C);box-shadow:0 4px 0 #9a662d;}
 .jq-mode.jq-d{background:linear-gradient(180deg,#A473C4,#8B5AAB);box-shadow:0 4px 0 #6f4589;}
-.jq-tip{font-size:12px;font-weight:700;color:#7a8663;text-align:center;line-height:1.6;max-width:340px;}
+.jq-tip{font-size:14px;font-weight:700;color:#7a8663;text-align:center;line-height:1.6;max-width:340px;}
 .jq-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;}
-.jq-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:13.5px;font-weight:900;
+.jq-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;
   cursor:pointer;font-family:inherit;background:#ffffffe0;color:#5f6b4b;box-shadow:0 3px 0 rgba(120,130,100,.28);}
 .jq-pick[aria-pressed="true"]{background:linear-gradient(180deg,#8FBF63,#71A248);color:#fff;}
 .jq-top{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.jq-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f6b4b;
+.jq-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#5f6b4b;
   box-shadow:0 2px 6px rgba(120,130,100,.22);white-space:nowrap;}
 .jq-chip.jq-hot{background:#FFF0DE;color:#A9531F;}
-.jq-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#61704b;margin-top:8px;line-height:1.5;}
+.jq-note{text-align:center;min-height:20px;font-size:14px;font-weight:700;color:#61704b;margin-top:8px;line-height:1.5;}
 .jq-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;}
+.jq-crest{display:inline-flex;align-items:center;gap:4px;background:#fff;border-radius:999px;padding:5px 10px;
+  font-size:14px;font-weight:800;color:#5f6b4b;box-shadow:0 2px 6px rgba(120,130,100,.22);white-space:nowrap;}
+.jq-crest svg{display:block;}
+/* r18 B:同 dark-chess —— 平板横屏首屏菜单 326px 沉在白卡顶部,下方空洞。
+   竖直居中 + 模式块 420→560 放宽,窄屏/矮横屏零变化。 */
+@media (min-width:900px) and (min-height:620px){
+  .jq-menu{min-height:calc(100dvh - 180px);justify-content:center;gap:14px;}
+  .jq-sub{max-width:430px;}
+  .jq-modes{max-width:560px;gap:12px;grid-template-columns:repeat(2,1fr);}
+  .jq-mode{padding:18px 12px;font-size:18px;}
+}
 `;
 
 const AI_DELAY_MS = 560;
@@ -89,7 +102,7 @@ export interface TableOptions {
 export function createTable(host: HTMLElement, opts: TableOptions): { destroy: () => void } {
   const state = opts.state;
   const wrap = document.createElement("div");
-  wrap.className = "jq-wrap";
+  wrap.className = opts.rival === "human" ? "jq-wrap jq-duoplay" : "jq-wrap";
   host.appendChild(wrap);
 
   const top = document.createElement("div");
@@ -101,7 +114,12 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   labelChip.textContent = opts.label;
   const plyChip = document.createElement("span");
   plyChip.className = "jq-chip";
-  top.append(turnChip, labelChip, plyChip);
+  // 双方军旗徽标 + 各自还剩几枚棋子（小旗 SVG 见 art.ts）
+  const duoCrest = document.createElement("span");
+  duoCrest.className = "jq-crest";
+  const starCrest = document.createElement("span");
+  starCrest.className = "jq-crest";
+  top.append(turnChip, labelChip, plyChip, duoCrest, starCrest);
   wrap.appendChild(top);
 
   const boardHost = document.createElement("div");
@@ -138,6 +156,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     turnChip.className = state.turn === "duo" ? "jq-chip jq-hot" : "jq-chip";
     const left = Math.max(0, opts.maxPlies - state.plies);
     plyChip.textContent = `还剩 ${left} 手`;
+    const countOf = (side: Side): number =>
+      state.cells.reduce((n, c) => n + (c && c.side === side ? 1 : 0), 0);
+    const starName = opts.rival === "human" ? "星星" : "小对手";
+    duoCrest.innerHTML = `${crestSVG("duo")}<b>${countOf("duo")}</b>`;
+    duoCrest.setAttribute("aria-label", `朵朵还有 ${countOf("duo")} 枚棋子`);
+    starCrest.innerHTML = `${crestSVG("star")}<b>${countOf("star")}</b>`;
+    starCrest.setAttribute("aria-label", `${starName}还有 ${countOf("star")} 枚棋子`);
   }
 
   function finish(): void {
@@ -187,6 +212,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
           attacker: res.combat.attacker.kind,
           defender: res.combat.defender.kind,
           outcome: res.combat.outcome,
+          flagTaken: res.combat.flagTaken,
         }
       : null;
     setNote(res.message);

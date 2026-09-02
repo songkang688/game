@@ -19,6 +19,7 @@ import {
   type SandboxClip,
   type ScaleKind,
 } from "./sandbox";
+import { clipWaveHeights } from "./starTheme";
 import { DIATONIC_NOTES, PENTATONIC_NOTES, midiToFreq } from "./tuning";
 import { createStarBoard, fitIntoStage, type StarBoardHandle } from "./ui";
 import type { StarSynth } from "./synth";
@@ -190,8 +191,19 @@ export function createSandbox(opts: SandboxOptions): SandboxHandle {
     clipsEl.appendChild(head);
     for (const clip of clips) {
       const row = document.createElement("div");
-      row.className = "mst-tools";
-      row.appendChild(button(`▶️ ${clip.name}`, () => playClip(clip)));
+      // 1.3 视觉：片段做成音符胶带条——夜空色小条 + 波形微缩（从片段音符只读推导）。
+      // 数据结构与两颗按钮的行为一字不动，胶带条只是壳。
+      row.className = "mst-tools mst-clip";
+      const wave = document.createElement("span");
+      wave.className = "mst-clip-wave";
+      for (const h of clipWaveHeights(clip.notes)) {
+        const bar = document.createElement("span");
+        bar.className = "mst-clip-bar";
+        bar.style.height = `${h}px`;
+        wave.appendChild(bar);
+      }
+      row.appendChild(wave);
+      row.appendChild(button(`▶️ ${clip.name}`, () => playClip(clip), "mst-chip mst-clip-play"));
       row.appendChild(
         button("🗑️", () => {
           clips = dropClip(clips, clip.id);

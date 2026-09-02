@@ -9,6 +9,7 @@ import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
 import type { PickAllTask } from "./levels";
+import { TICKET_CSS, buildScene, classifyToken } from "./scene";
 
 /** 挑拣车厢要朗读的整句话：题目加判断方法，听一遍就知道该挑什么 */
 export function pickAllSpeech(task: PickAllTask): string {
@@ -67,7 +68,7 @@ const CSS = `
 @keyframes pkShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 .pk-bottom{display:flex;flex-direction:column;align-items:center;gap:8px;}
 .pk-go{border:none;border-radius:18px;padding:12px 30px;font-size:18px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
+  font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;min-height:44px;}
 .pk-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .pk-msg{min-height:24px;font-size:15px;font-weight:800;text-align:center;}
 .pk-say-row{display:flex;justify-content:center;position:sticky;top:4px;z-index:3;}
@@ -78,6 +79,37 @@ const CSS = `
 @media (max-width:420px){
   .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
   .pk-title{font-size:18px;}
+}
+/* N-35 配方 G:矮横屏舞台左、选票右;380 下限在 412 高档会把票挤下线 */
+@media (max-height:500px){
+  .pk-wrap{min-height:0;padding:8px;gap:6px;}
+  .pk-title{font-size:17px;}
+  .pk-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .pk-go{position:sticky;bottom:0;z-index:2;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .pk-wrap{display:grid;grid-template-columns:minmax(168px,34%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:6px 10px;align-items:start;}
+  .pk-top{grid-column:1/-1;grid-row:1;}
+  .pk-title{grid-column:2;grid-row:2;}
+  .pk-hint{grid-column:2;grid-row:3;}
+  .pk-say-row{grid-column:2;grid-row:4;position:static;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pk-chips{grid-column:2;grid-row:5;}
+  .pk-bottom{grid-column:2;grid-row:6;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .pk-wrap{display:grid;grid-template-columns:minmax(200px,36%) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto 1fr auto;gap:8px 12px;align-items:start;}
+  .pk-top{grid-column:1/-1;grid-row:1;}
+  .pk-title{grid-column:2;grid-row:2;}
+  .pk-hint{grid-column:2;grid-row:3;}
+  .pk-say-row{grid-column:2;grid-row:4;position:static;}
+  .pyt-scene{grid-column:1;grid-row:2 / span 5;height:auto !important;min-height:0;align-self:stretch;}
+  .pk-chips{grid-column:2;grid-row:5;}
+  .pk-bottom{grid-column:2;grid-row:6;}
 }
 `;
 
@@ -110,14 +142,14 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
   wrap.className = "pk-wrap";
   wrap.style.background = theme.bg;
   wrap.innerHTML = `
-    <style>${CSS}</style>
+    <style>${CSS}${TICKET_CSS}</style>
     <div class="pk-top">
       <span class="pk-badge pk-count" style="color:${theme.accent}">已挑 0 个</span>
       <span class="pk-badge pk-life" style="color:#b84708">💗 ${"❤".repeat(task.maxWrong + 1)}</span>
     </div>
     <div class="pk-title" style="color:${theme.accent}">🚃 ${task.title}</div>
     <div class="pk-hint" style="color:${theme.accent}">${task.hint}</div>
-    <div class="pk-say-row"><button type="button" class="pk-say" style="color:${theme.accent}" hidden>🔈 再听一遍</button></div>
+    <div class="pk-say-row"><button type="button" class="pk-say pyt-horn" style="color:${theme.accent}" hidden>📢 再听一遍</button></div>
     <div class="pk-chips"></div>
     <div class="pk-bottom">
       <button type="button" class="pk-go">✅ 就挑这些</button>
@@ -125,6 +157,10 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
     </div>
   `;
   stage.appendChild(wrap);
+
+  // 火车舞台（纯视觉）：挑对整车后，正确卡片逐一挂厢、鸣笛发车
+  const scene = buildScene({ target: task.correct.length });
+  wrap.insertBefore(scene.el, wrap.querySelector(".pk-chips"));
 
   const chipsEl = wrap.querySelector(".pk-chips") as HTMLElement;
   const countEl = wrap.querySelector(".pk-count") as HTMLElement;
@@ -153,7 +189,8 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
   for (const chip of task.chips) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "pk-chip";
+    // 车票三色助记只按文字长相分类上色，正确与否绝不从颜色上漏出去
+    btn.className = `pk-chip pyt-ticket pyt-tk-${classifyToken(chip)}`;
     btn.textContent = chip;
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `${chip}，还没挑中`);
@@ -194,6 +231,9 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
       ended = true;
       ctx.sfx("coin");
       for (const c of task.correct) chipEls.get(c)?.classList.add("pk-good");
+      // 纯视觉：挑对的整车逐一挂厢，随后鸣笛发车
+      for (const c of task.correct) scene.hook(c);
+      settle(() => scene.depart(), 320);
       msgEl.textContent = pickAllFeedback(verdict);
       const got = rateBelow(wrong, 0, 1);
       settle(() => ctx.win(got, wrong === 0 ? "一次就全挑对，眼力真准！" : "全挑对啦，这一车稳稳到站！"), 700);
@@ -202,6 +242,8 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
     wrong++;
     ctx.sfx("oops");
     updateHud();
+    // 纯视觉：车厢轻晃不脱钩 + 站牌「再听一遍」
+    scene.wobble();
     for (const btn of chipEls.values()) {
       btn.classList.add("pk-shake");
     }
@@ -228,6 +270,7 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
       stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      scene.destroy();
       wrap.remove();
     },
   };

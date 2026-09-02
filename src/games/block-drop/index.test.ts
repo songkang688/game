@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FakeEl, installCanvasDom, type DomHarness } from "../__tests__/canvasDom";
+import { FakeCanvas, FakeEl, installCanvasDom, type DomHarness } from "../__tests__/canvasDom";
 import guide from "./guide";
 import { DROP_CONSTS, acceptsRepeat, meta, mount } from "./index";
 
@@ -96,5 +96,104 @@ describe("方块叠叠乐 · 按住不放的时候", () => {
     // 真机取证：一次真按 ＋ 19 下连发，分数从 0 跳到 258、下一块队列走掉 4 个
     expect(acceptsRepeat("w")).toBe(false);
     expect(acceptsRepeat("ArrowUp")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 第 2 步 C · 视觉升级的集成契约:真实挂载 → 进一局 → 看画布上发生了什么。
+// 替身环境没有 drawImage,主画布会走直绘分支,渐变调用直接落在主上下文上。
+// ---------------------------------------------------------------------------
+
+describe("方块叠叠乐 · 1.3 视觉升级(整局集成)", () => {
+  beforeEach(() => {
+    dom = installCanvasDom();
+  });
+  afterEach(() => dom.restore());
+
+  /** 挂载 → 点「马拉松 / 竞速」→ 选马拉松,开出一张单人桌 */
+  function intoMarathon(root: FakeEl): void {
+    const modeBtn = root.byClass("bd-open").find((b) => b.textContent.includes("马拉松"));
+    expect(modeBtn).toBeTruthy();
+    modeBtn?.fire("click");
+    const pick = root.byClass("bd-open").find((b) => b.textContent.includes("🏃"));
+    expect(pick).toBeTruthy();
+    pick?.fire("click");
+  }
+
+  it("一帧 draw() 非空,且格子走过渐变分支(不再是单色矩形)", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const handle = mount(api);
+    intoMarathon(root);
+    dom.tick(2);
+    const main = root.byClass("bd-canvas")[0] as FakeCanvas;
+    expect(main).toBeTruthy();
+    expect(main.ctx.painted).toBeGreaterThan(0);
+    expect(main.ctx.ops.some((o) => o.op === "createLinearGradient")).toBe(true);
+    handle.destroy();
+  });
+
+  it("暂存 / 下一个是画出来的迷你画布,不再是字母串", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const handle = mount(api);
+    intoMarathon(root);
+    dom.tick(2);
+    const holdCv = root.byClass("bd-hold-cv")[0] as FakeCanvas;
+    const nextCv = root.byClass("bd-next-cv")[0] as FakeCanvas;
+    expect(holdCv).toBeTruthy();
+    expect(nextCv).toBeTruthy();
+    // 非空白:虚位框 / 真形状的迷你块都算画了东西
+    expect(holdCv.ctx.painted).toBeGreaterThan(0);
+    expect(nextCv.ctx.painted).toBeGreaterThan(0);
+    // 老版的「下一个 I O T」字母串不复存在
+    const minis = root.byClass("bd-mini");
+    expect(minis.some((m) => /下一个 [IOTSZJL]/.test(m.textContent))).toBe(false);
+    handle.destroy();
+  });
+
+  it("井壁与网格画在主画布上:画布比 10 列井宽出两面井壁", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const handle = mount(api);
+    intoMarathon(root);
+    dom.tick(1);
+    const main = root.byClass("bd-canvas")[0] as FakeCanvas;
+    // cellPx 26 → 井 260,再加左右各 6px 井壁
+    expect(main.width).toBe(10 * 26 + 12);
+    expect(main.height).toBe(20 * 26 + 8);
+    handle.destroy();
+  });
+
+  it("对战席位卡:P1 粉 / P2 蓝名牌都挂出来", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const handle = mount(api);
+    const versusBtn = root.byClass("bd-open").find((b) => b.textContent.includes("对战"));
+    expect(versusBtn).toBeTruthy();
+    versusBtn?.fire("click");
+    const rookie = root.byClass("bd-open").find((b) => b.textContent.includes("菜鸟"));
+    expect(rookie).toBeTruthy();
+    rookie?.fire("click");
+    dom.tick(2);
+    expect(root.byClass("bd-name-p1")).toHaveLength(1);
+    expect(root.byClass("bd-name-p2")).toHaveLength(1);
+    // 两块场地画布都真的在画
+    const canvases = root.byClass("bd-canvas") as FakeCanvas[];
+    expect(canvases).toHaveLength(2);
+    for (const cv of canvases) expect(cv.ctx.painted).toBeGreaterThan(0);
+    handle.destroy();
+  });
+
+  it("退出模式后画布与监听一并撤干净(视觉层不漏东西)", () => {
+    const root = new FakeEl("div");
+    const { api } = fakeApi(root);
+    const before = dom.globalListenerCount();
+    const handle = mount(api);
+    intoMarathon(root);
+    dom.tick(2);
+    handle.destroy();
+    expect(root.children).toHaveLength(0);
+    expect(dom.globalListenerCount()).toBe(before);
   });
 });

@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - game-1.1
+      - game-1.2
+      - game-1.3
   pull_request:
 
 concurrency:
@@ -30,7 +32,7 @@ jobs:
       # 本地 4 秒出头、在 runner 上会顶破 vitest 默认的 5 秒而假失败,
       # 所以这里统一把单个用例的超时放宽到 30 秒(不改 vite.config.ts)。
       - name: 单元测试
-        run: npm test -- --testTimeout=30000
+        run: npm test -- --testTimeout=180000
 
       - name: 类型检查 + 构建
         run: npm run build

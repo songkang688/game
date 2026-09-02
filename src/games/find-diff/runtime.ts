@@ -269,6 +269,79 @@ export function scrollToShowPx(top: number, bottom: number, client: number, max:
   return Math.max(0, Math.min(max, Math.round(want)));
 }
 
+/**
+ * 横屏矮屏(915×412 一族)两张图要不要**并排**摆(L-1,trio-r5)。
+ *
+ * 竖着摞的数学账:两张 3 行图各要 116px(26px 底线格 + 标题 + 边距),
+ * 加中缝与 165px 家当,至少 560px;而 915×412 的舞台可视段只有 ~260px——
+ * 竖排怎么钳都装不下,内滚 200px+,一半格子永远在折叠线下。
+ * 并排后一张图独享整段可视高,格子反而能回到 31px+,全部进屏。
+ * 只认「真横屏」:宽 ≥600 且宽大于高;竖屏与方屏一律照旧竖排,零回归。
+ */
+export function panelsSideBySide(viewW: number, viewH: number): boolean {
+  if (!Number.isFinite(viewW) || !Number.isFinite(viewH)) return false;
+  return viewW >= 600 && viewW > viewH;
+}
+
+/**
+ * N-68:三图关在真横屏上走单独横排(两张参考 + 可点下图并排),
+ * 不再跟 L-1 的 `rowLayout = !triple && panelsSideBySide` 抢同一条。
+ * 竖屏仍旧上排两张参考、下排可点图。
+ */
+export function triplePanelsRow(viewW: number, viewH: number): boolean {
+  return panelsSideBySide(viewW, viewH);
+}
+
+/** 三栏时按宽摊格:915 宽三块,每块扣掉相框再除列数,下限 26 */
+export function tripleCellPxByWidth(cols: number, viewW: number, max = SMALL_CELL_PX): number {
+  const w = Number.isFinite(viewW) && viewW > 0 ? viewW : 360;
+  const per = Math.floor(w / 3) - 28;
+  return Math.max(26, Math.min(max, Math.floor(per / Math.max(1, cols))));
+}
+
+/** 并排时主棋盘一格的边长:同 `panelCellPx`,但一张图能吃的高度从 40% 提到 62% */
+export function panelCellPxRow(rows: number, viewportHeight: number, max = SMALL_CELL_PX): number {
+  const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 640;
+  const perPanel = Math.max(140, h * 0.62) - 28;
+  return Math.max(26, Math.min(max, Math.floor(perPanel / Math.max(1, rows))));
+}
+
+/** 并排时的固定家当:比竖排多一行独享的标题挂牌(竖排的 165 里只摊了半行) */
+export const PANEL_CHROME_ROW_PX = PANEL_CHROME_PX + 14;
+
+/** 并排时按舞台可视余量摊格:同 `panelCellForRoom`,但不再除以 2(单图独享) */
+export function panelCellForRoomRow(rows: number, roomPx: number, max = SMALL_CELL_PX): number {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return max;
+  const perPanel = roomPx - PANEL_CHROME_ROW_PX;
+  return Math.max(26, Math.min(max, Math.floor(perPanel / Math.max(1, rows))));
+}
+
+/**
+ * 首帧之后允许格子**往回长**到多大;不该长就返回 null。
+ *
+ * 为什么需要这一条:挂载那一刻 `.fdf-panels` 还是空的,`.l99-stage` 这类
+ * **随内容长高**的裁切祖先此时几乎没有高度,`stageRoomPx()` 量出来的余量
+ * 小得离谱,`panelCellForRoom()` 直接钳到 26px 下限——390×844 的手机和
+ * 1024×768 的平板上棋盘四周明明一大片空,格子却只有 26px(三办 R4 实测)。
+ * 等真实内容排完再量一次,余量就是真的了;这里按同一套公式复算,
+ * 只许放大、不许缩小(缩小的活儿归 fitViewport 的钳制,别抢)。
+ * `row = true` 时按并排口径复算(单图独享可视高)。
+ */
+export function regrowCellPx(
+  currentPx: number,
+  rows: number,
+  viewportHeight: number,
+  roomPx: number,
+  max = SMALL_CELL_PX,
+  row = false,
+): number | null {
+  if (!Number.isFinite(currentPx) || currentPx <= 0) return null;
+  const grown = row
+    ? Math.min(panelCellPxRow(rows, viewportHeight, max), panelCellForRoomRow(rows, roomPx, max))
+    : Math.min(panelCellPx(rows, viewportHeight, max), panelCellForRoom(rows, roomPx, max));
+  return grown > currentPx ? grown : null;
+}
+
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */
 export function miniCellPx(cols: number, viewportWidth: number): number {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;

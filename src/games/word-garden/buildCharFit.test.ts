@@ -154,9 +154,10 @@ describe("识字小花园 · 描红台 · 钳位（源码巡检）", () => {
   });
 
   it("换一个字 / 开一朵花都会变高，重量一次", () => {
-    const at = trace.indexOf('flowersEl.className = "wgd-flowers wgd-bloom"');
-    expect(at).toBeGreaterThan(-1);
-    expect(trace.slice(at, at + 220)).toContain("fit.relayout()");
+    expect(trace).toContain("renderGarden(false)");
+    expect(trace).toContain("fit.relayout()");
+    const at = trace.lastIndexOf("renderGarden(false)");
+    expect(trace.slice(at, at + 80)).toContain("fit.relayout()");
   });
 
   it("destroy 里把 resize 那条监听拆掉", () => {

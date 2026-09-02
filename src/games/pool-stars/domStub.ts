@@ -120,6 +120,64 @@ export const ctx2d: unknown = new Proxy(
   }
 );
 
+// ---------------------------------------------------------------------------
+// 录制型 canvas 2d 上下文（1.3 视觉契约测试用，只增不改上面的空操作桩）
+// ---------------------------------------------------------------------------
+
+export interface CtxOp {
+  name: string;
+  args: unknown[];
+}
+
+export interface RecCtx {
+  /** 塞给 canvas.getContext 用 */
+  ctx: unknown;
+  /** 按发生顺序记下的每一次方法调用与属性赋值（赋值记作 `set:属性名`） */
+  ops: CtxOp[];
+  names: () => string[];
+  clear: () => void;
+}
+
+/**
+ * 造一个把每次绘制调用都记下来的 2d 上下文：
+ * 「球走 sprite drawImage」「台呢走渐变」「球杆只在瞄准阶段画」这些视觉契约靠它断言。
+ * drawImage 的第一个参数保留对象本身，方便断言「四类 sprite 互不相同」。
+ */
+export function makeRecordingCtx(): RecCtx {
+  const ops: CtxOp[] = [];
+  const gradient = {
+    addColorStop: (...args: unknown[]) => {
+      ops.push({ name: "addColorStop", args });
+    },
+  };
+  const ctx = new Proxy(
+    {},
+    {
+      get: (_t, prop: string | symbol) => {
+        const name = String(prop);
+        return (...args: unknown[]) => {
+          ops.push({ name, args });
+          if (name === "createLinearGradient" || name === "createRadialGradient") return gradient;
+          if (name === "measureText") return { width: 10 };
+          return undefined;
+        };
+      },
+      set: (_t, prop: string | symbol, v: unknown) => {
+        ops.push({ name: `set:${String(prop)}`, args: [v] });
+        return true;
+      },
+    }
+  );
+  return {
+    ctx,
+    ops,
+    names: () => ops.map((o) => o.name),
+    clear: () => {
+      ops.length = 0;
+    },
+  };
+}
+
 export interface Dom {
   root: El;
   head: El;

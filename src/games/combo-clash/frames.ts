@@ -95,6 +95,31 @@ export const SLOT_LABELS: Record<MoveSlot, string> = {
   sv2: "超必 LV2"
 };
 
+/** 头饰造型 id(1.3 视觉升级新增,纯外观查表,不参与任何判定) */
+export type LookHat =
+  | "flower"
+  | "star"
+  | "dango"
+  | "cloud"
+  | "bear"
+  | "spark"
+  | "sprout"
+  | "chick"
+  | "snow"
+  | "peach";
+
+/**
+ * 角色纯外观字段(1.3 视觉升级新增):头饰剪影 + 服装二色。
+ * 只被 `index.ts` / `art.ts` 的绘制层读取,引擎与判定一个字节都不碰它。
+ */
+export interface CharLook {
+  hat: LookHat;
+  /** 服装主色 */
+  dress: string;
+  /** 服装点缀色(披风 / 腰带 / 头饰配色) */
+  trim: string;
+}
+
 /** 打法类型:体术 / 投射 / 抓投 / 蓄力 */
 export type Archetype = "rush" | "zoner" | "grappler" | "charge";
 
@@ -172,6 +197,8 @@ export interface Character {
   color: string;
   /** 描边 / 深色装饰 */
   ink: string;
+  /** 纯外观:头饰与服装二色(1.3 视觉升级) */
+  look: CharLook;
   archetype: Archetype;
   /** 一句话人设 */
   blurb: string;
@@ -484,6 +511,7 @@ interface CharSpec {
   emoji: string;
   color: string;
   ink: string;
+  look: CharLook;
   archetype: Archetype;
   blurb: string;
   style: string;
@@ -618,6 +646,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "🌸",
     color: "#FFC1DC",
     ink: "#B85C8A",
+    look: { hat: "flower", dress: "#f78bb8", trim: "#79c86e" },
     archetype: "rush",
     blurb: "一朵爱练招的小花,连招接得又快又顺。",
     style: "起手快、连段长,适合第一次上手",
@@ -655,6 +684,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "⭐",
     color: "#FFE08A",
     ink: "#B98A1E",
+    look: { hat: "star", dress: "#ffd25e", trim: "#5fa8e8" },
     archetype: "zoner",
     blurb: "会丢星光弹的小星星,喜欢在远处点人。",
     style: "远距离压制,靠星光弹逼对手跳过来",
@@ -695,6 +725,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "🍡",
     color: "#FFD9C7",
     ink: "#B5744F",
+    look: { hat: "dango", dress: "#ffbf9e", trim: "#f28bb1" },
     archetype: "grappler",
     blurb: "软软糯糯的小团子,抱住了就转圈圈。",
     style: "近身抓投,投技威力最高的一档",
@@ -736,6 +767,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "☁️",
     color: "#CFE3FF",
     ink: "#5B7FB5",
+    look: { hat: "cloud", dress: "#a9cdf7", trim: "#ffffff" },
     archetype: "charge",
     blurb: "慢吞吞的小云朵,蓄好了一下就很沉。",
     style: "蓄力型:憋住一招,放出来又高又远",
@@ -773,6 +805,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "🧸",
     color: "#E7D2B8",
     ink: "#8A6A45",
+    look: { hat: "bear", dress: "#d3b48c", trim: "#8a6a45" },
     archetype: "grappler",
     blurb: "圆滚滚的小墩子,站在那儿就很难推动。",
     style: "元气最厚,近身一抱定胜负",
@@ -813,6 +846,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "✨",
     color: "#FFF0B8",
     ink: "#C29A18",
+    look: { hat: "spark", dress: "#ffe793", trim: "#ffb14e" },
     archetype: "rush",
     blurb: "一闪一闪的小光点,快得看不清。",
     style: "全场最快的起手,靠速度压满连段",
@@ -842,6 +876,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "🌱",
     color: "#CFEFC2",
     ink: "#5C8A44",
+    look: { hat: "sprout", dress: "#a9de92", trim: "#5c8a44" },
     archetype: "zoner",
     blurb: "一颗刚发芽的小豆子,豆芽伸得可长了。",
     style: "判定框最长,远远地就能碰到人",
@@ -882,6 +917,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "🐣",
     color: "#FFE0B2",
     ink: "#C08033",
+    look: { hat: "chick", dress: "#ffcf8c", trim: "#ff9d5c" },
     archetype: "rush",
     blurb: "刚学会飞的小啾啾,最喜欢从天上扑下来。",
     style: "跳入最强,空中招判定又大又久",
@@ -920,6 +956,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "❄️",
     color: "#D6F0F7",
     ink: "#4E8CA0",
+    look: { hat: "snow", dress: "#b3e0ee", trim: "#7fc2d8" },
     archetype: "charge",
     blurb: "住在窗花里的小霜花,慢慢结,结好了很硬。",
     style: "蓄力型:憋一招破防,擅长逼对手放开格挡",
@@ -956,6 +993,7 @@ const CHAR_SPECS: CharSpec[] = [
     emoji: "🍑",
     color: "#FFD3D3",
     ink: "#C06A72",
+    look: { hat: "peach", dress: "#ffb0b8", trim: "#8fca6e" },
     archetype: "grappler",
     blurb: "圆圆的小桃子,抱起人来软软的。",
     style: "抓投型里跑得最快,擅长跑过去就抱",
@@ -1000,6 +1038,7 @@ function buildCharacter(spec: CharSpec): Character {
     emoji: spec.emoji,
     color: spec.color,
     ink: spec.ink,
+    look: spec.look,
     archetype: spec.archetype,
     blurb: spec.blurb,
     style: spec.style,

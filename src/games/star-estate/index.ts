@@ -60,6 +60,24 @@ import {
 } from "./economy";
 import { AI_TIER_LABELS, buildContext, buildState, type AiTier } from "./ai";
 import {
+  coinSVG,
+  coinTagSVG,
+  dieSVG,
+  flagSVG,
+  hotelSVG,
+  houseSVG,
+  mortNoteSVG,
+  plazaSVG,
+  railTexSVG,
+  resultBarsHTML,
+  rippleTexSVG,
+  roofSVG,
+  stampSVG,
+  tileIconSVG,
+  tokenKindOf,
+  tokenSVG
+} from "./art";
+import {
   CHAPTERS,
   endlessConfig,
   goalLine,
@@ -72,12 +90,21 @@ import {
   versusConfig
 } from "./levels";
 
-/** 棋子一格一格跳的单步时长（毫秒），不允许瞬移 */
-export const HOP_MS = 130;
+/** 棋子一格一格跳的单步时长（毫秒），不允许瞬移；每一步是「上抛 + 落地回弹」小抛物线 */
+export const HOP_MS = 120;
 /** AI 回合每一条播报之间的停顿 */
 export const BEAT_MS = 340;
 /** 金币飞行动画时长 */
 export const COIN_MS = 460;
+/** 掷骰翻面演出总时长（六帧翻面 → 停格弹跳） */
+export const DICE_ROLL_MS = 500;
+
+/** 四个席位的固定色（基座、旗子、条形图共用同一份） */
+const SEAT_COLORS = ["#E4762F", "#5B8FD6", "#59A36B", "#B36FC0"] as const;
+
+function seatColor(id: number): string {
+  return SEAT_COLORS[id % 4];
+}
 
 const CSS = `
 .se-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF8EC,#FFF1F6);
@@ -87,43 +114,87 @@ const CSS = `
   box-shadow:0 2px 6px rgba(200,170,120,.3);overflow-wrap:anywhere;line-height:1.4;}
 .se-seats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
 .se-seat{flex:1 1 120px;min-width:0;background:#fff;border-radius:14px;padding:6px 8px;font-size:16px;font-weight:800;
-  color:#7a5230;box-shadow:0 2px 6px rgba(200,170,120,.25);line-height:1.5;overflow-wrap:anywhere;}
+  color:#7a5230;box-shadow:0 2px 6px rgba(200,170,120,.25);line-height:1.5;overflow-wrap:anywhere;position:relative;}
 .se-seat-on{outline:3px solid #F0A85C;}
-.se-seat-out{opacity:.5;}
+.se-seat-out{opacity:.6;}
+.se-seat-head{display:flex;align-items:center;gap:5px;min-width:0;}
+.se-seat-ava{width:19px;flex:none;}
+.se-seat-ava svg{width:100%;height:auto;display:block;}
+.se-seat-out .se-seat-ava{filter:grayscale(1);opacity:.55;}
 .se-seat-name{font-size:var(--mt-body,16px);}
 .se-seat-tier{font-size:16px;font-weight:700;color:#9a7a52;}
 .se-seat-cash{color:#3f7d55;}
+.se-cash-up{color:#2f9d5a;animation:seflash 300ms ease;}
+.se-cash-down{color:#c1443b;animation:seflash 300ms ease;}
+.se-stamp{position:absolute;right:4px;top:2px;width:38px;transform:rotate(-14deg);opacity:.92;pointer-events:none;}
+.se-stamp svg{width:100%;height:auto;display:block;}
 .se-board-wrap{position:relative;width:100%;max-width:560px;margin:0 auto;}
 .se-board{display:grid;grid-template-columns:repeat(11,1fr);grid-template-rows:repeat(11,1fr);gap:2px;
   aspect-ratio:1;background:#F3E4CD;border-radius:14px;padding:4px;}
 .se-tile{position:relative;border:none;border-radius:6px;background:#fffdf8;padding:1px;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:inherit;
   overflow:hidden;min-width:0;min-height:0;}
-.se-tile-emoji{font-size:clamp(14px,2.2vw,15px);line-height:1;}
-.se-tile-price{font-size:var(--mt-control,14px);font-weight:800;color:#8a6a44;line-height:1.1;}
-.se-tile-band{position:absolute;top:0;left:0;right:0;height:22%;border-radius:6px 6px 0 0;}
-.se-tile-own{position:absolute;bottom:0;left:0;right:0;height:16%;font-size:0;}
-/* 房子用色块点表示：格子只有 30px 宽时，任何字号都读不动，读数交给放大预览。 */
-.se-tile-houses{position:absolute;top:22%;left:0;right:0;display:flex;justify-content:center;
-  align-items:center;gap:1px;font-size:0;line-height:0;pointer-events:none;}
-.se-pip{display:block;width:14%;max-width:5px;aspect-ratio:1;border-radius:1px;background:#3f7d55;}
-.se-pip-hotel{width:30%;max-width:11px;aspect-ratio:1.4;border-radius:2px;background:#c1443b;}
+/* 地格主题图标（1.3 r1 G-6 修复）：kit 风格矢量小图标替代裸 emoji，字形不随系统漂移 */
+.se-tile-icon{font-size:clamp(15px,2.6vw,17px);width:1em;line-height:0;position:relative;z-index:1;}
+.se-tile-icon svg{width:100%;height:auto;display:block;}
+.se-tile-price{display:flex;align-items:center;gap:2px;font-size:var(--mt-control,14px);font-weight:800;
+  color:#8a6a44;line-height:1.1;position:relative;z-index:1;}
+.se-tile-price .se-cointag{width:9px;height:9px;flex:none;}
+.se-tile-roof{position:absolute;top:0;left:0;right:0;height:24%;pointer-events:none;}
+.se-tile-roof svg{width:100%;height:100%;display:block;}
+.se-tile-tex{position:absolute;top:28%;bottom:22%;left:8%;right:8%;pointer-events:none;opacity:.55;}
+.se-tile-tex svg{width:100%;height:100%;display:block;}
+.se-tile-flag{position:absolute;bottom:1%;right:2%;width:30%;max-width:14px;pointer-events:none;z-index:2;}
+.se-tile-flag svg{width:100%;height:auto;display:block;}
+/* 房屋是真的小房子：格子太窄时读数交给放大预览，这里只求「一眼几栋」 */
+.se-tile-houses{position:absolute;top:23%;left:0;right:0;display:flex;justify-content:center;
+  align-items:flex-end;gap:1px;font-size:0;line-height:0;pointer-events:none;z-index:2;}
+.se-tile-houses .se-house{width:24%;max-width:11px;height:auto;}
+.se-tile-houses .se-hotel{width:48%;max-width:19px;height:auto;}
+.se-drop{animation:sedrop 300ms ease-out;transform-origin:bottom center;}
 .se-tile-mort{position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(150,150,170,.35) 0 4px,transparent 4px 8px);
-  border-radius:6px;}
+  border-radius:6px;z-index:2;}
+.se-mort-wrap{position:absolute;left:2%;right:2%;top:36%;transform:rotate(-11deg);pointer-events:none;z-index:3;}
+.se-mort-wrap svg{width:100%;height:auto;display:block;}
 .se-tile-sel{outline:3px solid #E4762F;z-index:3;}
 .se-tile-corner{background:#FFF3DC;}
-.se-token{position:absolute;font-size:clamp(13px,2.1vw,15px);line-height:1;pointer-events:none;z-index:4;
+.se-token{position:absolute;width:clamp(17px,4.6vw,26px);pointer-events:none;z-index:4;
   transition:left ${HOP_MS}ms linear,top ${HOP_MS}ms linear;transform:translate(-50%,-50%);}
-.se-coin{position:absolute;font-size:18px;pointer-events:none;z-index:6;transition:left ${COIN_MS}ms ease,top ${COIN_MS}ms ease,opacity ${COIN_MS}ms ease;
-  transform:translate(-50%,-50%);}
+.se-token svg{width:100%;height:auto;display:block;}
+.se-token-b{display:block;}
+.se-token-svg{filter:drop-shadow(0 1.5px 1px rgba(120,90,60,.32));}
+.se-hop .se-token-b{animation:sehop ${HOP_MS}ms ease-in-out infinite;}
+.se-token-bow .se-token-b{transform:rotate(15deg) translateY(2px);transition:transform 600ms ease;}
+.se-token-out{opacity:0;filter:grayscale(1);transition:opacity 420ms ease 80ms,filter 200ms linear;}
+.se-coin{position:absolute;width:15px;pointer-events:none;z-index:6;
+  transition:left ${COIN_MS}ms ease-in,top ${COIN_MS}ms ease-in,opacity ${COIN_MS}ms ease;transform:translate(-50%,-50%);}
+.se-coin svg{width:100%;height:auto;display:block;}
+.se-coin-arc{display:block;animation:searc ${COIN_MS}ms ease-out;}
+.se-dust{position:absolute;width:6px;height:6px;border-radius:50%;background:#d9c8a8;pointer-events:none;z-index:5;
+  transform:translate(-50%,-50%);animation:sedust 440ms ease-out forwards;}
 .se-center{grid-column:2 / span 9;grid-row:2 / span 9;background:#FFFBF2;border-radius:10px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px;text-align:center;min-width:0;}
-.se-dice{font-size:clamp(16px,5vw,30px);line-height:1;letter-spacing:4px;}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px;text-align:center;
+  min-width:0;position:relative;overflow:hidden;}
+.se-center>*{position:relative;z-index:1;}
+.se-plaza{position:absolute;inset:0;z-index:0;pointer-events:none;}
+.se-plaza svg{width:100%;height:100%;display:block;}
+.se-dice{display:flex;gap:8px;justify-content:center;align-items:center;}
+.se-dice .se-die{width:clamp(24px,7vw,36px);height:auto;filter:drop-shadow(0 2px 1px rgba(150,120,80,.3));}
+.se-dice-roll .se-die{animation:seflip 84ms linear infinite;}
+.se-dice-land .se-die{animation:seland 240ms ease-out;}
 .se-goal{font-size:clamp(13px,2.4vw,14px);font-weight:800;color:#9a6a3a;line-height:1.5;overflow-wrap:anywhere;}
 .se-preview{font-size:clamp(16px,2.8vw,17px);font-weight:900;color:#7a5230;line-height:1.5;overflow-wrap:anywhere;}
-.se-log{font-size:clamp(16px,2.3vw,17px);font-weight:700;color:#6b6152;line-height:1.5;max-height:5.2em;
-  overflow:hidden;overflow-wrap:anywhere;}
+.se-log{display:flex;flex-direction:column;gap:3px;align-items:center;max-height:5.2em;overflow:hidden;max-width:100%;
+  font-size:clamp(16px,2.3vw,17px);font-weight:700;color:#6b6152;line-height:1.4;}
+.se-log-line{position:relative;max-width:100%;background:rgba(255,255,255,.88);border-radius:10px;padding:1px 8px;
+  overflow-wrap:anywhere;animation:sebubble 300ms ease;}
+.se-log-line::after{content:"";position:absolute;left:10px;bottom:-4px;border:4px solid transparent;
+  border-top-color:rgba(255,255,255,.88);border-bottom:none;}
+.se-log-line:nth-last-child(2){opacity:.72;}
+.se-log-line:nth-last-child(3){opacity:.5;}
 .se-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px;}
+/* display:flex 压过 UA 的 [hidden]{display:none},轮到电脑时这排要真的藏住 */
+.se-pad[hidden]{display:none;}
 .se-btn{min-width:88px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:16px;
   font-weight:900;cursor:pointer;background:#F6D9AE;color:#7a4a18;box-shadow:0 3px 0 #DDB981;padding:0 12px;}
 .se-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #DDB981;}
@@ -141,6 +212,8 @@ const CSS = `
   font-family:inherit;font-size:16px;font-weight:800;color:#6b4a24;background:#FFF6E6;line-height:1.5;overflow-wrap:anywhere;}
 .se-deed-mort{background:#EFEDF4;color:#6a6478;}
 .se-modebar,.se-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.se-modebar[hidden]{display:none;}
 .se-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5230;text-align:center;overflow-wrap:anywhere;}
 .se-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E9A05C,#CE7F3B);box-shadow:0 4px 0 #A96227;}
@@ -156,7 +229,24 @@ const CSS = `
 .se-pause{position:absolute;inset:0;background:rgba(255,250,240,.95);border-radius:16px;z-index:9;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .se-pause-t{font-size:20px;font-weight:900;color:#8a5a2a;}
+.se-bars{margin:12px auto 2px;max-width:340px;display:flex;flex-direction:column;gap:6px;text-align:left;}
+.se-bar-row{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:#7a5230;}
+.se-bar-name{flex:none;min-width:3em;overflow-wrap:anywhere;}
+.se-bar-track{flex:1;background:#f3e8d5;border-radius:7px;height:14px;overflow:hidden;}
+.se-bar-fill{display:block;height:100%;border-radius:7px;}
+.se-bar-val{flex:none;}
+.se-bar-cup{width:17px;flex:none;}
+.se-bar-cup svg{width:100%;height:auto;display:block;}
 @keyframes sepaper{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),64px) rotate(220deg);opacity:0}}
+@keyframes sehop{0%{transform:translateY(0) scale(1,1)}45%{transform:translateY(-6px) scale(.96,1.05)}
+  78%{transform:translateY(0) scale(1,1)}90%{transform:translateY(0) scale(1.08,.9)}100%{transform:translateY(0) scale(1,1)}}
+@keyframes seflip{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(9deg) scale(.92)}100%{transform:rotate(-7deg) scale(1)}}
+@keyframes seland{0%{transform:scale(1.15)}60%{transform:scale(.95)}100%{transform:scale(1)}}
+@keyframes searc{0%{transform:translateY(0)}45%{transform:translateY(-14px)}100%{transform:translateY(0)}}
+@keyframes sedust{0%{transform:translate(-50%,-50%) scale(1);opacity:.9}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% - 8px)) scale(1.6);opacity:0}}
+@keyframes sedrop{0%{transform:translateY(-8px)}70%{transform:translateY(0) scaleY(.85)}100%{transform:translateY(0)}}
+@keyframes sebubble{0%{opacity:0;transform:translateY(3px)}100%{opacity:1;transform:none}}
+@keyframes seflash{0%{transform:scale(1.15)}100%{transform:scale(1)}}
 /* 窄屏格子只剩 30px 上下，价格数字塞进去既读不动也挤掉图标，
    按规格改走「棋盘缩到整屏 + 当前格放大预览」，价格只在预览里给。 */
 @media (max-width:480px){
@@ -168,10 +258,71 @@ const CSS = `
   .se-btn{min-width:72px;font-size:15px;padding:0 8px;}
   .se-deed{flex:1 1 100%;}
 }
+/* N-3 配方 E：结束回合 / 掷骰钉底，棋盘按矮屏余高收方 */
+@media (max-height:500px){
+  .se-board-wrap{max-width:min(560px, calc(100dvh - 140px));}
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .se-board-wrap{max-height:min(200px,42dvh);max-width:min(200px,42dvh,calc(100dvh - 140px));flex:0 1 auto;}
+  .se-log{max-height:2.2em;}
+  .se-seats{margin-bottom:4px;}
+  .se-wrap{max-height:calc(100dvh - 76px);}
+  .se-board-wrap{max-height:min(156px,38dvh);}
+}
+/* U-1:平板横屏(768/820 高)吃不到 500 档,同款 sticky + 棋盘钳高扩一档 */
+@media (max-height:900px) and (min-height:501px){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(280px,52dvh);max-width:min(280px,52dvh,calc(100dvh - 140px));}
+}
+/* r18 · N-3:模式屏(1v3/短盘/双人)实测 .se-wrap 顶距 128,76 的预算让 .se-pad 的
+   sticky 根本钉不住(掷骰 442 线下)。只在模式屏补真预算;座位藏净资产行抬棋盘;
+   行动排收窄靠右,少遮棋盘下缘。闯关 .se-wrap 与 38dvh 棋盘钳一律不动。 */
+@media (max-height:500px) and (min-width:700px){
+  .se-mode .se-wrap{max-height:calc(100dvh - 128px);}
+  .se-mode .se-seat-info{display:none;}
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* U-x(#107):平板 501–840 中间档手牌排右对齐 */
+@media (max-height:840px) and (min-height:501px) and (min-width:700px){
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* N-124 模式:768 不命中 500;粗指针钉行动排+收盘。r10/r14/r18 500 原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-wrap{max-height:calc(100dvh - 96px);min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .se-board-wrap{max-height:min(280px,48dvh);max-width:min(280px,48dvh,calc(100dvh - 140px));}
+}
+@media (max-height:820px) and (min-width:700px) and (pointer:coarse){
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
+/* N-122 模式:390×844 钉掷骰行,不拆 500 档 overflow:hidden 锁 */
+@media (max-width:430px) and (min-height:700px){
+  .se-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
+    box-shadow:0 -8px 14px rgba(200,170,120,.18);
+  }
+  .se-board-wrap{max-height:min(52dvh,320px);max-width:min(52dvh,320px);}
+}
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
   .se-coin{transition:opacity 120ms linear;}
-  .se-paper{display:none;}
+  .se-paper,.se-dust{display:none;}
+  .se-hop .se-token-b,.se-dice-roll .se-die,.se-dice-land .se-die,.se-log-line,.se-drop,
+  .se-cash-up,.se-cash-down{animation:none;}
+  .se-token-bow .se-token-b{transition:none;transform:none;}
 }
 `;
 
@@ -186,8 +337,6 @@ function reducedMotion(): boolean {
     return false;
   }
 }
-
-const DICE_FACES = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
 /** 事件 → 一句中文播报（纯函数，测试直接读） */
 export function eventLine(state: EstateState, ev: EstateEvent): string {
@@ -261,6 +410,8 @@ export interface TableResult {
   /** 每个座位本局自己掏钱买下了几处产业 */
   bought: number[];
   humanWon: boolean;
+  /** 本局最贵的一笔租金（结算回放用；一笔租金都没付过就没有） */
+  topRent?: { amount: number; payer: number; owner: number };
 }
 
 export interface TableOpts {
@@ -286,7 +437,7 @@ interface Table {
 
 type Phase = "idle" | "busy" | "decide" | "bid" | "jail" | "over";
 
-function createTable(host: HTMLElement, opts: TableOpts): Table {
+export function createTable(host: HTMLElement, opts: TableOpts): Table {
   const soft = reducedMotion();
   const humans = new Set<number>();
   opts.seats.forEach((s, i) => {
@@ -319,6 +470,12 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
   let paused = false;
   let destroyed = false;
   const log: string[] = [];
+  /** 上一次画进气泡区的三条 log（不变就不重建，免得气泡动画反复重播） */
+  let lastLogKey = "";
+  /** 刚盖好的那栋房要播「落下 + 尘土」，只在紧随的一次 render 里带动画类 */
+  let dropFx: { pos: number } | null = null;
+  /** 本局最贵一笔租金（结算回放） */
+  let topRent: { amount: number; payer: number; owner: number } | null = null;
   const timers = new Set<ReturnType<typeof setTimeout>>();
 
   function later(fn: () => void, ms: number): void {
@@ -352,12 +509,34 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
 
   const seatRow = document.createElement("div");
   seatRow.className = "se-seats";
-  const seatEls = state.players.map(() => {
+  // 席位卡是持久节点：现金数字要滚动、要闪涨跌色，整卡 innerHTML 重建会把动画掐掉
+  const seatViews = state.players.map((p, i) => {
     const el = document.createElement("div");
     el.className = "se-seat";
+    const head = document.createElement("div");
+    head.className = "se-seat-head";
+    const ava = document.createElement("span");
+    ava.className = "se-seat-ava";
+    ava.setAttribute("aria-hidden", "true");
+    ava.innerHTML = tokenSVG(tokenKindOf(p.emoji), seatColor(i));
+    const name = document.createElement("span");
+    name.className = "se-seat-name";
+    head.append(ava, name);
+    const cash = document.createElement("div");
+    cash.className = "se-seat-cash";
+    const info = document.createElement("div");
+    info.className = "se-seat-info";
+    const stamp = document.createElement("span");
+    stamp.className = "se-stamp";
+    stamp.hidden = true;
+    stamp.innerHTML = stampSVG();
+    el.append(head, cash, info, stamp);
     seatRow.appendChild(el);
-    return el;
+    return { el, name, cash, info, stamp };
   });
+  /** 席位卡上正显示的现金（滚动动画期间和 state 不同步） */
+  const cashShown = state.players.map((p) => p.cash);
+  const cashBusy = state.players.map(() => false);
   wrap.appendChild(seatRow);
 
   const boardWrap = document.createElement("div");
@@ -386,23 +565,33 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
 
   const center = document.createElement("div");
   center.className = "se-center";
+  // 星城广场装饰底图：环形路 + 中央喷泉星 + 四角草地，骰子与播报浮在其上
+  const plaza = document.createElement("div");
+  plaza.className = "se-plaza";
+  plaza.setAttribute("aria-hidden", "true");
+  plaza.innerHTML = plazaSVG();
   const diceEl = document.createElement("div");
   diceEl.className = "se-dice";
-  diceEl.textContent = "🎲🎲";
+  diceEl.setAttribute("role", "img");
   const previewEl = document.createElement("div");
   previewEl.className = "se-preview";
   const logEl = document.createElement("div");
   logEl.className = "se-log";
-  center.append(diceEl, previewEl, logEl);
+  center.append(plaza, diceEl, previewEl, logEl);
   board.appendChild(center);
 
-  const tokens = state.players.map((p) => {
+  // 棋子不再是 emoji 字符，而是 24×30 的 SVG 立牌；emoji 保留进 aria-label
+  const tokens = state.players.map((p, i) => {
     const el = document.createElement("div");
     el.className = "se-token";
-    el.textContent = p.emoji;
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", `${p.emoji} ${p.name} 的棋子`);
+    el.innerHTML = `<span class="se-token-b">${tokenSVG(tokenKindOf(p.emoji), seatColor(i))}</span>`;
     boardWrap.appendChild(el);
     return el;
   });
+  /** 已经播过「鞠躬收摊」的座位（仪式只播一次） */
+  const retired = state.players.map(() => false);
 
   const pad = document.createElement("div");
   pad.className = "se-pad";
@@ -457,10 +646,19 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     });
     tokens.forEach((el, i) => {
       if (state.players[i].bankrupt) {
-        el.style.opacity = "0";
+        // 收摊仪式：先鞠躬 0.6s，再变灰淡出；席位卡那边同步盖「已收摊」印章
+        if (!retired[i]) {
+          retired[i] = true;
+          el.classList.remove("se-hop");
+          if (soft) {
+            el.classList.add("se-token-out");
+          } else {
+            el.classList.add("se-token-bow");
+            later(() => el.classList.add("se-token-out"), 600);
+          }
+        }
         return;
       }
-      el.style.opacity = "1";
       const pos = renderPos[i];
       const mates = bucket.get(pos) ?? [i];
       const k = Math.max(0, mates.indexOf(i));
@@ -470,17 +668,92 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     });
   }
 
+  /** 掷骰演出序号：新的一掷开始后，上一掷残留的翻面帧立刻作废 */
+  let diceSeq = 0;
+
+  /**
+   * 掷骰演出：0.5s 六帧翻面 → 停格弹跳（scale 1.15→1）；双骰同点金描边。
+   * `soft`（prefers-reduced-motion）直接给结果面。
+   * 点数真相立刻写进 data-d1 / data-d2，画面帧只是演出。
+   */
+  function showDice(d1: number, d2: number, animate: boolean, doubles: boolean): void {
+    diceEl.setAttribute("data-d1", String(d1));
+    diceEl.setAttribute("data-d2", String(d2));
+    diceEl.setAttribute("aria-label", `骰子掷出 ${d1} 和 ${d2}${doubles ? "，同点" : ""}`);
+    const seq = ++diceSeq;
+    if (soft || !animate) {
+      diceEl.classList.remove("se-dice-roll", "se-dice-land");
+      diceEl.innerHTML = dieSVG(d1, doubles) + dieSVG(d2, doubles);
+      return;
+    }
+    diceEl.classList.add("se-dice-roll");
+    let k = 0;
+    const flip = (): void => {
+      if (seq !== diceSeq) return;
+      if (k >= 6) {
+        diceEl.classList.remove("se-dice-roll");
+        diceEl.innerHTML = dieSVG(d1, doubles) + dieSVG(d2, doubles);
+        diceEl.classList.add("se-dice-land");
+        later(() => diceEl.classList.remove("se-dice-land"), 260);
+        return;
+      }
+      diceEl.innerHTML = dieSVG(((d1 + k * 2) % 6) + 1) + dieSVG(((d2 + k * 3 + 1) % 6) + 1);
+      k++;
+      later(flip, DICE_ROLL_MS / 6);
+    };
+    flip();
+  }
+  showDice(1, 1, false, false);
+
+  /** 席位卡现金：涨绿跌红闪 0.3s + 数字滚动到位（soft 直接跳到位） */
+  function paintCash(i: number): void {
+    const v = seatViews[i];
+    const p = state.players[i];
+    if (p.bankrupt) {
+      cashShown[i] = 0;
+      v.cash.textContent = "💰 已收摊";
+      return;
+    }
+    if (soft || phase === "over") cashShown[i] = p.cash;
+    if (cashShown[i] !== p.cash && !cashBusy[i]) {
+      cashBusy[i] = true;
+      v.cash.classList.remove("se-cash-up", "se-cash-down");
+      v.cash.classList.add(p.cash > cashShown[i] ? "se-cash-up" : "se-cash-down");
+      later(() => v.cash.classList.remove("se-cash-up", "se-cash-down"), 320);
+      later(() => rollCash(i), 60);
+    }
+    if (!cashBusy[i]) v.cash.textContent = `💰 ${cashShown[i]}`;
+  }
+
+  function rollCash(i: number): void {
+    const p = state.players[i];
+    if (p.bankrupt) {
+      cashBusy[i] = false;
+      paintCash(i);
+      return;
+    }
+    const diff = p.cash - cashShown[i];
+    cashShown[i] += Math.abs(diff) <= 6 ? diff : Math.round(diff / 3);
+    seatViews[i].cash.textContent = `💰 ${cashShown[i]}`;
+    if (cashShown[i] === p.cash) {
+      cashBusy[i] = false;
+      return;
+    }
+    later(() => rollCash(i), 70);
+  }
+
   function render(): void {
     const me = state.players[state.turn];
     roundChip.textContent = `第 ${state.round} / ${opts.rules.maxRounds} 回合 · 轮到 ${me?.name ?? "-"}`;
     if (opts.goalProgress) progressChip.textContent = opts.goalProgress(state);
-    seatEls.forEach((el, i) => {
+    seatViews.forEach((v, i) => {
       const p = state.players[i];
       const own = deedsOf(state, i).length;
-      el.className = `se-seat${i === state.turn ? " se-seat-on" : ""}${p.bankrupt ? " se-seat-out" : ""}`;
-      el.innerHTML = `<div class="se-seat-name">${p.emoji} ${p.name}${humans.has(i) ? "" : `<span class="se-seat-tier"> · ${AI_TIER_LABELS[tiers[i]]}</span>`}</div>
-        <div class="se-seat-cash">💰 ${p.bankrupt ? "已收摊" : p.cash}</div>
-        <div>🏷️ ${own} 块 · 净资产 ${netWorth(state, i)}${p.inJail ? " · 🪑小黑屋" : ""}${p.outCards > 0 ? ` · 🎫${p.outCards}` : ""}</div>`;
+      v.el.className = `se-seat${i === state.turn ? " se-seat-on" : ""}${p.bankrupt ? " se-seat-out" : ""}`;
+      v.name.innerHTML = `${p.name}${humans.has(i) ? "" : `<span class="se-seat-tier"> · ${AI_TIER_LABELS[tiers[i]]}</span>`}`;
+      v.info.textContent = `🏷️ ${own} 块 · 净资产 ${netWorth(state, i)}${p.inJail ? " · 🪑小黑屋" : ""}${p.outCards > 0 ? ` · 🎫${p.outCards}` : ""}`;
+      v.stamp.hidden = !p.bankrupt;
+      paintCash(i);
     });
 
     for (const tile of BOARD) {
@@ -489,24 +762,26 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       const owner = st.owner;
       const band = tile.group ? groupInfo(tile.group).color : tile.kind === "station" ? "#D9D3C4" : tile.kind === "util" ? "#CFE0E6" : "";
       const price = tile.price ? `${tile.price}` : tile.tax ? `-${tile.tax}` : "";
-      el.innerHTML = `${band ? `<span class="se-tile-band" style="background:${band}"></span>` : ""}
-        <span class="se-tile-emoji">${tile.emoji}</span>
-        ${price ? `<span class="se-tile-price">${price}</span>` : ""}
+      const drop = dropFx !== null && dropFx.pos === tile.pos;
+      el.innerHTML = `${band ? `<span class="se-tile-roof">${roofSVG(band)}</span>` : ""}
+        ${tile.kind === "station" ? `<span class="se-tile-tex">${railTexSVG()}</span>` : tile.kind === "util" ? `<span class="se-tile-tex">${rippleTexSVG()}</span>` : ""}
+        <span class="se-tile-icon">${tileIconSVG(tile.emoji)}</span>
+        ${price ? `<span class="se-tile-price">${coinTagSVG()}<b>${price}</b></span>` : ""}
         ${
           st.houses > 0
             ? `<span class="se-tile-houses">${
                 st.houses >= MAX_HOUSES
-                  ? `<i class="se-pip se-pip-hotel"></i>`
-                  : `<i class="se-pip"></i>`.repeat(st.houses)
+                  ? hotelSVG(drop)
+                  : Array.from({ length: st.houses }, (_, h) => houseSVG(drop && h === st.houses - 1)).join("")
               }</span>`
             : ""
         }
-        ${owner !== BANK ? `<span class="se-tile-own" style="background:${seatColor(owner)}"></span>` : ""}
-        ${st.mortgaged ? `<span class="se-tile-mort"></span>` : ""}`;
+        ${owner !== BANK ? `<span class="se-tile-flag">${flagSVG(seatColor(owner))}</span>` : ""}
+        ${st.mortgaged ? `<span class="se-tile-mort"></span><span class="se-mort-wrap">${mortNoteSVG()}</span>` : ""}`;
       el.classList.toggle("se-tile-sel", tile.pos === selected);
       el.setAttribute(
         "aria-label",
-        `${tile.name}${tile.price ? `，售价 ${tile.price} 星币` : ""}${owner !== BANK ? `，主人是${state.players[owner].name}` : ""}${
+        `${tile.emoji} ${tile.name}${tile.price ? `，售价 ${tile.price} 星币` : ""}${owner !== BANK ? `，主人是${state.players[owner].name}` : ""}${
           st.houses > 0 ? `，${housesLabel(st.houses)}` : ""
         }${st.mortgaged ? "，抵押中" : ""}`
       );
@@ -526,14 +801,19 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     }
     if (sel.tax) parts.push(`要交 ${sel.tax} 星币`);
     previewEl.textContent = parts.join(" · ");
-    logEl.textContent = log.slice(-3).join("\n");
+    // log 是带气泡尾巴的消息条（最近 3 条），内容没变就不重建，免得淡入动画反复重播
+    const logKey = log.slice(-3).join("\n");
+    if (logKey !== lastLogKey) {
+      lastLogKey = logKey;
+      logEl.innerHTML = log
+        .slice(-3)
+        .map((line) => `<div class="se-log-line">${line}</div>`)
+        .join("");
+    }
+    dropFx = null;
     drawTokens();
     renderDeeds();
     renderButtons();
-  }
-
-  function seatColor(id: number): string {
-    return ["#E4762F", "#5B8FD6", "#59A36B", "#B36FC0"][id % 4];
   }
 
   function renderDeeds(): void {
@@ -633,38 +913,69 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       steps.push(cur);
     }
     if (steps.length === 0 || soft) {
+      // prefers-reduced-motion：退回原来的直线位移，不加跳格动画类
       renderPos[playerId] = to;
       drawTokens();
       later(done, soft ? 20 : 60);
       return;
     }
+    // 逐格跳：每格 HOP_MS，一步一个「上抛 + 落地压扁回弹」的小抛物线
+    const el = tokens[playerId];
+    el.classList.add("se-hop");
     let i = 0;
     const tick = (): void => {
       renderPos[playerId] = steps[i];
       drawTokens();
       i++;
-      if (i < steps.length) later(tick, HOP_MS);
-      else later(done, HOP_MS);
+      if (i < steps.length) {
+        later(tick, HOP_MS);
+      } else {
+        later(() => {
+          el.classList.remove("se-hop");
+          done();
+        }, HOP_MS);
+      }
     };
     tick();
   }
 
+  /** 收租金币飞行：3–5 枚渐变金币错峰起飞，沿小抛物线飞向收款方，落地即清 */
   function coinFly(fromPos: number, toPos: number): void {
     if (soft) return;
-    const el = document.createElement("div");
-    el.className = "se-coin";
-    el.textContent = "🪙";
     const a = tileCenter(fromPos);
     const b = tileCenter(toPos);
-    el.style.left = `${a.x}%`;
-    el.style.top = `${a.y}%`;
-    boardWrap.appendChild(el);
-    later(() => {
-      el.style.left = `${b.x}%`;
-      el.style.top = `${b.y}%`;
-      el.style.opacity = "0";
-    }, 20);
-    later(() => el.remove(), COIN_MS + 120);
+    const count = 3 + ((fromPos + toPos) % 3);
+    for (let k = 0; k < count; k++) {
+      later(() => {
+        const el = document.createElement("div");
+        el.className = "se-coin";
+        el.innerHTML = `<span class="se-coin-arc">${coinSVG()}</span>`;
+        el.style.left = `${a.x + (k - 1) * 1.6}%`;
+        el.style.top = `${a.y}%`;
+        boardWrap.appendChild(el);
+        later(() => {
+          el.style.left = `${b.x}%`;
+          el.style.top = `${b.y}%`;
+          el.style.opacity = "0";
+        }, 20);
+        later(() => el.remove(), COIN_MS + 160);
+      }, k * 70);
+    }
+  }
+
+  /** 盖房落地时的两粒尘土（soft 关） */
+  function dustPuff(pos: number): void {
+    if (soft) return;
+    const c = tileCenter(pos);
+    for (const dx of [-9, 9]) {
+      const el = document.createElement("div");
+      el.className = "se-dust";
+      el.style.left = `${c.x}%`;
+      el.style.top = `${c.y}%`;
+      el.style.setProperty("--dx", `${dx}px`);
+      boardWrap.appendChild(el);
+      later(() => el.remove(), 480);
+    }
   }
 
   /** 破产是「棋子收摊 + 钱包倒出彩纸」，不做任何沮丧化描写 */
@@ -705,11 +1016,18 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
         });
         return;
       }
-      if (ev.kind === "rent") {
+      if (ev.kind === "roll") {
+        showDice(ev.dice[0], ev.dice[1], true, ev.doubles);
+      } else if (ev.kind === "rent") {
         opts.sfx("coin");
+        if (!topRent || ev.amount > topRent.amount) topRent = { amount: ev.amount, payer: ev.payer, owner: ev.owner };
         coinFly(state.players[ev.payer].pos, state.players[ev.owner].pos);
       } else if (ev.kind === "buy" || ev.kind === "build") {
         opts.sfx("pop");
+        if (ev.kind === "build") {
+          dropFx = { pos: ev.pos };
+          dustPuff(ev.pos);
+        }
       } else if (ev.kind === "bankrupt") {
         opts.sfx("oops");
         confetti(state.players[ev.player].pos);
@@ -738,7 +1056,8 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       netWorths: state.players.map((p) => netWorth(state, p.id)),
       deeds: state.players.map((p) => deedsOf(state, p.id).length),
       bought: state.players.map((p) => p.deedsBought),
-      humanWon: humans.has(winner)
+      humanWon: humans.has(winner),
+      topRent: topRent ?? undefined
     });
   }
 
@@ -814,7 +1133,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     const p = state.players[id];
     const dice = nextDiceForHuman();
     lastDice = dice;
-    diceEl.textContent = `${DICE_FACES[dice[0]]}${DICE_FACES[dice[1]]}`;
+    showDice(dice[0], dice[1], true, dice[0] === dice[1]);
     opts.sfx("tap");
 
     if (phase === "jail") {
@@ -952,7 +1271,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       phase = "busy";
       const dice = nextDiceForHuman();
       lastDice = dice;
-      diceEl.textContent = `${DICE_FACES[dice[0]]}${DICE_FACES[dice[1]]}`;
+      showDice(dice[0], dice[1], true, dice[0] === dice[1]);
       rolledThisTurn = true;
       moveAndResolve(id, dice[0] + dice[1]);
       return;
@@ -960,6 +1279,8 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     if (buildableSelected()) {
       if (buildHouse(state, selected)) {
         opts.sfx("pop");
+        dropFx = { pos: selected };
+        dustPuff(selected);
         say(`在 ${tileAt(selected).name} 盖到 ${housesLabel(state.tiles[selected].houses)}。`);
       }
       render();
@@ -1210,6 +1531,20 @@ const MODE_TITLE: Record<ExtraMode, string> = {
   duo: "👫 双人同屏"
 };
 
+/** 结算面板的净资产条形对比（四色横条 + 第一名奖杯） */
+function barsFor(names: string[], r: TableResult): string {
+  return resultBarsHTML(
+    names.map((name, i) => ({ name, color: seatColor(i), worth: r.netWorths[i] ?? 0, win: i === r.winner }))
+  );
+}
+
+/** 本局最贵一笔租金的回放文本（一笔都没付过就空着） */
+function topRentLine(names: string[], r: TableResult): string {
+  return r.topRent
+    ? `本局最贵一笔租金：${names[r.topRent.payer] ?? "?"} 付给 ${names[r.topRent.owner] ?? "?"} ${r.topRent.amount} 星币。`
+    : "";
+}
+
 function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: () => void): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "se-mode";
@@ -1239,13 +1574,13 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     onBack();
   });
 
-  function showOver(title: string, sub: string, again: string): void {
+  function showOver(title: string, sub: string, again: string, extra = ""): void {
     table?.destroy();
     table = null;
     stage.innerHTML = "";
     const box = document.createElement("div");
     box.className = "se-over";
-    box.innerHTML = `<div class="se-over-t">${title}</div><div class="se-over-s">${sub}</div>`;
+    box.innerHTML = `<div class="se-over-t">${title}</div><div class="se-over-s">${sub}</div>${extra}`;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "se-open";
@@ -1321,11 +1656,13 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       sfx: (n) => api.play(n),
       onOver: (r) => {
         if (r.humanWon) api.addStars(2);
+        const names = ["朵朵", "星星", "糯糯", "云云"];
         showOver(
           r.humanWon ? "这一局赢下来啦！" : "这一局到此为止",
           `${r.reason === "settle" ? "80 回合到点比净资产" : "有人先收摊了"}：朵朵 ${r.netWorths[0]} 星币，` +
-            `对手 ${r.netWorths.slice(1).join(" / ")}。`,
-          "🔁 再打一场"
+            `对手 ${r.netWorths.slice(1).join(" / ")}。${topRentLine(names, r)}`,
+          "🔁 再打一场",
+          barsFor(names, r)
         );
       }
     });
@@ -1353,16 +1690,23 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       goalText: `短盘 ${cfg.rounds} 回合，赢一局连胜 +1，输一次就从头来`,
       sfx: (n) => api.play(n),
       onOver: (r) => {
+        const names = ["朵朵", AI_TIER_LABELS[cfg.tiers[1]]];
         if (r.humanWon) {
           streak++;
           best = save.recordEndlessBest(meta.id, streak);
           api.play("win");
-          showOver(`连胜 ${streak} 场！`, `最高连胜 ${best}。手气正好，接着来一盘吧。`, "▶ 下一盘");
+          showOver(
+            `连胜 ${streak} 场！`,
+            `最高连胜 ${best}。${topRentLine(names, r)}手气正好，接着来一盘吧。`,
+            "▶ 下一盘",
+            barsFor(names, r)
+          );
         } else {
           showOver(
             "连胜到这里啦",
             `这一轮连胜 ${streak} 场，最高纪录还是 ${best}。钱包空了没关系，下一局重新开。`,
-            "🔁 重新开始"
+            "🔁 重新开始",
+            barsFor(names, r)
           );
           streak = 0;
         }
@@ -1395,10 +1739,12 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       onOver: (r) => {
         const duo = r.netWorths[0];
         const star = r.netWorths[1];
+        const names = ["朵朵", "星星", "糯糯", "云云"];
         showOver(
           duo === star ? "打成平手！" : duo > star ? "朵朵这一局更稳" : "星星这一局更稳",
-          `朵朵 ${duo} 星币，星星 ${star} 星币。再来一局换个买地顺序试试。`,
-          "🔁 再来一局"
+          `朵朵 ${duo} 星币，星星 ${star} 星币。${topRentLine(names, r)}再来一局换个买地顺序试试。`,
+          "🔁 再来一局",
+          barsFor(names, r)
         );
       }
     });
@@ -1488,7 +1834,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先看清这一关的目标，再决定买哪条街。垄断一整条街，租金才真的涨得起来。",
       grandMessage: "188 关全部拿下，朵星地产的招牌就挂你名字了！",
       guideTitle: "朵星地产 · 经营笔记"
@@ -1506,7 +1862,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 }
 
 /** 给测试钉住的关键常量 */
-export const ESTATE_CONSTS = { HOP_MS, BEAT_MS, COIN_MS, BOARD_LEN, MAX_HOUSES };
+export const ESTATE_CONSTS = { HOP_MS, BEAT_MS, COIN_MS, DICE_ROLL_MS, BOARD_LEN, MAX_HOUSES };
 
 /** 给测试用的参考解法（战役可通关性） */
 export { solveLevel, levelConfig };

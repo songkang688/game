@@ -130,7 +130,9 @@ describe("接线与样式", () => {
     expect(at).toBeGreaterThan(-1);
     const body = SRC.slice(at, SRC.indexOf("  return {", at));
     expect(body).toContain("requestAnimationFrame");
-    expect(body).toContain("if (liveFit) fitViewport()");
+    // 三办 R4-A 之后这一帧还多了「格子回涨」,守门写法从内联判断改成先行 return
+    expect(body).toContain("if (!liveFit) return;");
+    expect(body).toContain("fitViewport();");
     // 拆掉舞台之后那一帧不许再回来动 DOM
     expect(SRC.slice(SRC.indexOf("destroy() {", at))).toContain("liveFit = false");
   });

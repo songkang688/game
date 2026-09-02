@@ -947,6 +947,11 @@ export function mapLayout(w: number, h: number, size: number): MapLayout {
   // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
   const my1 = h - 62;
   const r = Math.max(13, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+  // 行距夹上限再整块垂直居中:11 回合 3 行的果园曾被摊满整个画布高,
+  // 行距能拉到 250px+,地图像漏了气(1.3 UX 走查修复)
+  const span = Math.max(0, my1 - my0);
+  const gap = rows <= 1 ? 0 : Math.min(Math.max(r * 3.2, 84), span / (rows - 1));
+  const yTop = my0 + (span - gap * (rows - 1)) / 2;
   const spots: MapNodeSpot[] = [];
   for (let i = 0; i < n; i++) {
     const row = Math.floor(i / cols);
@@ -955,7 +960,7 @@ export function mapLayout(w: number, h: number, size: number): MapLayout {
     spots.push({
       i,
       x: mx0 + ((mx1 - mx0) * col) / (cols - 1),
-      y: my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1)),
+      y: rows === 1 ? my0 + span / 2 : yTop + gap * row,
       r,
     });
   }

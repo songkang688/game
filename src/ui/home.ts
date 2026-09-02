@@ -12,6 +12,8 @@ import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
 import { RECENT_SHOWN, loadRecentIds } from "./recent";
 import { applyMobileTextVars } from "./mobileText";
+// 契约文件只有常量与纯逻辑,不会把密码门弹窗拖进首页首屏 chunk
+import { isRootOpen, rootStatusLine } from "./root12Contract";
 import {
   MODE_CHIPS,
   PLATFORM_CHIPS,
@@ -98,21 +100,23 @@ const HOME_EXTRA_CSS = `
 .home-search{flex:1 1 190px;min-width:0;display:flex;align-items:center;gap:8px;min-height:50px;
   padding:0 12px 0 16px;
   border:3px solid #fff;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:var(--shadow-soft)}
-.home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
+.home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;min-height:44px;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
 .home-search-clear{display:grid;place-items:center;flex:0 0 auto;min-width:44px;min-height:44px;
   border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
 .tabs.cat-tabs{margin-bottom:2px}
 .tabs.mode-chips{margin:0;padding-top:0;gap:10px}
-.mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.mode-chips .tab{min-height:46px;min-width:44px;padding:0 18px;font-size:17px}
 .mode-chips .tab-emoji{font-size:19px}
 .tabs.platform-chips{margin:0 0 4px;padding-top:0;gap:10px}
-.platform-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.platform-chips .tab{min-height:46px;min-width:44px;padding:0 18px;font-size:17px}
 .platform-chips .tab-emoji{font-size:19px}
 /* 管理员入口:大人才用,做得不显眼,但热区仍是 44×44 */
 .icon-btn--admin{opacity:.55;font-size:17px}
 .icon-btn--admin:hover,.icon-btn--admin:focus-visible{opacity:1}
+/* 管理员权限开着时钥匙亮起来,一眼看出当前是解锁状态 */
+.icon-btn--admin.icon-btn--admin-on{opacity:1;background:#ffe3f1;box-shadow:inset 0 0 0 2px #c84483}
 /* 心形是卡片的兄弟节点(按钮不能套按钮),浮在卡片右上角,热区 44×44 */
 .fav-slot{position:relative;display:flex}
 .fav-slot>.game-card,.fav-slot>.recent-card{flex:1;min-width:0}
@@ -257,12 +261,18 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     const adminBtn = document.createElement("button");
     adminBtn.type = "button";
     adminBtn.className = "icon-btn icon-btn--admin";
-    adminBtn.title = "管理员权限";
-    adminBtn.setAttribute("aria-label", "管理员权限");
     adminBtn.textContent = "🔑";
+    // 开着时钥匙亮起来,悬停 / 读屏能听到「永久开启」或「还剩 X 分钟」
+    const renderAdminState = (): void => {
+      const status = rootStatusLine();
+      adminBtn.classList.toggle("icon-btn--admin-on", isRootOpen());
+      adminBtn.title = status;
+      adminBtn.setAttribute("aria-label", status);
+    };
+    renderAdminState();
     adminBtn.addEventListener("click", () => {
       playSound("tap");
-      void openRootGateSafely();
+      void openRootGateSafely().then(renderAdminState);
     });
     actions.appendChild(adminBtn);
   }
@@ -585,6 +595,33 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     recentSection.appendChild(row);
   }
 
+  /**
+   * 元信息行的玩法徽章(纯展示,不参与筛选):
+   * 挑一眼最有用的一种 —— 对战 > 双人 > 无尽;闯关有进度小旗管着,不重复出徽章。
+   * 图形与文案沿用玩法芯片(MODE_CHIPS)的语言,孩子在两处看到的是同一套符号。
+   */
+  function modeBadgeOf(meta: GameModule["meta"]): { emoji: string; label: string } | null {
+    const modes = meta.modes ?? [];
+    if (modes.includes("versus")) return { emoji: "🤝", label: "对战" };
+    if (modes.includes("twoPlayer") || modes.includes("coop")) return { emoji: "👫", label: "双人" };
+    if (modes.includes("endless")) return { emoji: "♾️", label: "无尽" };
+    return null;
+  }
+
+  /** 胶囊 + 图形的小徽章(元信息行通用) */
+  function makeBadge(className: string, emoji: string, label: string): HTMLElement {
+    const badge = document.createElement("span");
+    badge.className = `card-badge ${className}`;
+    const em = document.createElement("span");
+    em.className = "card-badge-emoji";
+    em.setAttribute("aria-hidden", "true");
+    em.textContent = emoji;
+    const text = document.createElement("span");
+    text.textContent = label;
+    badge.append(em, text);
+    return badge;
+  }
+
   function createGameCard(game: GameModule, index: number): HTMLElement {
     const { meta } = game;
     const card = document.createElement("button");
@@ -594,10 +631,19 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     // 错峰浮现动画的序号(封顶,后面的卡片不再继续拖延)
     card.style.setProperty("--card-i", String(Math.min(index, 11)));
 
+    // ---- 第一层:封面区(渐变 + 分类图形语言,表情贴纸骑在封面下沿) ----
+    const cover = document.createElement("span");
+    cover.className = `card-cover card-cover--${meta.category}`;
+    cover.setAttribute("aria-hidden", "true");
+
     const emoji = document.createElement("span");
     emoji.className = "card-emoji";
-    emoji.setAttribute("aria-hidden", "true");
     emoji.textContent = meta.emoji;
+    cover.appendChild(emoji);
+
+    // ---- 第二层:标题行(游戏名 + 一句话目标) ----
+    const body = document.createElement("span");
+    body.className = "card-body";
 
     const titleEl = document.createElement("span");
     titleEl.className = "card-title";
@@ -607,6 +653,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     blurb.className = "card-blurb";
     blurb.textContent = meta.blurb;
 
+    // ---- 第三层:元信息行(星级胶囊 + 进度小旗 + 玩法/设备徽章) ----
     const metaRow = document.createElement("span");
     metaRow.className = "card-meta";
 
@@ -629,7 +676,18 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       metaRow.appendChild(badgeEl);
     }
 
-    card.append(emoji, titleEl, blurb, metaRow);
+    const mode = modeBadgeOf(meta);
+    if (mode) metaRow.appendChild(makeBadge("card-badge--mode", mode.emoji, mode.label));
+
+    // 设备徽章:两边都顺手(both / 不填)不出徽章,只标「只适合一边」的
+    if (meta.platform === "mobile") {
+      metaRow.appendChild(makeBadge("card-badge--platform", "📱", "手游"));
+    } else if (meta.platform === "desktop") {
+      metaRow.appendChild(makeBadge("card-badge--platform", "💻", "端游"));
+    }
+
+    body.append(titleEl, blurb, metaRow);
+    card.append(cover, body);
     card.addEventListener("click", () => openGame(meta.id));
     return withFavHeart(card, meta.id, meta.title);
   }

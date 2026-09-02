@@ -9,6 +9,7 @@
  * `scripts/smoke188.mjs` 靠它们在浏览器里替真人点画布，而 `scripts/` 不在本步的可改范围内。
  */
 import { PIGMENT_HEX, PIGMENT_SYMBOL, lightness } from "./mix";
+import { blobLayers } from "../../art/kit/paintBlob";
 import type { Picture } from "./levels";
 
 /** 颜料漫开的时长：不是瞬间变色，看得见颜色从笔尖化开 */
@@ -71,6 +72,9 @@ export const CLF_CSS = `
   word-break:break-word;}
 .clf-chip-done{opacity:.55;text-decoration:line-through;}
 .clf-chip-dot{width:15px;height:15px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 2px #0003;flex:0 0 auto;}
+/* 操作排（色票/撤销/调色锅/色盘）单独成列：矮横屏双栏时钉在画布右侧，
+   不要跟画布一起卷进 .clf-scrolly。竖屏仍是画布下面那一叠，gap 跟外壳对齐。 */
+.clf-ops{display:flex;flex-direction:column;align-items:center;gap:inherit;width:100%;min-width:0;}
 .clf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .clf-tool{border:none;border-radius:999px;min-height:${SWATCH_MIN_PX}px;padding:8px 16px;font-size:15px;
   font-weight:900;cursor:pointer;font-family:inherit;background:#ffffffe0;color:#5c4a30;
@@ -129,7 +133,7 @@ export const CLF_CSS = `
 .clf-pick.clf-pick-on{outline:3px solid #f08c00;}
 .clf-gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;max-width:400px;}
 .clf-work{border:none;border-radius:10px;padding:2px;background:#fff;cursor:pointer;font-family:inherit;
-  box-shadow:0 2px 6px rgba(150,130,80,.22);}
+  box-shadow:0 2px 6px rgba(150,130,80,.22);min-width:44px;min-height:44px;}
 .clf-work svg{width:100%;height:auto;display:block;}
 .clf-work.clf-work-on{outline:3px solid #f08c00;}
 .clf-empty{font-size:13px;font-weight:700;color:#96795a;text-align:center;}
@@ -190,6 +194,42 @@ export const CLF_CSS = `
 .clf-wrap.clf-tighter .clf-palette{padding:2px 2px 3px;gap:6px;}
 .clf-wrap.clf-tighter .clf-swatch-name{font-size:12px;line-height:1.1;}
 .clf-wrap.clf-tighter .clf-msg{min-height:16px;font-size:13px;line-height:1.3;}
+/* N-43(trio-r11):915×412 七关型色盘/调色锅整排掉进 .clf-scrolly 线下。
+   矮横屏改双栏——画布左、操作排右 sticky；画布放开 55vh 下限。竖屏与高屏零变化。 */
+@media (max-height:500px){
+  .clf-wrap{min-height:0;}
+  .clf-stage{min-height:0;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);
+    grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
+    align-items:stretch;gap:6px 10px;padding:6px 8px;}
+  .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
+  .clf-wrap>.clf-top{grid-area:top;}
+  .clf-wrap>.clf-preview{grid-area:preview;}
+  .clf-wrap>.clf-legend{grid-area:legend;}
+  .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
+    max-height:min(260px,calc(100dvh - 88px));align-self:stretch;}
+  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:6px;
+    width:100%;max-width:100%;}
+  .clf-wrap.clf-scrolly{overflow:hidden;}
+  .clf-wrap .clf-chips{max-height:44px;}
+  .clf-wrap .clf-mixer{max-width:100%;}
+  .clf-wrap .clf-palette{max-width:100%;justify-content:center;}
+}
+@media (max-height:840px) and (min-height:501px) and (min-width:640px){
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);
+    grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
+    align-items:stretch;gap:8px 12px;}
+  .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
+  .clf-wrap>.clf-top{grid-area:top;}
+  .clf-wrap>.clf-preview{grid-area:preview;}
+  .clf-wrap>.clf-legend{grid-area:legend;}
+  .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
+    max-height:min(360px,calc(100dvh - 120px));align-self:stretch;}
+  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:6px;
+    width:100%;max-width:100%;}
+}
 `;
 
 /**
@@ -514,6 +554,8 @@ export function makeSwatch(doc: Document, name: string, opts: SwatchOptions = {}
   const dot = doc.createElement("span");
   dot.className = "clf-swatch-dot";
   dot.style.background = PIGMENT_HEX[name] ?? "#ffffff";
+  // 颜料坨质感（1.3 视觉）：底色那行照旧是纯 hex，凸起感全靠叠上去的三层渐变
+  dot.style.backgroundImage = blobLayers(PIGMENT_HEX[name] ?? "#ffffff");
   if (opts.mark) {
     dot.textContent = opts.mark;
     dot.style.color = inkOn(name);
@@ -536,6 +578,8 @@ export function makePrimary(doc: Document, name: string): HTMLButtonElement {
   const dot = doc.createElement("span");
   dot.className = "clf-primary-dot";
   dot.style.background = PIGMENT_HEX[name] ?? "#ffffff";
+  // 原料按钮也是一坨颜料（1.3 视觉）：同样只叠不换底
+  dot.style.backgroundImage = blobLayers(PIGMENT_HEX[name] ?? "#ffffff");
   const label = doc.createElement("span");
   label.className = "clf-primary-name";
   label.textContent = name;

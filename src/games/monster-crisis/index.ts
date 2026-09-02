@@ -34,13 +34,10 @@ import {
   ARENA_W,
   type ArenaEvent,
   type ArenaInput,
-  type ArenaMonster,
   type ArenaResult,
   type ArenaState,
   BEHAVIOR_INFO,
   COOP_WAVES,
-  HERO_R,
-  HOME_R,
   SCENE_COUNT,
   VERSUS_WAVES,
   arenaEndlessWave,
@@ -65,14 +62,29 @@ import {
   arenaWinLine,
   draftTitle,
 } from "./copy";
-import { MONSTER_COLOR, MONSTER_INFO, campaignStars, formatClock } from "./logic";
+import { MONSTER_INFO, campaignStars, formatClock } from "./logic";
 import { CHAPTERS, LEVELS, TOTAL, buildCoopWave, endlessLevelIndex } from "./levels";
+import {
+  FAREWELL_TIME,
+  type Farewell,
+  HERO_SKINS,
+  drawBullet,
+  drawCrumb,
+  drawFarewell,
+  drawHero,
+  drawHome,
+  drawMonster,
+  drawParticle,
+  drawScenery,
+  drawSky,
+} from "./art";
 
 /* ------------------------------------------------------------------ */
 /* 配色与样式(类名一律 mcr- 前缀,样式只挂在自己这棵树上)                 */
 /* ------------------------------------------------------------------ */
 
-const P_COLOR = ["#e6558f", "#3f7fd6"];
+/** 双人识别色 = 皮肤表里的身体主色(1.2 的 P_COLOR 数值原样)。 */
+const P_COLOR = [HERO_SKINS[0].body, HERO_SKINS[1].body];
 const P_NAME = ["朵朵", "星星"];
 
 /** 八套场景皮:无尽每 10 波换一套,闯关按章节取。 */
@@ -173,307 +185,36 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+/* U-x(#107):501–840 中间档把操控排 sticky 钉底 */
+@media (max-height:840px) and (min-height:501px){
+  .mcr-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,253,250,0),#fffdfa 16px);}
+}
+/* N-124 模式:915×412 摇杆/甩弹并排钉在画布旁,不改 ARENA 尺寸与 arenaCanvasSize。
+   写在 N-106 之前:≤500 两档同时命中,让 1.3 已验收的 fixed 钉底方案最终生效;
+   501~820 的粗指针中间档只命中本档,拿到并排栅格。 */
+@media (max-height:820px) and (min-width:640px) and (pointer:coarse){
+  .mcr-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;justify-items:stretch;
+    max-height:calc(100dvh - 108px);overflow:hidden;box-sizing:border-box;}
+  .mcr-hud,.mcr-tip{grid-column:1/-1;}
+  .mcr-stage{grid-column:1;min-width:0;}
+  .mcr-pads{grid-column:2;grid-row:2;flex-direction:column;align-items:flex-start;width:auto;min-height:0;
+    position:sticky;top:0;z-index:5;}
+}
+/* N-106:双人合作双摇杆 370~462 / 甩弹 379~453 被排到 412 线下(裁切壳 overflow:hidden)。
+   矮横屏两组操控 fixed 钉视口左右下角:画布(154~360)两侧全是空地,盖不到战场;
+   摇杆判定走自身 rect,fixed 后照常。技能三卡 .mcr-cards 一条不动。 */
+@media (max-height:500px) and (min-width:640px){
+  .mcr-pads{position:fixed;left:12px;right:12px;bottom:8px;z-index:25;min-height:0;pointer-events:none;}
+  .mcr-pad{pointer-events:auto;}
+  .mcr-stick{width:84px;height:84px;}
+  .mcr-fire{width:64px;height:64px;font-size:24px;}
+  .mcr-tip{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .mcr-fire:active,.mcr-btn:active,.mcr-card:active,.mcr-back:active,.mcr-hudbtn:active{transform:none;}
 }
 `;
-
-/* ------------------------------------------------------------------ */
-/* 画笔:全部程序化绘制,一张外部图片都不用                                */
-/* ------------------------------------------------------------------ */
-
-function shade(hex: string, k: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.min(255, Math.round(((n >> 16) & 255) * k));
-  const g = Math.min(255, Math.round(((n >> 8) & 255) * k));
-  const b = Math.min(255, Math.round((n & 255) * k));
-  return `rgb(${r},${g},${b})`;
-}
-
-function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  c.beginPath();
-  c.roundRect(x, y, w, h, r);
-}
-
-/** 两只圆眼睛 + 一张笑嘴:全员卡通,凶不起来。 */
-function drawFace(c: CanvasRenderingContext2D, cx: number, cy: number, r: number, blink: boolean): void {
-  const ex = r * 0.34;
-  c.fillStyle = "#fff";
-  for (const s of [-1, 1]) {
-    c.beginPath();
-    c.ellipse(cx + s * ex, cy - r * 0.1, r * 0.24, blink ? r * 0.05 : r * 0.26, 0, 0, Math.PI * 2);
-    c.fill();
-  }
-  if (!blink) {
-    c.fillStyle = "#3d3350";
-    for (const s of [-1, 1]) {
-      c.beginPath();
-      c.arc(cx + s * ex, cy - r * 0.06, r * 0.12, 0, Math.PI * 2);
-      c.fill();
-    }
-  }
-  c.strokeStyle = "#3d3350";
-  c.lineWidth = Math.max(1.2, r * 0.09);
-  c.lineCap = "round";
-  c.beginPath();
-  c.arc(cx, cy + r * 0.28, r * 0.26, 0.15 * Math.PI, 0.85 * Math.PI);
-  c.stroke();
-}
-
-/** 地面阴影:2D 俯视里唯一的「立体」,近的画在上面靠 y 轴排序。 */
-function drawShadow(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  c.fillStyle = "rgba(110,95,150,.13)";
-  c.beginPath();
-  c.ellipse(x, y + r * 0.72, r * 0.9, r * 0.42, 0, 0, Math.PI * 2);
-  c.fill();
-}
-
-/**
- * 五种行为五种外形,不是只换个颜色:
- * 直冲 = 圆脑袋加一个冲刺尖角、绕行 = 转着的风车星、吐泡泡 = 圆气球顶着长喇叭、
- * 召唤 = 高个蛋壳背着小豆子、精英 = 六边形正面顶着一块盾。
- */
-function drawMonster(c: CanvasRenderingContext2D, m: ArenaMonster, t: number, motion: boolean): void {
-  const fill = MONSTER_COLOR[m.kind];
-  const r = m.r;
-  const bob = motion ? Math.sin(t * 4 + m.phase) * (m.behavior === "spit" ? 2.6 : 1.4) : 0;
-  const x = m.x;
-  const y = m.y + bob;
-  const ang = Math.atan2(m.fy, m.fx);
-
-  drawShadow(c, m.x, m.y, r);
-  c.save();
-  if (motion && m.hitFlash > 0) c.globalAlpha = 0.62 + 0.38 * Math.cos(m.hitFlash * 44);
-  c.lineWidth = 2.4;
-  c.lineJoin = "round";
-  c.strokeStyle = shade(fill, 0.6);
-  c.fillStyle = fill;
-
-  if (m.behavior === "rush") {
-    c.beginPath();
-    c.arc(x, y, r, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-    // 冲刺尖角:一眼看出它奔着哪儿去
-    c.beginPath();
-    c.moveTo(x + Math.cos(ang) * (r + 8), y + Math.sin(ang) * (r + 8));
-    c.lineTo(x + Math.cos(ang + 2.4) * r, y + Math.sin(ang + 2.4) * r);
-    c.lineTo(x + Math.cos(ang - 2.4) * r, y + Math.sin(ang - 2.4) * r);
-    c.closePath();
-    c.fill();
-    c.stroke();
-  } else if (m.behavior === "weave") {
-    const spin = motion ? t * 3 + m.phase : m.phase;
-    c.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const a = spin + (i / 10) * Math.PI * 2;
-      const rad = i % 2 === 0 ? r * 1.15 : r * 0.55;
-      const px2 = x + Math.cos(a) * rad;
-      const py2 = y + Math.sin(a) * rad;
-      if (i === 0) c.moveTo(px2, py2);
-      else c.lineTo(px2, py2);
-    }
-    c.closePath();
-    c.fill();
-    c.stroke();
-  } else if (m.behavior === "spit") {
-    // 飘着的气球:身子和影子离得远一点,看着就在天上
-    c.beginPath();
-    c.ellipse(x, y - r * 0.5, r * 0.92, r * 1.02, 0, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-    c.strokeStyle = shade(fill, 0.5);
-    c.lineWidth = 3;
-    c.beginPath();
-    c.moveTo(x, y - r * 0.5);
-    c.lineTo(x + Math.cos(ang) * (r + 9), y - r * 0.5 + Math.sin(ang) * (r + 9));
-    c.stroke();
-    c.fillStyle = shade(fill, 0.85);
-    c.beginPath();
-    c.arc(x + Math.cos(ang) * (r + 10), y - r * 0.5 + Math.sin(ang) * (r + 10), r * 0.34, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-  } else if (m.behavior === "summon") {
-    roundRect(c, x - r * 0.72, y - r * 1.15, r * 1.44, r * 2.1, r * 0.7);
-    c.fill();
-    c.stroke();
-    // 背上那几颗小豆子就是待会儿要蹦出来的小跟班
-    c.fillStyle = shade(fill, 0.82);
-    for (let i = 0; i < Math.min(3, m.summons); i++) {
-      c.beginPath();
-      c.arc(x - r * 0.5 + i * r * 0.5, y + r * 0.8, r * 0.24, 0, Math.PI * 2);
-      c.fill();
-    }
-    c.strokeStyle = shade(fill, 0.5);
-    c.lineWidth = 2;
-    c.beginPath();
-    c.moveTo(x, y - r * 1.15);
-    c.lineTo(x, y - r * 1.65);
-    c.stroke();
-    c.fillStyle = "#ffd7ea";
-    c.beginPath();
-    c.arc(x, y - r * 1.75, r * 0.2, 0, Math.PI * 2);
-    c.fill();
-  } else {
-    c.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = ang + (i / 6) * Math.PI * 2;
-      const px2 = x + Math.cos(a) * r * 1.05;
-      const py2 = y + Math.sin(a) * r * 1.05;
-      if (i === 0) c.moveTo(px2, py2);
-      else c.lineTo(px2, py2);
-    }
-    c.closePath();
-    c.fill();
-    c.stroke();
-  }
-
-  // 精英怪正面那块盾:挡一下掉一格,掉光就没了(绕到侧后方就打得着)
-  if (m.shield > 0) {
-    const left = m.shield / Math.max(1, m.shieldMax);
-    c.strokeStyle = m.blockFlash > 0 && motion ? "#ffffff" : "#9fd0ff";
-    c.lineWidth = 5;
-    c.lineCap = "round";
-    c.beginPath();
-    c.arc(x, y, r + 6, ang - 1.15 * left - 0.1, ang + 1.15 * left + 0.1);
-    c.stroke();
-  }
-
-  const blink = motion && Math.sin(t * 1.7 + m.phase * 2) > 0.96;
-  drawFace(c, x, m.behavior === "spit" ? y - r * 0.55 : y, r * 0.8, blink);
-
-  if (m.boss) {
-    c.fillStyle = "#ffcf4d";
-    c.strokeStyle = "#d99f18";
-    c.lineWidth = 2;
-    c.beginPath();
-    c.moveTo(x - r * 0.55, y - r * 1.0);
-    c.lineTo(x - r * 0.3, y - r * 1.45);
-    c.lineTo(x, y - r * 1.05);
-    c.lineTo(x + r * 0.3, y - r * 1.45);
-    c.lineTo(x + r * 0.55, y - r * 1.0);
-    c.closePath();
-    c.fill();
-    c.stroke();
-  }
-  c.restore();
-
-  // 上色进度条:被涂过才显示,没挨过颜料的头顶干干净净
-  if (m.hp < m.maxHp) {
-    const w = r * 2;
-    const by = y - r * (m.boss ? 1.75 : 1.5);
-    c.fillStyle = "rgba(255,255,255,.85)";
-    roundRect(c, x - w / 2, by, w, 4.5, 2.2);
-    c.fill();
-    c.fillStyle = "#7fd6a3";
-    roundRect(c, x - w / 2, by, (w * Math.max(0, m.hp)) / m.maxHp, 4.5, 2.2);
-    c.fill();
-  }
-}
-
-function drawHero(
-  c: CanvasRenderingContext2D,
-  h: { x: number; y: number; fx: number; fy: number; spin: number; invuln: number; windup: number; shields: number; idx: number },
-  t: number,
-  motion: boolean
-): void {
-  const col = P_COLOR[h.idx] ?? P_COLOR[0];
-  drawShadow(c, h.x, h.y, HERO_R);
-  c.save();
-  if (h.invuln > 0 && motion) c.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(t * 16));
-  // 转圈:整个人打着转,晕头转向但一点都不疼
-  const spinAngle = h.spin > 0 ? t * 12 : 0;
-  c.translate(h.x, h.y);
-  c.rotate(spinAngle);
-  c.lineWidth = 2.6;
-  c.strokeStyle = shade(col, 0.68);
-  c.fillStyle = col;
-  c.beginPath();
-  c.arc(0, 0, HERO_R, 0, Math.PI * 2);
-  c.fill();
-  c.stroke();
-  // 举着的刷子:前摇时往回收,甩出去的一瞬间伸到最长
-  const ang = Math.atan2(h.fy, h.fx);
-  const reach = HERO_R + 5 + (h.windup > 0 ? -3 : 8);
-  c.strokeStyle = "#8a6a4a";
-  c.lineWidth = 3.4;
-  c.lineCap = "round";
-  c.beginPath();
-  c.moveTo(Math.cos(ang) * 4, Math.sin(ang) * 4);
-  c.lineTo(Math.cos(ang) * reach, Math.sin(ang) * reach);
-  c.stroke();
-  c.fillStyle = "#fff";
-  c.beginPath();
-  c.arc(Math.cos(ang) * (reach + 3), Math.sin(ang) * (reach + 3), 3.6, 0, Math.PI * 2);
-  c.fill();
-  drawFace(c, 0, 0, HERO_R * 0.85, false);
-  c.restore();
-
-  // 护盾泡:身上挂着几个就画几个
-  for (let i = 0; i < h.shields; i++) {
-    const a = t * 1.6 + (i / Math.max(1, h.shields)) * Math.PI * 2;
-    c.strokeStyle = "rgba(150,205,255,.85)";
-    c.lineWidth = 2;
-    c.beginPath();
-    c.arc(h.x + Math.cos(a) * (HERO_R + 7), h.y + Math.sin(a) * (HERO_R + 7), 5, 0, Math.PI * 2);
-    c.stroke();
-  }
-  if (h.spin > 0) {
-    c.fillStyle = "#ffd66b";
-    for (let i = 0; i < 3; i++) {
-      const a = t * 9 + (i / 3) * Math.PI * 2;
-      c.beginPath();
-      c.arc(h.x + Math.cos(a) * (HERO_R + 9), h.y - HERO_R - 6 + Math.sin(a) * 4, 2.6, 0, Math.PI * 2);
-      c.fill();
-    }
-  }
-}
-
-function drawHome(
-  c: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  jars: number,
-  maxJars: number,
-  color: string
-): void {
-  // 判定圈:小怪物碰到这一圈就抱走一罐,画清楚孩子才知道底线在哪
-  c.strokeStyle = "rgba(150,120,190,.35)";
-  c.setLineDash([7, 6]);
-  c.lineWidth = 2;
-  c.beginPath();
-  c.arc(x, y, HOME_R, 0, Math.PI * 2);
-  c.stroke();
-  c.setLineDash([]);
-
-  c.fillStyle = "#fff";
-  c.strokeStyle = color;
-  c.lineWidth = 3;
-  roundRect(c, x - 16, y - 12, 32, 24, 7);
-  c.fill();
-  c.stroke();
-  c.beginPath();
-  c.moveTo(x - 20, y - 12);
-  c.lineTo(x, y - 26);
-  c.lineTo(x + 20, y - 12);
-  c.closePath();
-  c.fillStyle = color;
-  c.fill();
-
-  // 家门口的元气罐:被抱走一罐就灭一个
-  for (let i = 0; i < maxJars; i++) {
-    const a = (i / maxJars) * Math.PI * 2 - Math.PI / 2;
-    const jx = x + Math.cos(a) * (HOME_R - 5);
-    const jy = y + Math.sin(a) * (HOME_R - 5);
-    const on = i < jars;
-    c.fillStyle = on ? "#ff9ec4" : "#e7e1ee";
-    c.strokeStyle = on ? "#d9628a" : "#cfc7dd";
-    c.lineWidth = 2;
-    roundRect(c, jx - 4, jy - 5, 8, 10, 2.5);
-    c.fill();
-    c.stroke();
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /* 画布尺寸                                                            */
@@ -851,6 +592,10 @@ function createArenaView(host: HTMLElement, opts: ViewOptions): ViewHandle {
   const soundAt = new Map<string, number>();
   let sayLeft = 0;
   let shake = 0;
+  /** 涂满离场的开心演出:pop 事件进来排队,画完 FAREWELL_TIME 秒自动出列 */
+  const farewells: Farewell[] = [];
+  /** 每个英雄上一次出手的时刻:挥击弧痕与刷毛甩开按这个算 */
+  const swingAt = [-9, -9];
 
   function playThrottled(name: SoundName, key: string, gap: number): void {
     const now = state.elapsed;
@@ -865,6 +610,12 @@ function createArenaView(host: HTMLElement, opts: ViewOptions): ViewHandle {
       switch (e.type) {
         case "pop":
           playThrottled("pop", "pop", 0.12);
+          // 上色完成!小怪物开开心心变彩色离场
+          farewells.push({ x: e.x ?? 0, y: e.y ?? 0, start: state.elapsed });
+          if (farewells.length > 8) farewells.shift();
+          break;
+        case "fire":
+          swingAt[e.hero ?? 0] = state.elapsed;
           break;
         case "block":
           playThrottled("tap", "block", 0.35);
@@ -913,98 +664,38 @@ function createArenaView(host: HTMLElement, opts: ViewOptions): ViewHandle {
     const ground = SCENE_GROUND[scene] ?? SCENE_GROUND[0];
 
     c2d.clearRect(0, 0, ARENA_W, ARENA_H);
-    c2d.fillStyle = sky;
-    c2d.fillRect(0, 0, ARENA_W, ARENA_H);
+    drawSky(c2d, ARENA_W, ARENA_H, sky, t, !reduced);
 
     c2d.save();
     if (shake > 0 && !reduced) c2d.translate(Math.sin(t * 46) * shake * 5, Math.cos(t * 39) * shake * 3);
 
-    // 地面:一圈一圈的草地纹路,看得出家在中间、怪从外面往里挤
+    // 庭院草纹 + 场景装饰(对战只画中线),都在 art.ts 查表
     const yard = versus ? 108 : 152;
-    for (const home of state.homes) {
-      c2d.fillStyle = ground;
-      c2d.beginPath();
-      c2d.arc(home.x, home.y, yard, 0, Math.PI * 2);
-      c2d.fill();
-      c2d.strokeStyle = shade(ground, 0.86);
-      c2d.lineWidth = 3;
-      c2d.beginPath();
-      c2d.arc(home.x, home.y, yard, 0, Math.PI * 2);
-      c2d.stroke();
-      c2d.strokeStyle = "rgba(255,255,255,.65)";
-      c2d.lineWidth = 1.6;
-      for (let r = 44; r < yard; r += 36) {
-        c2d.beginPath();
-        c2d.arc(home.x, home.y, r, 0, Math.PI * 2);
-        c2d.stroke();
-      }
-    }
-    if (versus) {
-      c2d.strokeStyle = "rgba(120,100,170,.4)";
-      c2d.setLineDash([9, 7]);
-      c2d.lineWidth = 2.5;
-      c2d.beginPath();
-      c2d.moveTo(ARENA_W / 2, 0);
-      c2d.lineTo(ARENA_W / 2, ARENA_H);
-      c2d.stroke();
-      c2d.setLineDash([]);
-    }
+    drawScenery(c2d, ARENA_W, ARENA_H, { ground, scene, versus, homes: state.homes, yard }, t, !reduced);
 
     for (let s = 0; s < state.homes.length; s++) {
-      drawHome(c2d, state.homes[s].x, state.homes[s].y, state.jars[s], state.maxJars, P_COLOR[s] ?? P_COLOR[0]);
+      drawHome(c2d, state.homes[s].x, state.homes[s].y, state.jars[s], state.maxJars, P_COLOR[s] ?? P_COLOR[0], t, !reduced);
     }
 
     // 元气糖
-    for (const c of state.crumbs) {
-      c2d.fillStyle = "#ffd86b";
-      c2d.strokeStyle = "#e0a92c";
-      c2d.lineWidth = 1.4;
-      c2d.beginPath();
-      c2d.arc(c.x, c.y, 4.2, 0, Math.PI * 2);
-      c2d.fill();
-      c2d.stroke();
-    }
+    for (const c of state.crumbs) drawCrumb(c2d, c.x, c.y, t, !reduced);
 
     // 近的画在上面:按 y 排一下序,俯视图也有一点点前后关系
     const actors: Array<{ y: number; draw: () => void }> = [];
     for (const m of state.monsters) actors.push({ y: m.y, draw: () => drawMonster(c2d, m, t, !reduced) });
-    for (const h of state.heroes) actors.push({ y: h.y, draw: () => drawHero(c2d, h, t, !reduced) });
+    for (const h of state.heroes) actors.push({ y: h.y, draw: () => drawHero(c2d, h, t, !reduced, t - swingAt[h.idx]) });
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
 
-    for (const b of state.bullets) {
-      c2d.fillStyle = b.foe ? "#a9d6ff" : "#ff7fb4";
-      c2d.strokeStyle = b.foe ? "#6ba7dd" : "#d9628a";
-      c2d.lineWidth = 1.4;
-      c2d.beginPath();
-      c2d.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      c2d.fill();
-      c2d.stroke();
-    }
+    for (const b of state.bullets) drawBullet(c2d, b, t, !reduced);
 
-    for (const p of state.particles) {
-      const k = 1 - p.life / p.maxLife;
-      c2d.save();
-      c2d.globalAlpha = Math.max(0, 1 - k);
-      if (p.kind === "cloud") {
-        c2d.font = "18px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
-        c2d.textAlign = "center";
-        c2d.textBaseline = "middle";
-        c2d.fillText(p.emoji || "☁️", p.x, p.y);
-      } else if (p.kind === "ring") {
-        c2d.strokeStyle = "#bcd6ff";
-        c2d.lineWidth = 3 * (1 - k) + 1;
-        c2d.beginPath();
-        c2d.arc(p.x, p.y, 8 + k * 20, 0, Math.PI * 2);
-        c2d.stroke();
-      } else {
-        c2d.fillStyle = "#ffd6ea";
-        c2d.beginPath();
-        c2d.arc(p.x, p.y, 3.4 * (1 - k) + 1, 0, Math.PI * 2);
-        c2d.fill();
-      }
-      c2d.restore();
+    for (const p of state.particles) drawParticle(c2d, p);
+
+    // 涂满离场:开心变彩色跳一下(演完自动出列)
+    for (let i = farewells.length - 1; i >= 0; i--) {
+      if (t - farewells[i].start > FAREWELL_TIME) farewells.splice(i, 1);
     }
+    for (const f of farewells) drawFarewell(c2d, f, t, !reduced);
 
     c2d.restore();
   }

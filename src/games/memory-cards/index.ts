@@ -3,8 +3,21 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import { CHAPTERS, LEVELS, type MemoryLevel } from "./levels";
-import { THEME_PACKS, drawIcon, packForTheme, type Icon, type IconCtx } from "./art";
+import { BONUS_ICONS, THEME_PACKS, packForTheme, type Icon, type IconCtx } from "./art";
+import {
+  MC_ANIM,
+  MC_COLORS,
+  MC_WAVE_MAX_TOTAL_MS,
+  backBaseForTheme,
+  cardBackSpec,
+  drawIconDeluxe,
+  paintCardBack,
+  paintMatchBurst,
+  waveDelayMs,
+  type McCtx,
+} from "./visual";
 import {
   BACK_PATTERNS,
   ENDLESS_MAX_MISS,
@@ -15,6 +28,7 @@ import {
   backPattern,
   boardGap,
   buildDeck,
+  cardWidthAt,
   coverDelayMs,
   deckSeed,
   endlessLevel,
@@ -44,9 +58,12 @@ import {
 } from "./logic";
 
 const CSS = `
-.mmc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E9F4FF, #FDF0FF); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.mmc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E9F4FF, #FDF0FF); border-radius: 16px; padding: 12px; user-select: none; position: relative;
+  --mc-flip-ms: ${MC_ANIM.flipMs}ms; --mc-fade-ms: ${MC_ANIM.fadeMs}ms; --mc-lift-px: ${MC_ANIM.liftPx}px;
+  --mc-bump-ms: ${MC_ANIM.bumpMs}ms; --mc-sparkle-ms: ${MC_ANIM.sparkleMs}ms; --mc-shake-ms: ${MC_ANIM.shakeMs}ms; --mc-breath-ms: ${MC_ANIM.breathMs}ms;
+  --mc-gold: ${MC_COLORS.mcBackGold}; --mc-face: ${MC_COLORS.mcFace}; --mc-glow: ${MC_COLORS.mcMatchGlow}; --mc-assist: ${MC_COLORS.mcAssist}; --mc-shadow: ${MC_COLORS.mcShadow}; }
 .mmc-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.mmc-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 700; color: #5B8FC9; box-shadow: 0 2px 6px rgba(120,160,220,.25); font-size: 14px; white-space: nowrap; }
+.mmc-badge { background: linear-gradient(180deg, #FFFFFF, #FDF8EE); border: 1px solid rgba(240,194,90,.4); border-radius: 14px; padding: 5px 12px; font-weight: 700; color: #5B8FC9; box-shadow: 0 2px 6px var(--mc-shadow); font-size: 14px; white-space: nowrap; }
 .mmc-badge.mmc-warn { color: #E8590C; }
 .mmc-badge.mmc-spin { color: #C065A8; }
 .mmc-badge.mmc-hot { background: #FFE9D6; color: #D9480F; }
@@ -57,40 +74,46 @@ const CSS = `
 .mmc-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #8FC5FF, #C9A7F5); border-radius: 8px; transition: width .3s; }
 .mmc-board { display: grid; gap: 8px; }
 .mmc-card { position: relative; aspect-ratio: 3 / 4; min-height: 72px; border: none; background: none; padding: 0; cursor: pointer; perspective: 600px; }
-.mmc-inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 200ms ease; }
-.mmc-card.mmc-up .mmc-inner { transform: rotateY(180deg); }
-.mmc-side { position: absolute; inset: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; box-shadow: 0 3px 6px rgba(100,140,200,.18); transition: opacity 0s linear 100ms; }
-.mmc-face { opacity: 0; background: #fff; transform: rotateY(180deg); }
-.mmc-card.mmc-up .mmc-face { opacity: 1; }
-.mmc-card.mmc-up .mmc-back { opacity: 0; }
-.mmc-b0 { background: radial-gradient(circle at 50% 40%, #ffffff55 12%, transparent 13%), var(--mmc-back); }
-.mmc-b1 { background: repeating-linear-gradient(45deg, #ffffff33 0 6px, transparent 6px 12px), var(--mmc-back); }
-.mmc-b2 { background: radial-gradient(circle at 20% 20%, #ffffff55 8%, transparent 9%), radial-gradient(circle at 80% 80%, #ffffff55 8%, transparent 9%), var(--mmc-back); }
-.mmc-b3 { background: repeating-linear-gradient(-45deg, #ffffff2e 0 5px, transparent 5px 14px), var(--mmc-back); }
-.mmc-mark { font-size: clamp(15px, 5vw, 22px); font-weight: 900; color: #ffffffcc; text-shadow: 0 1px 2px rgba(120,90,150,.25); }
+.mmc-inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform var(--mc-flip-ms) ease-in-out; }
+.mmc-card.mmc-up .mmc-inner { transform: translateY(calc(-1 * var(--mc-lift-px))) rotateY(180deg); }
+.mmc-side { position: absolute; inset: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; box-shadow: 0 3px 6px var(--mc-shadow); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.mmc-face { background: var(--mc-face); transform: rotateY(180deg); }
+.mmc-back { background: var(--mc-back-base, #4A3E78); box-shadow: 0 3px 6px var(--mc-shadow), inset 0 0 0 1.5px var(--mc-gold); }
+.mmc-backpic { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.mmc-face::after { content: ""; position: absolute; inset: 0; border-radius: 14px; box-shadow: inset 0 0 12px var(--mc-glow), inset 0 0 0 2px var(--mc-glow); opacity: 0; pointer-events: none; }
+.mmc-peek .mmc-card .mmc-face::after { animation: mmcBreath var(--mc-breath-ms) ease-in-out infinite alternate; }
 .mmc-pic { width: 78%; height: 62%; display: block; }
 .mmc-name { font-size: clamp(11px, 3.2vw, 14px); font-weight: 800; color: #5B7FB5; line-height: 1; }
 .mmc-text { font-size: clamp(13px, 4.2vw, 20px); font-weight: 900; color: #4B7BB5; letter-spacing: .5px; padding: 0 2px; text-align: center; }
 .mmc-card.mmc-gone .mmc-inner { opacity: 0; transform: scale(.86); transition: opacity .32s, transform .32s; }
 .mmc-card.mmc-gone { pointer-events: none; }
-.mmc-card.mmc-hit .mmc-inner { animation: mmcHit .42s ease; }
-.mmc-card.mmc-shake .mmc-inner { animation: mmcShake .36s ease; }
-.mmc-card.mmc-assist .mmc-face { outline: 3px solid #FFB84D; outline-offset: -3px; }
+.mmc-card.mmc-gone::after { content: "★"; position: absolute; inset: 8% 10%; border-radius: 12px; background: var(--mc-glow); color: var(--mc-face); font-size: 16px; font-weight: 900; display: flex; align-items: center; justify-content: center; animation: mmcSeal .32s ease-out both; }
+.mmc-card.mmc-bump .mmc-inner { animation: mmcBump var(--mc-bump-ms) cubic-bezier(.34,1.56,.64,1); }
+.mmc-card.mmc-shake .mmc-inner { animation: mmcShake var(--mc-shake-ms) ease-in-out; }
+.mmc-card.mmc-assist .mmc-face { outline: 2px solid rgba(159,217,139,.85); outline-offset: -2px; }
+.mmc-card.mmc-assist .mmc-face::after { opacity: 1; box-shadow: inset 0 0 12px var(--mc-assist), inset 0 0 0 3px var(--mc-assist); }
 .mmc-card.mmc-alert .mmc-back { outline: 3px dashed #E8590C; outline-offset: -3px; }
 .mmc-card.mmc-swap .mmc-inner { animation: mmcSwap .5s ease; }
 .mmc-card.mmc-turn .mmc-inner { animation: mmcTurn .45s ease; }
 .mmc-card.mmc-ghost .mmc-inner { animation: mmcGhost .5s ease; }
 .mmc-card:disabled { cursor: default; }
-@keyframes mmcHit { 0%,100% { transform: rotateY(180deg) scale(1); } 45% { transform: rotateY(180deg) scale(1.14); } }
-@keyframes mmcShake { 0%,100% { transform: rotateY(180deg) rotate(0); } 30% { transform: rotateY(180deg) rotate(-7deg); } 70% { transform: rotateY(180deg) rotate(7deg); } }
+.mmc-burst { position: absolute; pointer-events: none; z-index: 3; animation: mmcBurst var(--mc-sparkle-ms) ease-out forwards; }
+.mmc-bonus { display: block; margin: 0 auto 10px; width: min(224px, 80%); }
+@keyframes mmcBreath { from { opacity: .25; } to { opacity: 1; } }
+@keyframes mmcSeal { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes mmcBump { 0%,100% { transform: translate(0, 0) rotateY(180deg); } 45% { transform: translate(var(--mc-bx, 0px), var(--mc-by, 0px)) rotateY(180deg) scale(1.05); } }
+@keyframes mmcShake { 0%,100% { transform: rotateY(180deg) rotate(0); } 30% { transform: rotateY(180deg) rotate(-3deg); } 70% { transform: rotateY(180deg) rotate(3deg); } }
+@keyframes mmcBurst { 0% { transform: scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(1.15) translateY(-8px); opacity: 0; } }
 @keyframes mmcSwap { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-12deg) scale(1.08); } 70% { transform: rotate(12deg) scale(1.08); } }
 @keyframes mmcTurn { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(.84); } 100% { transform: rotate(360deg) scale(1); } }
 @keyframes mmcGhost { 0%,100% { opacity: 1; } 50% { opacity: .35; transform: scale(.9); } }
 .mmc-msg { text-align: center; min-height: 22px; color: #6A9BD8; font-weight: 700; margin-top: 10px; font-size: 15px; line-height: 1.5; }
 .mmc-modes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
-.mmc-open { border: none; border-radius: 999px; padding: 8px 16px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FA8DC, #4E86BC); box-shadow: 0 4px 0 #3C6C9C; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.mmc-modes[hidden] { display: none; }
+.mmc-open { border: none; border-radius: 999px; padding: 8px 16px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FA8DC, #4E86BC); box-shadow: 0 4px 0 #3C6C9C; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 .mmc-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3C6C9C; }
-.mmc-toggle { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7A5AA0; box-shadow: 0 3px 0 rgba(120,90,160,.25); white-space: nowrap; }
+.mmc-toggle { border: none; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7A5AA0; box-shadow: 0 3px 0 rgba(120,90,160,.25); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; box-sizing: border-box; }
 .mmc-toggle:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,90,160,.25); }
 .mmc-tip { text-align: center; font-size: 13px; font-weight: 700; color: #77619B; margin-bottom: 8px; line-height: 1.5; }
 .mmc-mhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
@@ -101,32 +124,95 @@ const CSS = `
   .mmc-wrap { padding: 8px; }
   .mmc-badge { font-size: 14px; padding: 4px 9px; }
 }
+/* N-69:915×412 上 4×4 竖卡(3/4)把后三行顶到 490+。矮横屏钳卡高,第一屏至少两行可点。配对规则不动 */
+@media (min-width: 640px) and (max-height: 500px) {
+  .mmc-wrap { padding: 6px 8px; }
+  .mmc-bar { margin-bottom: 6px; }
+  .mmc-board { gap: 4px; max-height: min(280px, 68dvh); overflow-y: auto; }
+  .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(48px, 16dvh, 72px); }
+  .mmc-msg { min-height: 0; margin-top: 4px; }
+}
+@media (min-width: 640px) and (max-height: 840px) and (min-height: 501px) {
+  .mmc-board { gap: 6px; max-height: min(420px, 58dvh); }
+  .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(52px, 14dvh, 88px); }
+}
 @media (prefers-reduced-motion: reduce) {
   .mmc-inner { transition: none; }
-  .mmc-side { transition: opacity 140ms linear; }
-  .mmc-face { transform: none; }
-  .mmc-card.mmc-hit .mmc-inner, .mmc-card.mmc-shake .mmc-inner,
+  .mmc-card.mmc-up .mmc-inner { transform: none; }
+  .mmc-side { transition: opacity var(--mc-fade-ms) linear; backface-visibility: visible; -webkit-backface-visibility: visible; }
+  .mmc-face { transform: none; opacity: 0; }
+  .mmc-card.mmc-up .mmc-face { opacity: 1; }
+  .mmc-card.mmc-up .mmc-back { opacity: 0; }
+  .mmc-peek .mmc-card .mmc-face::after { animation: none; opacity: .55; }
+  .mmc-card.mmc-gone::after { animation: none; }
+  .mmc-burst { display: none; }
+  .mmc-card.mmc-bump .mmc-inner, .mmc-card.mmc-shake .mmc-inner,
   .mmc-card.mmc-swap .mmc-inner, .mmc-card.mmc-turn .mmc-inner,
   .mmc-card.mmc-ghost .mmc-inner { animation: none; }
 }
 `;
 
-/** 画一个原创图案到卡面上（拿不到画布上下文就只留名字，照样玩得下去） */
+/** 拿一块画布的 2D 上下文（jsdom / 老浏览器拿不到就返回 null，照样玩得下去） */
+function ctx2d(cv: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  try {
+    return cv.getContext?.("2d") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 画一个原创图案到卡面上：1.3 起统一走后处理层（软影 + 描边 + 高光 + 64% 归一化） */
 function paintIcon(cv: HTMLCanvasElement, icon: Icon): void {
   const size = 72;
   const dpr = Math.min(2, Math.max(1, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1));
   cv.width = Math.round(size * dpr);
   cv.height = Math.round(size * dpr);
-  let ctx: CanvasRenderingContext2D | null = null;
-  try {
-    ctx = cv.getContext?.("2d") ?? null;
-  } catch {
-    ctx = null;
-  }
+  const ctx = ctx2d(cv);
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
-  drawIcon(ctx as unknown as IconCtx, icon, size);
+  drawIconDeluxe(ctx as unknown as IconCtx, icon, size);
+}
+
+/** 卡背统一纹样：深色底 + 星月环纹 + 双星徽章 + 圆花角饰（<48px 小卡省略角饰） */
+function paintBack(cv: HTMLCanvasElement, theme: number, variant: number, cardWidthPx: number): void {
+  const w = 90;
+  const h = 120;
+  const dpr = Math.min(2, Math.max(1, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1));
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const ctx = ctx2d(cv);
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paintCardBack(ctx as unknown as McCtx, w, h, cardBackSpec(theme, cardWidthPx, variant));
+}
+
+/** 结算界面的花絮小花车：四枚 1.3 追加图标（纯装饰，不进牌面） */
+function paintBonusStrip(cv: HTMLCanvasElement): void {
+  const cell = 56;
+  const n = BONUS_ICONS.length;
+  const dpr = Math.min(2, Math.max(1, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1));
+  cv.width = Math.round(cell * n * dpr);
+  cv.height = Math.round(cell * dpr);
+  const ctx = ctx2d(cv);
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (let i = 0; i < n; i++) {
+    ctx.save();
+    ctx.translate(i * cell, 0);
+    drawIconDeluxe(ctx as unknown as IconCtx, BONUS_ICONS[i], cell);
+    ctx.restore();
+  }
+}
+
+/** 用户开了「减弱动态效果」吗：3D 翻转 / 波浪时差 / 爱心星屑全停，反馈由静态收纳态兜底 */
+function prefersReduced(): boolean {
+  try {
+    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    return mm?.("(prefers-reduced-motion: reduce)")?.matches === true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +321,36 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   boardEl.style.gridTemplateColumns = `repeat(${cfg.cols}, minmax(0, 1fr))`;
   boardEl.style.gap = `${boardGap(cfg.cols, rows)}px`;
 
+  /**
+   * r18 B:中等高度(平板横屏 768/820)卡片跟着 660px 容器等比放大到 276px 高,
+   * 后排整行沉出视口。按「舞台余高 ÷ 行数」反推卡宽给棋盘限宽,整副牌进一屏。
+   * ≤500px 矮横屏另有 N-69 的钳高媒体,这里不掺和;量不到舞台(单测桩)不动。
+   */
+  function capBoardWidth(): void {
+    const vh = window.innerHeight || 0;
+    if (!(vh > 500)) {
+      boardEl.style.maxWidth = "";
+      boardEl.style.margin = "";
+      return;
+    }
+    const room = stagePlayRoom(host, { w: 0, h: 0 }).h;
+    if (room <= 1) return;
+    const gap = boardGap(cfg.cols, rows);
+    const chrome = 150; // 徽章行 + 进度条 + 底部提示行的呼吸量
+    const cardH = Math.max(72, (room - chrome - gap * (rows - 1)) / rows);
+    const maxW = Math.round(cfg.cols * (cardH * 3) / 4 + gap * (cfg.cols - 1));
+    if (maxW > 0 && maxW < (boardEl.clientWidth || Number.MAX_SAFE_INTEGER)) {
+      boardEl.style.maxWidth = `${maxW}px`;
+      boardEl.style.margin = "0 auto";
+    } else {
+      boardEl.style.maxWidth = "";
+      boardEl.style.margin = "";
+    }
+  }
+  capBoardWidth();
+  const onBoardResize = (): void => capBoardWidth();
+  window.addEventListener("resize", onBoardResize);
+
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
       timeouts.delete(t);
@@ -247,10 +363,14 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
 
   interface SlotEls {
     btn: HTMLButtonElement;
+    inner: HTMLElement;
     pic: HTMLCanvasElement;
     name: HTMLElement;
     text: HTMLElement;
   }
+
+  // 估一张卡的实宽：<48px 的小卡卡背省略四角圆花，只留环纹 + 中心徽章
+  const estCardW = cardWidthAt(boardEl.clientWidth || wrap.clientWidth || 360, cfg.cols, rows);
 
   const slots: SlotEls[] = [];
   for (let s = 0; s < totalCards; s++) {
@@ -261,8 +381,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     inner.className = "mmc-inner";
     const back = document.createElement("div");
     back.className = `mmc-side mmc-back mmc-b${backPattern(s, cfg.theme)}`;
-    back.style.setProperty("--mmc-back", pack.back);
-    back.innerHTML = `<span class="mmc-mark">★</span>`;
+    back.style.setProperty("--mc-back-base", backBaseForTheme(cfg.theme));
+    const backPic = document.createElement("canvas");
+    backPic.className = "mmc-backpic";
+    paintBack(backPic, cfg.theme, backPattern(s, cfg.theme), estCardW);
+    back.appendChild(backPic);
     const face = document.createElement("div");
     face.className = "mmc-side mmc-face";
     const pic = document.createElement("canvas");
@@ -276,7 +399,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     btn.appendChild(inner);
     btn.addEventListener("click", () => onSlot(s));
     boardEl.appendChild(btn);
-    slots.push({ btn, pic, name, text });
+    slots.push({ btn, inner, pic, name, text });
   }
 
   /** 把某张牌的正面画到某个槽位上（算式关写字，其余关画原创图案 + 名字） */
@@ -417,6 +540,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
 
     opts.sfx("tap");
     faceUp[card] = true;
+    // 玩家亲手翻的牌不吃集体翻回的波浪时差,立刻起翻
+    slots[s].inner.style.transitionDelay = "";
     renderSlot(s);
     if (eff.kind === "flip") {
       countFlip();
@@ -436,7 +561,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
       msgEl.textContent = cfg.mathPairs
         ? `${group.map((c) => deck[c].face).join(" = ")}，算对啦！`
         : `配到一组「${pack.icons[iconIndexOf(cfg, first, pack.icons.length)].name}」！`;
-      flashSlots(slotsOf(group), "mmc-hit", 430);
+      celebrateMatch(slotsOf(group));
       renderTop();
       later(() => {
         group.forEach((c) => { gone[c] = true; });
@@ -499,6 +624,39 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     return cards.map((c) => order.indexOf(c)).filter((s) => s >= 0);
   }
 
+  /**
+   * 配对成功的视觉反馈:两卡相互轻碰(各向组中心位移 3px 回弹)+ 卡间冒小爱心与金星屑。
+   * reduced 一概不播,直接进入亮色收纳态(mmc-gone 的印花);判定与消卡时序在 resolve 里,一毫秒不动。
+   */
+  function celebrateMatch(slotList: readonly number[]): void {
+    if (prefersReduced() || slotList.length === 0) return;
+    const mc = slotList.reduce((a, s) => a + (s % cfg.cols), 0) / slotList.length;
+    const mr = slotList.reduce((a, s) => a + Math.floor(s / cfg.cols), 0) / slotList.length;
+    for (const s of slotList) {
+      const bx = Math.sign(mc - (s % cfg.cols)) * MC_ANIM.bumpPx;
+      const by = Math.sign(mr - Math.floor(s / cfg.cols)) * MC_ANIM.bumpPx;
+      slots[s].btn.style.setProperty("--mc-bx", `${bx}px`);
+      slots[s].btn.style.setProperty("--mc-by", `${by}px`);
+    }
+    flashSlots(slotList, "mmc-bump", 430);
+    // 爱心 + 星屑:落在这组卡的正中间,320ms 放大淡出后自清
+    const size = 64;
+    const x = slotList.reduce((a, s) => a + slots[s].btn.offsetLeft + slots[s].btn.offsetWidth / 2, 0) / slotList.length;
+    const y = slotList.reduce((a, s) => a + slots[s].btn.offsetTop + slots[s].btn.offsetHeight / 2, 0) / slotList.length;
+    const cv = document.createElement("canvas");
+    cv.className = "mmc-burst";
+    cv.width = size;
+    cv.height = size;
+    cv.style.left = `${Math.round(x - size / 2)}px`;
+    cv.style.top = `${Math.round(y - size / 2)}px`;
+    cv.style.width = `${size}px`;
+    cv.style.height = `${size}px`;
+    const bctx = ctx2d(cv);
+    if (bctx) paintMatchBurst(bctx as unknown as McCtx, size, false);
+    wrap.appendChild(cv);
+    later(() => cv.remove(), MC_ANIM.sparkleMs + 80);
+  }
+
   function openingHint(): string {
     if (cfg.mathPairs && decoys > 0) return "算式配得数，还有对不上号的独苗卡，看仔细！";
     if (cfg.mathPairs) return "🧮 先算出得数，再去找写着它的那张牌！";
@@ -519,13 +677,25 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   renderTop();
   if (cfg.peekMs > 0) {
     msgEl.textContent = "👀 快记住它们的位置！";
+    // 记忆窗口仪式感:全场亮面时边框呼吸微光提示「快记住」(reduced 恒定微光)
+    wrap.classList.add("mmc-peek");
     faceUp.fill(true);
     renderAll();
     later(() => {
+      // 集体翻回加波浪时差:纯视觉的 transition-delay,每卡 ≤30ms 交错、
+      // 总时长钉死 ≤ 既有收尾;翻牌解锁(startPlay)仍在这一拍,判定时序一毫秒不动
+      wrap.classList.remove("mmc-peek");
+      const reduced = prefersReduced();
+      slots.forEach((el, s) => {
+        el.inner.style.transitionDelay = `${waveDelayMs(s, totalCards, reduced)}ms`;
+      });
       faceUp.fill(false);
       renderAll();
       flip = startPlay(flip);
       msgEl.textContent = openingHint();
+      later(() => {
+        for (const el of slots) el.inner.style.transitionDelay = "";
+      }, MC_WAVE_MAX_TOTAL_MS + MC_ANIM.flipMs);
     }, cfg.peekMs);
   } else {
     flip = startPlay(flip);
@@ -564,6 +734,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     destroy() {
       destroyed = true;
       done = true;
+      window.removeEventListener("resize", onBoardResize);
       if (ticker) clearInterval(ticker);
       ticker = null;
       if (beat) clearInterval(beat);
@@ -613,6 +784,10 @@ function mountEndless(host: HTMLElement, api: GameApi, assist: boolean, onBack: 
     const box = document.createElement("div");
     box.className = "mmc-over";
     box.innerHTML = `<div class="mmc-over-t">这一趟记忆挑战结束啦</div><div class="mmc-over-s">${sub}</div>`;
+    const parade = document.createElement("canvas");
+    parade.className = "mmc-bonus";
+    paintBonusStrip(parade);
+    box.appendChild(parade);
     const again = document.createElement("button");
     again.type = "button";
     again.className = "mmc-open";
@@ -721,6 +896,10 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
     const w = versusWinner(scores);
     box.innerHTML = `<div class="mmc-over-t">${w === null ? "打成平手！" : `${SEAT_NAMES[w]} 这局记得更牢！`}</div>
       <div class="mmc-over-s">${versusLine(scores)}</div>`;
+    const parade = document.createElement("canvas");
+    parade.className = "mmc-bonus";
+    paintBonusStrip(parade);
+    box.appendChild(parade);
     const again = document.createElement("button");
     again.type = "button";
     again.className = "mmc-open";

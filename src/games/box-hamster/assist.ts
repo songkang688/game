@@ -461,6 +461,25 @@ export function fitCell(cols: number, avail: number, gap: number = CELL_GAP): nu
   return Math.max(CELL_MIN, Math.min(CELL_MAX, raw));
 }
 
+/**
+ * 宽高两把尺一起量：cols 列要塞进 availW、rows 行要塞进 availH，边长取小的那把。
+ *
+ * 只按宽算的后果在竖屏上量到过：10 行高的仓库 42px 一格要 438px，
+ * 加上 HUD（~48px）、方向盘（两行 ≥104px）和提示行，360×640 上方向盘整个
+ * 掉到 `.game-stage` 的裁切线以下——那是触屏唯一的走法，点不着等于这关没法玩。
+ * 竖向量不出来（还没上屏 / 测试桩 / 没有裁切祖先）时 `fitCell` 自己会退回
+ * CELL_MAX，min 之后就是「只按宽算」的老行为，一个字都不变。
+ */
+export function fitCellRect(
+  cols: number,
+  rows: number,
+  availW: number,
+  availH: number,
+  gap: number = CELL_GAP
+): number {
+  return Math.min(fitCell(cols, availW, gap), fitCell(rows, availH, gap));
+}
+
 /** 四方向里哪些是这一步走得动的(触屏方向键按它变灰) */
 export function usableDirs(p: Puzzle, s: State, who: number): boolean[] {
   return ALL_DIRS.map((dir) => {

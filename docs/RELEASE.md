@@ -16,7 +16,8 @@
 ## 一次发版的完整步骤
 
 1. **对齐版本号。** `package.json` 里的 `version` 必须和要打的 tag 去掉 `v` 之后完全一致
-   ——比如 tag `v1.2.2` 对应 `"version": "1.2.2"`。
+   ——比如 tag `v1.3.4` 对应 `"version": "1.3.4"`。
+   安卓包还要顺手把 `android/app/build.gradle` 里的 `versionName` 对齐、`versionCode` 加一。
    工作流第一步就会校验这一条,对不上直接失败,不会出包(否则文件名里的版本会和 Release 对不上)。
 
 2. **确认要发的提交已经在远端分支上**,本地跑一遍 `npm test -- --testTimeout=30000 && npm run build` 心里有底。
@@ -24,10 +25,10 @@
 3. **打 annotated tag 并推上去:**
 
    ```bash
-   git fetch origin game-1.2
-   git checkout game-1.2 && git pull origin game-1.2
-   git tag -a v1.2.2 -m "一朵一星 1.2.2"
-   git push origin v1.2.2
+   git fetch origin game-1.3
+   git checkout game-1.3 && git pull origin game-1.3
+   git tag -a v1.3.4 -m "一朵一星 1.3.4"
+   git push origin v1.3.4
    ```
 
    > tag 一律用 `-a`(annotated,带作者和说明),不要用轻量 tag。
@@ -42,14 +43,14 @@
    ```
 
 5. 全绿之后,Release 页会出现在
-   `https://github.com/songkang688/game/releases/tag/v1.2.2`,资产就是上面三个包。
-   这是正式 1.2 线,工作流里 `make_latest: true`,会成为 Latest。
+   `https://github.com/songkang688/game/releases/tag/v1.3.4`,资产就是上面三个包。
+   这是正式 1.3 线,工作流里 `make_latest: true`,会成为 Latest。
 
 ## 工作流里都有什么
 
 | 工作流 | 什么时候跑 | 干什么 |
 | ---- | ---- | ---- |
-| `.github/workflows/ci.yml` | push 到 `main` / `game-1.2`,以及所有 PR | Node 22 上 `npm ci && npm test && npm run build` |
+| `.github/workflows/ci.yml` | push 到 `main` / `game-1.1` / `game-1.2` / `game-1.3`,以及所有 PR | Node 22 上 `npm ci && npm test && npm run build` |
 | `.github/workflows/release.yml` | push `v*` tag | 校验版本号 → 跑测试 → 三件套出包 → 建 Release 挂资产 |
 
 `release.yml` 的 job:

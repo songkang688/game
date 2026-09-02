@@ -547,3 +547,71 @@ describe("分级红线", () => {
     }
   });
 });
+
+describe("1.3 视觉 HUD · 座位条 / 吃子槽 / 记谱高亮", () => {
+  beforeEach(() => boot());
+
+  /** 开一盘朵朵 VS 星星（双人同屏走得快，不用等 AI） */
+  async function openPvp() {
+    const { mount } = await import("./index");
+    const spy = api();
+    const handle = mount(spy.api);
+    findByText(dom.root, "自由对战")!.dispatch("click", {});
+    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "开始下棋")!.dispatch("click", {});
+    return { handle, canvas: boardCanvas(dom.root) };
+  }
+
+  function capsbar(): El {
+    const el = dom.root.find((e) => e.className.includes("xq-capsbar"));
+    expect(el, "吃子槽没挂出来").not.toBeNull();
+    return el!;
+  }
+
+  it("座位条两边都配了将 / 帅小棋子图标（SVG，不是字符占位）", async () => {
+    const { handle } = await openPvp();
+    const red = dom.root.find((e) => e.className.includes("xq-red"))!;
+    const black = dom.root.find((e) => e.className.includes("xq-black"))!;
+    expect(red.innerHTML).toContain("xq-picon");
+    expect(red.innerHTML).toContain("帅");
+    expect(black.innerHTML).toContain("xq-picon");
+    expect(black.innerHTML).toContain("将");
+    handle.destroy();
+  });
+
+  it("吃子槽开局藏着，吃了子就按序排出小图标，悔棋再收回去", async () => {
+    const { handle, canvas } = await openPvp();
+    expect(capsbar().className).toContain("xq-hidden");
+    // 炮二平五 → 黑炮8平5 → 炮五进四吃中卒
+    tapAt(canvas, 7, 7);
+    tapAt(canvas, 4, 7);
+    tapAt(canvas, 7, 2);
+    tapAt(canvas, 4, 2);
+    tapAt(canvas, 4, 7);
+    tapAt(canvas, 4, 3);
+    expect(capsbar().className).not.toContain("xq-hidden");
+    expect(capsbar().innerHTML).toContain("xq-capline-red");
+    expect(capsbar().innerHTML).toContain("红方请回家");
+    expect(capsbar().innerHTML).toContain("xq-picon");
+    expect(capsbar().innerHTML).toContain("卒");
+    // 悔棋（双人要对方点头）之后，这颗卒回到棋盘，吃子槽重新藏起来
+    dom.root.find((e) => e.className.includes("xq-undo"))!.dispatch("click", {});
+    findByText(dom.root, "同意")!.dispatch("click", {});
+    expect(capsbar().className).toContain("xq-hidden");
+    handle.destroy();
+  });
+
+  it("记谱条最新一手带高亮标记，前面的着法不带", async () => {
+    const { handle, canvas } = await openPvp();
+    tapAt(canvas, 7, 7);
+    tapAt(canvas, 4, 7);
+    tapAt(canvas, 7, 2);
+    tapAt(canvas, 4, 2);
+    const steps = dom.root.findAll((e) => e.className.includes("xq-step") && e.className.includes("xq-step-"));
+    const chips = steps.filter((e) => /xq-step-(red|black)/.test(e.className));
+    expect(chips.length).toBe(2);
+    expect(chips[0].className).not.toContain("xq-step-last");
+    expect(chips[1].className).toContain("xq-step-last");
+    handle.destroy();
+  });
+});

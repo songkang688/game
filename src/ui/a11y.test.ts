@@ -233,13 +233,20 @@ describe("样式表的无障碍红线", () => {
     }
   });
 
+  it("游戏舞台竖向可滑，不再 overflow:hidden 把选关和棋盘裁死", () => {
+    const stageRules = [...CSS.matchAll(/(?:^|})\s*\.game-stage\s*\{([^}]*)\}/gm)].map((m) => m[1]);
+    expect(stageRules.join("\n")).toMatch(/overflow-y:\s*auto/);
+    expect(stageRules.some((b) => /^\s*overflow:\s*hidden\s*;/m.test(b))).toBe(false);
+  });
+
   it("四个目标断点都有对应的适配规则", () => {
-    // 320(超窄)、375/420(手机)、768(平板)、矮屏横放
+    // 320(超窄)、375/420(手机)、768(平板)、矮屏横放、手机竖屏常见高度
     expect(CSS).toMatch(/@media \(max-width: 340px\)/);
     expect(CSS).toMatch(/@media \(max-width: 380px\)/);
     expect(CSS).toMatch(/@media \(max-width: 420px\)/);
     expect(CSS).toMatch(/@media \(min-width: 700px\) and \(max-width: 1024px\)/);
     expect(CSS).toMatch(/@media \(max-height: 560px\)/);
+    expect(CSS).toMatch(/@media \(max-height: 740px\)/);
   });
 
   it("prefers-reduced-motion 下位移、抖动、循环动画全部停掉", () => {
@@ -290,13 +297,13 @@ describe("index.html 的语义与文案", () => {
     expect(desc).toContain("一朵一星");
     expect(desc).toContain("无广告");
     expect(desc).toMatch(/读屏|键盘/);
-    expect(desc).toContain("1.2");
+    expect(desc).toContain("1.3");
     expect(desc).toContain("76");
-    expect(desc).not.toMatch(/1\.1|55款|55 款/);
+    expect(desc).not.toMatch(/1\.1|1\.2|55款|55 款/);
   });
 
-  it("窗口标题是 1.2 · 76 款,不再写 1.1 · 55 款", () => {
-    expect(HTML).toMatch(/<title>一朵一星 1\.2 · 76 款原创小游戏合集<\/title>/);
+  it("窗口标题是 1.3 · 76 款,不再写旧版本号", () => {
+    expect(HTML).toMatch(/<title>一朵一星 1\.3 · 76 款原创小游戏合集<\/title>/);
   });
 
   it("有独立的 aria-live 播报区,而不是整个 #app 都在播报", () => {

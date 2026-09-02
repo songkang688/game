@@ -117,7 +117,9 @@ const PINYIN_INITIALS: Record<string, string> = {
   弟: "d", 怪: "g", 推: "t", 抢: "q", 斗: "d", 机: "j", 林: "l",
   格: "g", 森: "s", 物: "w", 皮: "p", 矿: "k", 箱: "x", 达: "d",
   金: "j", 钓: "d", 钩: "g", 铁: "t", 队: "d", 雪: "x", 主: "z",
-  炸: "z", 坦: "t", 克: "k", 射: "s", 鱼: "y", 馆: "g", 龄: "l"
+  炸: "z", 坦: "t", 克: "k", 射: "s", 鱼: "y", 馆: "g", 龄: "l",
+  // 1.3 窗口 5:bomb-buddies 更名「泡泡布阵」(旧名有商标风险),新标题用到的字。
+  布: "b", 阵: "z"
 };
 
 /**
@@ -289,12 +291,12 @@ export function heroSubtitle(gameCount: number, maxLevels: number): string {
 
 /**
  * Electron / 浏览器窗口标题。首页气泡已经按真实收录数拼款数,
- * 标题栏如果还写死「1.1 · 55 款」,安装包打开就会和里面的 76 款对不上。
+ * 标题栏如果还写死旧版本号,安装包打开就会和里面的款数对不上。
  */
 export function windowTitle(gameCount: number): string {
   const n = Number.isFinite(gameCount) ? Math.max(0, Math.floor(gameCount)) : 0;
   const games = n > 0 ? `${n} 款原创小游戏合集` : "原创小游戏合集";
-  return `一朵一星 1.2 · ${games}`;
+  return `一朵一星 1.3 · ${games}`;
 }
 
 /** 这款游戏的闯关总数:meta 没填就按通用框架的 188 关算 */

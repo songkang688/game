@@ -1,13 +1,18 @@
 /**
  * 军旗对决 · 棋盘视图。
  *
- * 铁路画粗线、公路画细线、行营画圆、大本营画方，一眼能看懂。
+ * 铁路画真铁轨（双钢轨 + 枕木）、公路画细线、行营是帐篷、大本营是碉堡，一眼能看懂。
+ * 棋子是军衔徽章立牌：汉字上方一条军衔条（星 / 杠 / 点，见 art.ts），不认字也能比大小；
+ * 盖着的子用统一的 SVG 牌背，红蓝双方同款，暗棋信息一丝不漏。
  * 点一枚自己的子选中，再点一个亮着的落点，最后按「确认」走。
  * 键盘按座位分：朵朵 WASD 挪光标、F 确认、G 取消；星星 方向键 + L / K。
  * 两个座位各有各的光标（双人同屏时谁也拨不走对方那一个），画面上只画该走的那一位。
- * 对撞一定有动画：两子翻开 → 停一下 → 回营的那一方淡出。
- * 12 行的棋盘在 360px 上放不下，所以整块棋盘可以缩放，也能拖着看。
+ * 对撞一定有动画：攻方滑入 → 两子翻开 → 停一下（回营的那一方摇一摇）→ 淡出
+ * （赢方亮金光，同尽来一朵卡通烟云，扛旗成功升旗）；reduced-motion 一律直接换面淡出。
+ * 12 行的棋盘在 360px 上放不下，所以整块棋盘可以缩放，也能拖着看；
+ * 缩到最小时军衔条自动收起，只留汉字，保住可读性。
  */
+import { backSVG, hoistSVG, hqSVG, mountainSVG, rankBadgeSVG, sideMarkSVG, smokeSVG, tentSVG } from "./art";
 import {
   CAMP,
   CELLS,
@@ -17,6 +22,7 @@ import {
   ROWS,
   cellName,
   colOf,
+  halfOf,
   idx,
   inCamp,
   inHQ,
@@ -25,6 +31,7 @@ import {
   type Side,
 } from "./board";
 import {
+  KINDS,
   LABEL,
   movesFrom,
   status,
@@ -40,10 +47,38 @@ import {
 export const PIECE_FONT = 17;
 export const MIN_SCALE = 0.75;
 export const MAX_SCALE = 1.6;
+/** 缩得比这个还小就把军衔条收起来，只留汉字（360px 可读优先） */
+export const TINY_SCALE = 0.85;
 
 /** 对撞动画的三段时长（毫秒） */
 export const ANIM = { flip: 260, hold: 320, fade: 240 };
 export const ANIM_FAST = { flip: 60, hold: 80, fade: 60 };
+
+/** 十二种棋子的面板：军衔条 + 汉字（只算一次，render 里按需换 innerHTML） */
+const KIND_FACE: Record<Kind, string> = (() => {
+  const out = {} as Record<Kind, string>;
+  for (const k of KINDS) {
+    out[k] = `<span class="jq-rank" aria-hidden="true">${rankBadgeSVG(k)}</span><span class="jq-han">${LABEL[k]}</span>`;
+  }
+  return out;
+})();
+const BACK_FACE = backSVG();
+const TENT_FACE = tentSVG();
+const HQ_FACE: Record<Side, string> = { duo: hqSVG("duo"), star: hqSVG("star") };
+/** 双方形状角标（专项③第二通道）：翻开的棋面左下角，去掉颜色也认得出是谁的子 */
+const SIDE_MARK: Record<Side, string> = {
+  duo: `<span class="jq-mark" aria-hidden="true">${sideMarkSVG("duo")}</span>`,
+  star: `<span class="jq-mark" aria-hidden="true">${sideMarkSVG("star")}</span>`,
+};
+
+/** 一格该画什么：有子画军衔徽章或统一牌背，空格画帐篷 / 碉堡地形 */
+export function faceHTML(p: Pos, kind: Kind | null, piece: Cell): string {
+  // 形状角标只跟「翻开的」棋面走；牌背保持无侧别，暗棋信息红线不破
+  if (piece) return kind ? KIND_FACE[kind] + SIDE_MARK[piece.side] : BACK_FACE;
+  if (inCamp(p)) return TENT_FACE;
+  if (inHQ(p)) return HQ_FACE[halfOf(p)];
+  return "";
+}
 
 export const CSS = `
 .jq-stage{position:relative;overflow:hidden;width:100%;height:min(58vh,470px);min-height:300px;
@@ -51,29 +86,79 @@ export const CSS = `
 .jq-pan{position:absolute;left:0;top:0;width:100%;transform-origin:0 0;}
 .jq-board{position:relative;width:100%;padding-top:240%;}
 .jq-half{position:absolute;left:0;width:100%;height:50%;border-radius:14px;}
-.jq-half.jq-top{top:0;background:#E9F1FB;}
-.jq-half.jq-bottom{top:50%;background:#FBF0E7;}
+.jq-half.jq-top{top:0;background-color:#E9F1FB;background-image:
+  radial-gradient(circle at 24% 32%,transparent 42px,#5F8FD014 43px,#5F8FD014 45px,transparent 46px),
+  radial-gradient(circle at 76% 64%,transparent 30px,#5F8FD012 31px,#5F8FD012 33px,transparent 34px),
+  radial-gradient(circle at 58% 12%,transparent 54px,#5F8FD010 55px,#5F8FD010 57px,transparent 58px);}
+.jq-half.jq-bottom{top:50%;background-color:#FBF0E7;background-image:
+  radial-gradient(circle at 30% 68%,transparent 44px,#D89A5416 45px,#D89A5416 47px,transparent 48px),
+  radial-gradient(circle at 72% 30%,transparent 32px,#D89A5412 33px,#D89A5412 35px,transparent 36px),
+  radial-gradient(circle at 46% 88%,transparent 52px,#D89A5410 53px,#D89A5410 55px,transparent 56px);}
 .jq-line{position:absolute;background:#B9C6A8;border-radius:2px;}
-.jq-line.jq-rail{background:#7E8B6B;box-shadow:0 0 0 1px #ffffff88;}
-.jq-mountain{position:absolute;transform:translate(-50%,-50%);font-size:14px;opacity:.75;}
+.jq-line.jq-rail{border-radius:0;box-shadow:0 0 0 1px #ffffff88;background-color:#EDE7D3;background-image:
+  linear-gradient(180deg,#6E7B5B 0 1.6px,transparent 1.6px calc(100% - 1.6px),#6E7B5B calc(100% - 1.6px) 100%),
+  repeating-linear-gradient(90deg,#A8946E 0 2.4px,transparent 2.4px 7px);}
+.jq-line.jq-rail.jq-vline{background-image:
+  linear-gradient(90deg,#6E7B5B 0 1.6px,transparent 1.6px calc(100% - 1.6px),#6E7B5B calc(100% - 1.6px) 100%),
+  repeating-linear-gradient(180deg,#A8946E 0 2.4px,transparent 2.4px 7px);}
+.jq-mountain{position:absolute;transform:translate(-50%,-50%);line-height:0;opacity:.9;}
 .jq-cell{position:absolute;width:20%;height:8.3333%;margin:0;padding:0;border:none;background:transparent;
   font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.jq-face{width:82%;height:82%;min-width:44px;min-height:44px;border-radius:12px;display:flex;
-  align-items:center;justify-content:center;font-size:${PIECE_FONT}px;font-weight:900;line-height:1.1;
+.jq-face{width:82%;height:82%;min-width:44px;min-height:44px;border-radius:12px;display:flex;position:relative;
+  flex-direction:column;align-items:center;justify-content:center;font-size:${PIECE_FONT}px;font-weight:900;line-height:1.1;
   transition:transform .22s ease,opacity .22s ease,box-shadow .18s ease;}
+.jq-rank{display:block;line-height:0;margin-bottom:1px;pointer-events:none;}
+.jq-rank svg,.jq-face>svg{display:block;pointer-events:none;}
+/* 双方形状角标（专项③第二通道）：左下角，避开右下的落点绿点提示 */
+.jq-mark{position:absolute;left:2px;bottom:2px;width:11px;height:11px;line-height:0;pointer-events:none;}
+.jq-mark svg{display:block;width:100%;height:100%;}
+.jq-han{display:block;text-shadow:0 1px 0 rgba(255,255,255,.55);}
+.jq-tiny .jq-rank{display:none;}
 .jq-cell.jq-camp .jq-face{border-radius:50%;}
+.jq-cell.jq-camp.jq-empty .jq-face{box-shadow:inset 0 0 0 2px #8FC46F59;}
 .jq-cell.jq-hq .jq-face{border-radius:8px;box-shadow:inset 0 0 0 3px #C9B48A;}
-.jq-empty .jq-face{background:#ffffff8c;color:#9aa88c;font-size:13px;font-weight:700;}
-.jq-duo .jq-face{background:linear-gradient(180deg,#FFE7D5,#FBD3B6);color:#A9531F;box-shadow:0 2px 0 #d9a97f;}
-.jq-star .jq-face{background:linear-gradient(180deg,#DFEAFA,#C4D8F4);color:#25508F;box-shadow:0 2px 0 #90afd8;}
-.jq-back .jq-face{background:linear-gradient(180deg,#EFE3F7,#DCCBEE);color:#7A5CA0;box-shadow:0 2px 0 #b39ccb;}
-.jq-cell.jq-sel .jq-face{transform:scale(1.06);box-shadow:0 0 0 3px #F2A03C;}
+.jq-empty .jq-face{background:#ffffff8c;color:#9aa88c;font-size:14px;font-weight:700;}
+.jq-duo .jq-face{background:linear-gradient(180deg,#FFE7D5,#FBD3B6);color:#A9531F;
+  box-shadow:0 2px 0 #d9a97f,inset 0 0 0 1px #c9853f66;}
+/* 星星方按 B 档规格压暗：r1 拉到 ≥20,r2 按 B 档 #8 把底停再压一档(#9FBCE4→#93B2DE),
+   底停灰度差到 ≥40——形状角标 + 颜色双通道都留足余量 */
+.jq-star .jq-face{background:linear-gradient(180deg,#C4D8F4,#93B2DE);color:#25508F;
+  box-shadow:0 2px 0 #7d9fce,inset 0 0 0 1px #4a72a866;}
+.jq-back .jq-face{background:linear-gradient(180deg,#EFE3F7,#DCCBEE);color:#7A5CA0;
+  box-shadow:0 2px 0 #b39ccb,inset 0 0 0 1px #7a5ca066;}
+.jq-cell.jq-sel .jq-face{transform:scale(1.06);box-shadow:0 0 0 3px #F2A03C,0 0 0 5px #ffffffb3;}
 .jq-cell.jq-target .jq-face{box-shadow:0 0 0 3px #7CC28B;}
+.jq-cell.jq-target .jq-face::after{content:"";position:absolute;right:3px;bottom:3px;width:9px;height:9px;
+  border-radius:50%;background:#7CC28B;box-shadow:0 0 0 2px #fff;}
 .jq-cell.jq-pending .jq-face{box-shadow:0 0 0 4px #E0663C;transform:scale(1.08);}
 .jq-cell.jq-cursor .jq-face{outline:3px dashed #6E7FD0;outline-offset:2px;}
 .jq-cell:focus-visible .jq-face{outline:3px solid #F2A03C;outline-offset:2px;}
-.jq-cell.jq-open .jq-face{transform:rotateY(0deg) scale(1.1);}
+.jq-cell.jq-open .jq-face{transform:rotateY(0deg) scale(1.1);animation:jq-flip .2s ease-out;}
+.jq-cell.jq-lunge-u .jq-face{transform:translate(0,-26%) scale(1.06);}
+.jq-cell.jq-lunge-d .jq-face{transform:translate(0,26%) scale(1.06);}
+.jq-cell.jq-lunge-l .jq-face{transform:translate(-26%,0) scale(1.06);}
+.jq-cell.jq-lunge-r .jq-face{transform:translate(26%,0) scale(1.06);}
+.jq-cell.jq-lunge-ul .jq-face{transform:translate(-20%,-20%) scale(1.06);}
+.jq-cell.jq-lunge-ur .jq-face{transform:translate(20%,-20%) scale(1.06);}
+.jq-cell.jq-lunge-dl .jq-face{transform:translate(-20%,20%) scale(1.06);}
+.jq-cell.jq-lunge-dr .jq-face{transform:translate(20%,20%) scale(1.06);}
+.jq-cell.jq-shake .jq-face{animation:jq-wobble .3s ease-in-out;}
+.jq-cell.jq-winner .jq-face{box-shadow:0 0 0 3px #F6C445,0 0 16px 4px #F6C44599;animation:jq-glow .45s ease-out;}
 .jq-cell.jq-gone .jq-face{opacity:0;transform:scale(.55);}
+.jq-cell.jq-hide .jq-face{opacity:0;transition:none;}
+.jq-fx{position:absolute;width:20%;height:8.3333%;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;z-index:6;line-height:0;}
+.jq-fx.jq-glide{transition:left .12s ease,top .12s ease;z-index:7;}
+.jq-fx.jq-smoke{animation:jq-puff .24s ease-out both;}
+.jq-fx.jq-hoist{z-index:8;}
+.jq-hoist .fx-flag{animation:jq-raise .6s ease-out both;}
+@keyframes jq-flip{from{transform:rotateY(88deg) scale(1.02);}to{transform:rotateY(0deg) scale(1.1);}}
+@keyframes jq-wobble{0%,100%{transform:translateX(0) scale(1.1);}25%,75%{transform:translateX(-8%) scale(1.1);}
+  50%{transform:translateX(8%) scale(1.1);}}
+@keyframes jq-glow{from{box-shadow:0 0 0 0 #F6C44500;}to{box-shadow:0 0 0 3px #F6C445,0 0 16px 4px #F6C44599;}}
+@keyframes jq-puff{from{transform:scale(.4);opacity:.5;}to{transform:scale(1.1);opacity:1;}}
+@keyframes jq-raise{0%{transform:translateY(26px);}45%{transform:translateY(6px) skewX(-4deg);}
+  80%{transform:translateY(-2px) skewX(3deg);}100%{transform:translateY(0);}}
 .jq-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;}
 .jq-btn{border:none;border-radius:999px;min-height:44px;min-width:44px;padding:9px 15px;font-size:14px;
   font-weight:800;font-family:inherit;cursor:pointer;background:#ffffffdd;color:#5f6b4b;
@@ -81,12 +166,63 @@ export const CSS = `
 .jq-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,130,100,.28);}
 .jq-btn.jq-go{background:linear-gradient(180deg,#8FC46F,#6FA954);color:#fff;}
 .jq-btn.jq-off{opacity:.45;}
-.jq-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:12px;
+.jq-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:14px;
   font-weight:700;color:#6b7758;}
 .jq-legend span{background:#ffffffcc;border-radius:999px;padding:3px 9px;}
+/* N-64:min-height 300 把确认行顶到 485。矮横屏收盘,工具钉底。布阵/胜负不动 */
+@media (max-height:500px){
+  .jq-stage{min-height:0;height:min(58dvh,236px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+}
+@media (max-height:840px) and (min-height:501px){
+  .jq-stage{min-height:0;height:min(64dvh,320px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+}
 @media (prefers-reduced-motion:reduce){
-  .jq-face{transition-duration:.06s;}
+  .jq-face{transition-duration:.06s;animation:none!important;}
+  .jq-fx{animation:none!important;transition:none!important;}
+  .jq-hoist .fx-flag{animation:none!important;}
   .jq-btn:active{transform:none;}
+}
+/* N-64:jq-duoplay confirm row. .jq-mode untouched. stage min-height 300 pushed pause off-screen */
+@media (max-height:500px){
+  .jq-duoplay .jq-stage{height:min(48dvh,220px);min-height:140px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
+  .jq-duoplay .jq-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
+  .jq-duoplay .jq-legend{display:none;}
+}
+/* U-x(#107):501–840 中间档双人盘按余高收敛并钉工具/行棋行 */
+@media (max-height:840px) and (min-height:501px){
+  .jq-duoplay .jq-stage{height:min(62dvh,300px);min-height:180px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:52px;z-index:5;}
+}
+/* N-124 模式:768 不命中 500;粗指针钉工具行。N-64 500 原文不动 */
+@media (max-height:820px) and (pointer:coarse){
+  .jq-stage{min-height:0;height:min(62dvh,420px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+  .jq-duoplay .jq-stage{height:min(52dvh,360px);min-height:140px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
+}
+/* N-122 模式:390×844 钉确认/行棋 */
+@media (max-width:420px) and (min-height:700px){
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
 }
 `;
 
@@ -117,6 +253,8 @@ export interface CombatShow {
   attacker: Kind;
   defender: Kind;
   outcome: CombatOutcome;
+  /** 这一撞把旗子扛到手了：落点升一杆小旗庆祝 */
+  flagTaken?: boolean;
 }
 
 export interface BoardHandle {
@@ -163,13 +301,13 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     board.appendChild(half);
   }
 
-  // 铁路粗线、公路细线、行营那几条斜线
+  // 铁路画真铁轨（横竖两套枕木方向）、公路细线、行营那几条斜线
   for (const line of LINES) {
     const el = document.createElement("div");
     el.className = `jq-line ${line.rail ? "jq-rail" : "jq-road"}`;
     const x1 = (colOf(line.a) + 0.5) * (100 / COLS);
     const y1 = (rowOf(line.a) + 0.5) * (100 / ROWS);
-    const thick = line.rail ? 6 : 2;
+    const thick = line.rail ? 7 : 2;
     el.style.left = `${x1}%`;
     el.style.top = `${y1}%`;
     if (line.diagonal) {
@@ -183,6 +321,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       el.style.height = `${thick}px`;
       el.style.transform = "translate(0,-50%)";
     } else {
+      el.className += " jq-vline";
       el.style.width = `${thick}px`;
       el.style.height = `${100 / ROWS}%`;
       el.style.transform = "translate(-50%,0)";
@@ -190,11 +329,11 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     board.appendChild(el);
   }
 
-  // 前沿走不通的那两列画座小山
+  // 前沿走不通的那两列画座小山（SVG 绿丘，不再用 emoji）
   for (const c of [1, 3]) {
     const el = document.createElement("div");
     el.className = "jq-mountain";
-    el.textContent = "⛰️";
+    el.innerHTML = mountainSVG();
     el.style.left = `${(c + 0.5) * (100 / COLS)}%`;
     el.style.top = "50%";
     board.appendChild(el);
@@ -234,7 +373,33 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   let overrideCells: readonly Cell[] | null = null;
   let openAt: Pos[] = [];
   let goneAt: Pos[] = [];
+  /** 对撞演出的临时状态：攻方扑向哪个方向、谁在摇、谁亮金光、谁先藏起来（滑动走子用） */
+  let lungeAt: Pos = -1;
+  let lungeDir = "";
+  let shakeAt: Pos[] = [];
+  let winnerAt: Pos[] = [];
+  let hiddenAt: Pos[] = [];
+  /** 每格面板当前的 HTML（只有变了才写 innerHTML，别让浏览器白干活） */
+  const faceHtml: string[] = new Array<string>(CELLS).fill("");
+  /** 场上飘着的特效元素（滑动克隆 / 烟云 / 升旗杆），动画一收就清掉 */
+  const fx: HTMLElement[] = [];
   const timers: Array<ReturnType<typeof setTimeout>> = [];
+
+  function spawnFx(cls: string, at: Pos, html: string): HTMLElement {
+    const el = document.createElement("div");
+    el.className = `jq-fx ${cls}`;
+    el.style.left = `${colOf(at) * (100 / COLS)}%`;
+    el.style.top = `${rowOf(at) * (100 / ROWS)}%`;
+    el.innerHTML = html;
+    board.appendChild(el);
+    fx.push(el);
+    return el;
+  }
+
+  function clearFx(): void {
+    for (const el of fx) el.remove();
+    fx.length = 0;
+  }
 
   let scale = 1;
   let panX = 0;
@@ -245,6 +410,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   function applyTransform(): void {
     pan.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+    // 缩到最小态军衔条自动隐藏只留汉字；只是切个类名，不碰手势数学
+    stage.className = scale < TINY_SCALE ? "jq-stage jq-tiny" : "jq-stage";
   }
 
   function stageSize(): { w: number; h: number } {
@@ -323,16 +490,16 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       if (p === cursors[activeSeat()]) classes.push("jq-cursor");
       if (openAt.includes(p)) classes.push("jq-open");
       if (goneAt.includes(p)) classes.push("jq-gone");
+      if (p === lungeAt && lungeDir) classes.push(`jq-lunge-${lungeDir}`);
+      if (shakeAt.includes(p)) classes.push("jq-shake");
+      if (winnerAt.includes(p)) classes.push("jq-winner");
+      if (hiddenAt.includes(p)) classes.push("jq-hide");
       cells[p].className = classes.join(" ");
-      faces[p].textContent = piece
-        ? kind
-          ? LABEL[kind]
-          : "🎖️"
-        : inCamp(p)
-          ? "⛺"
-          : inHQ(p)
-            ? "🏠"
-            : "";
+      const html = faceHTML(p, kind, piece);
+      if (faceHtml[p] !== html) {
+        faceHtml[p] = html;
+        faces[p].innerHTML = html;
+      }
       cells[p].setAttribute("aria-label", describe(p, kind, piece));
     }
     // 双人同屏时两个人的确认 / 取消键不一样，工具条上写轮到的那位那一套
@@ -430,40 +597,92 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     frozen = true;
     clearPick();
     if (!show) {
-      render();
+      // 平移一步：真棋子先按旧盘面藏在原地，克隆面从起点滑到落点；reduced 直接换面
+      if (!soft) {
+        overrideCells = before.slice();
+        hiddenAt = [move.from];
+        render();
+        const mover = before[move.from];
+        let kind: Kind | null = null;
+        if (mover) {
+          kind =
+            mover.side === opts.viewer || opts.viewer === "all"
+              ? mover.kind
+              : visibleKind(state, opts.viewer, move.to);
+        }
+        const tone = mover ? (kind ? (mover.side === "duo" ? "jq-duo" : "jq-star") : "jq-back") : "";
+        const ghost = spawnFx(
+          `jq-glide ${tone}`,
+          move.from,
+          `<span class="jq-face">${faceHTML(move.from, kind, mover)}</span>`
+        );
+        const tSlide = setTimeout(() => {
+          ghost.style.left = `${colOf(move.to) * (100 / COLS)}%`;
+          ghost.style.top = `${rowOf(move.to) * (100 / ROWS)}%`;
+        }, 16);
+        timers.push(tSlide);
+      } else {
+        render();
+      }
       const t = setTimeout(() => {
+        if (destroyed) return;
         frozen = false;
         overrideCells = null;
+        hiddenAt = [];
+        clearFx();
         render();
         done();
       }, Math.max(30, anim.fade));
       timers.push(t);
       return;
     }
-    // 第一段：两子都翻开
+    // 第一段：两子都翻开；攻方顺势往守方扑一小步（滑入对撞的起手）
     overrideCells = before.slice();
     openAt = [move.from, move.to];
     goneAt = [];
+    const losers =
+      show.outcome === "both"
+        ? [move.from, move.to]
+        : show.outcome === "attacker"
+          ? [move.to]
+          : [move.from];
+    const winners =
+      show.outcome === "attacker" ? [move.from] : show.outcome === "defender" ? [move.to] : [];
+    if (!soft) {
+      const dr = rowOf(move.to) - rowOf(move.from);
+      const dc = colOf(move.to) - colOf(move.from);
+      lungeDir = `${dr < 0 ? "u" : dr > 0 ? "d" : ""}${dc < 0 ? "l" : dc > 0 ? "r" : ""}`;
+      lungeAt = lungeDir ? move.from : -1;
+      if (show.flagTaken) {
+        // 旗子扛到手：落点升起一杆小旗（0.6s 从杆底升到顶），动画收尾一起清
+        const capturer = before[move.from];
+        spawnFx("jq-hoist", move.to, hoistSVG(capturer ? capturer.side : "duo"));
+      }
+    }
     render();
     const t1 = setTimeout(() => {
       if (destroyed) return;
-      // 第二段：停一下，让人看清楚
+      // 第二段：停一下，让人看清楚；要回营的那一方先左右摇两下
+      lungeAt = -1;
+      if (!soft) shakeAt = losers.slice();
       render();
       const t2 = setTimeout(() => {
         if (destroyed) return;
-        // 第三段：回营休息的一方淡出
-        goneAt =
-          show.outcome === "both"
-            ? [move.from, move.to]
-            : show.outcome === "attacker"
-              ? [move.to]
-              : [move.from];
+        // 第三段：回营休息的一方淡出；留下的一方亮一圈金光；同尽再来一朵卡通烟云
+        shakeAt = [];
+        goneAt = losers.slice();
+        if (!soft) {
+          winnerAt = winners.slice();
+          if (show.outcome === "both") spawnFx("jq-smoke", move.to, smokeSVG());
+        }
         render();
         const t3 = setTimeout(() => {
           if (destroyed) return;
           overrideCells = null;
           openAt = [];
           goneAt = [];
+          winnerAt = [];
+          clearFx();
           frozen = false;
           render();
           done();
@@ -552,7 +771,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   const legend = document.createElement("div");
   legend.className = "jq-legend";
-  for (const t of ["粗线是铁路", "细线是公路", "圆圈是行营", "方块是大本营", "⛰️ 过不去"]) {
+  for (const t of ["铁轨是铁路", "细线是公路", "帐篷是行营", "碉堡是大本营", "小山过不去"]) {
     const s = document.createElement("span");
     s.textContent = t;
     legend.appendChild(s);
@@ -577,6 +796,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       destroyed = true;
       for (const t of timers) clearTimeout(t);
       timers.length = 0;
+      clearFx();
       stage.removeEventListener("pointerdown", onPointerDown as EventListener);
       stage.removeEventListener("pointermove", onPointerMove as EventListener);
       stage.removeEventListener("pointerup", onPointerUp as EventListener);

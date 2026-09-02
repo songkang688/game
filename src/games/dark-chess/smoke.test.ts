@@ -119,7 +119,8 @@ describe("翻翻暗棋 · index 契约", () => {
     const handle = mount(api);
     dom.root.find((e) => e.textContent.includes("人机对战"))!.dispatch("click", {});
     const cells = dom.root.findAll((e) => e.className.includes("dc-cell"));
-    expect(cells[0].textContent).toBe("🌸");
+    // r3 起格子文字口径走 aria-label（textContent 桩已清理）：翻开前这一格还盖着
+    expect(cells[0].getAttribute("aria-label")).toContain("还盖着");
     cells[0].dispatch("click", {});
     // 翻子动画结束前先不改字，动画过后这一格一定不再是背面
     expect(dom.root.find((e) => e.className.includes("dc-note"))?.textContent).toContain("翻开");
@@ -130,9 +131,11 @@ describe("翻翻暗棋 · index 契约", () => {
   });
 
   it("360px 上棋盘一行八格，格子与按钮都够手指点", () => {
-    // 8 列 1fr，格子与按钮的 min-height 都写死到 44px
-    expect(BOARD_CSS).toContain("grid-template-columns:repeat(8,1fr)");
-    expect(BOARD_CSS).toContain(".dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;");
+    // 8 列 minmax(0,1fr) 允许窄屏收缩（A 档 5-2 阻断修复）。r2-1 回归修复后格子不再写
+    // min-height（Chrome 会经 aspect-ratio 把它传导成固定宽导致互叠），格尺寸完全跟随轨道，
+    // 44px 触控红线由 ::before 扩展点击区保住；按钮的 min-height:44px 原样在（.dc-btn）
+    expect(BOARD_CSS).toContain("grid-template-columns:repeat(8,minmax(0,1fr))");
+    expect(BOARD_CSS).toContain(".dc-cell{position:relative;aspect-ratio:1/1;min-width:0;min-height:0;");
     expect(BOARD_CSS).toContain("min-height:44px;}");
     expect(BOARD_CSS).not.toContain("min-height:40px");
   });

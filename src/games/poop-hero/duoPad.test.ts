@@ -108,6 +108,13 @@ describe("便便超人 · 双人手柄的热区（W5R2-C-02）", () => {
       expect(Number(hit[1]), `CSS 里有一处把 --k 写成了 ${hit[1]}px`).toBeGreaterThanOrEqual(MIN_HOT);
     }
   });
+
+  it("平板 768 高不盲拷 620 画布,独立 840&&min-height:621", () => {
+    expect(SRC).toContain("@media (max-height:840px) and (min-height:621px)");
+    expect(SRC).toContain(".ph-cv{height:220px;}");
+    expect(SRC).toContain('.ph-wrap[data-players="2"] .ph-cv{height:256px;}');
+    expect(SRC).toContain('.ph-wrap[data-players="2"] .ph-cv{height:224px;}');
+  });
 });
 
 describe("便便超人 · 画布按舞台看得见那一段收（W5R2-C-02 掉出屏幕那一半）", () => {

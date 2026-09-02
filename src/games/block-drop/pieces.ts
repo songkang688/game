@@ -114,15 +114,15 @@ export const BOX_SIZE: Record<PieceId, number> = {
   L: 3
 };
 
-/** 粉彩七色:每种块一个颜色,不用任何官方配色的名字 */
+/** 糖果七色:每种块一个颜色,不用任何官方配色的名字(1.3 调饱和一档,配果冻渐变) */
 export const PIECE_COLORS: Record<PieceId, string> = {
-  I: "#A8DDE8",
-  O: "#F8DFA8",
-  T: "#D9BFF0",
-  S: "#BFE7B0",
-  Z: "#F7B8C4",
-  J: "#AFC6F0",
-  L: "#F5C79A"
+  I: "#8FD8EA",
+  O: "#FFD76E",
+  T: "#CF9FF0",
+  S: "#9ADB82",
+  Z: "#FF9FAE",
+  J: "#8FABF2",
+  L: "#FFB26B"
 };
 
 /** 色盲友好的形状角标,可以在设置里打开 */

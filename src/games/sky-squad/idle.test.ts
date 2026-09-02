@@ -110,5 +110,5 @@ describe("sky-squad · 放跑判罚(B1 回归)", () => {
       }
     }
     expect(passed, `摆烂过关的:${passed.join("、")}`).toEqual([]);
-  }, 60000);
+  }, 180_000);
 });

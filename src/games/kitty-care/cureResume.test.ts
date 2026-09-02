@@ -117,7 +117,7 @@ describe("护理进度熬得过一次重画（W5-L-36）", () => {
   it("做对一步之后重画（点一下猫）——第 1 步仍旧是绿的，不许退回「先看一看」", () => {
     const arena = makeArena();
     arena.startTask(SPEC, () => {});
-    expect(plan()).toContain("1.❓");
+    expect(plan()).toContain("1❓");
 
     doStep(0);
     const afterStep = plan();
@@ -170,7 +170,7 @@ describe("护理进度熬得过一次重画（W5-L-36）", () => {
     expect(plan()).toContain(round.steps[0].answer.name);
 
     arena.startTask({ ...SPEC, seed: 9 }, () => {});
-    expect(plan(), "新的一件事该从第 1 步开始").toContain("1.❓");
+    expect(plan(), "新的一件事该从第 1 步开始").toContain("1❓");
   });
 
   it("同一件事重开（`startTask` 又拿同一个 spec 叫了一次）也从头来", () => {
@@ -178,7 +178,7 @@ describe("护理进度熬得过一次重画（W5-L-36）", () => {
     arena.startTask(SPEC, () => {});
     doStep(0);
     arena.startTask(SPEC, () => {});
-    expect(plan()).toContain("1.❓");
+    expect(plan()).toContain("1❓");
   });
 });
 

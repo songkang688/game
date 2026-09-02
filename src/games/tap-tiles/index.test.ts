@@ -6,6 +6,22 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GameApi } from "../level99";
+import {
+  BEAM_MAX_DEG,
+  BURST_SPECS,
+  COMBO_POP_MS,
+  LANE_SYMBOLS,
+  STAGE_THEMES,
+  WARM_COMBO,
+  beamAngle,
+  beamTint,
+  burstSprite,
+  comboScale,
+  countdownStep,
+  noteSprite,
+  sparkSprite,
+  themeForChapter,
+} from "./art";
 import { buildLevel, levelChart, matchChart } from "./levels";
 import {
   El,
@@ -499,6 +515,171 @@ describe("另外三种模式", () => {
     expect(canvas()).toBeFalsy();
     expect(dom.root.querySelector(".l99-map")).toBeTruthy();
     handle.destroy();
+  });
+});
+
+describe("1.3 视觉契约", () => {
+  /** 进当前进度的那一关并跑一帧,返回画布和这一关的谱(存档跨用例共享,不能写死第 1 关) */
+  function intoLevelOne(): { c: El; start: number; notes: { lane: number; time: number }[] } {
+    const rec = fakeApi(dom.root);
+    mount(rec.api);
+    const go = dom.root.findAll((e) => e.tagName === "button" && /开始冒险|继续 第/.test(e.textContent));
+    const m = /第\s*(\d+)\s*关/.exec(go[go.length - 1]?.textContent ?? "");
+    const level = m ? Number(m[1]) - 1 : 0;
+    go[go.length - 1]?.click();
+    flushFrames(dom, 1, 0);
+    const chart = levelChart(buildLevel(level));
+    return {
+      c: canvas()!,
+      start: dom.clock.ms,
+      notes: chart.notes.map((n) => ({ lane: n.lane, time: n.time })),
+    };
+  }
+
+  it("一帧画下来绘制非空,音符走的是 sprite 路径(drawImage),不再是单次纯色 roundRect", () => {
+    const { c } = intoLevelOne();
+    expect(c.draws).toBeGreaterThan(0);
+    // 至少一张静态背景 + 一个已经进屏的音符 sprite
+    expect(c.ops.drawImage ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it("四列音符 sprite 互不相同,长条头和单点也不同,而且预渲染有缓存", () => {
+    const taps = [0, 1, 2, 3].map((lane) => noteSprite(lane, "tap"));
+    expect(new Set(taps).size).toBe(4);
+    for (const s of taps) expect((s as unknown as El).draws).toBeGreaterThan(0);
+    expect(noteSprite(0, "hold")).not.toBe(noteSprite(0, "tap"));
+    expect((noteSprite(0, "hold") as unknown as El).draws).toBeGreaterThan(0);
+    // 同一键取两次是同一张:60fps 下不许重画
+    expect(noteSprite(2, "tap")).toBe(noteSprite(2, "tap"));
+  });
+
+  it("完美与良好两档爆点分支不同:金色六芒星 / 白色四芒星", () => {
+    expect(burstSprite("perfect")).not.toBe(burstSprite("good"));
+    expect((burstSprite("perfect") as unknown as El).draws).toBeGreaterThan(0);
+    expect((burstSprite("good") as unknown as El).draws).toBeGreaterThan(0);
+    expect(BURST_SPECS.perfect.points).toBe(6);
+    expect(BURST_SPECS.good.points).toBe(4);
+    expect(BURST_SPECS.perfect.color).not.toBe(BURST_SPECS.good.color);
+  });
+
+  it("两档命中粒子也不同:小星星 / 小音符两种路径,按判定档配色", () => {
+    expect(sparkSprite("star", "perfect")).not.toBe(sparkSprite("note", "perfect"));
+    expect(sparkSprite("star", "perfect")).not.toBe(sparkSprite("star", "good"));
+    expect(sparkSprite("star", "good")).toBe(sparkSprite("star", "good"));
+    expect((sparkSprite("note", "good") as unknown as El).draws).toBeGreaterThan(0);
+  });
+
+  it("miss 仍走轨道变暗的温柔路径,画布上一笔红色都没有(回归)", () => {
+    const { c, start, notes } = intoLevelOne();
+    c.fillStyles.length = 0;
+    dom.clock.ms = start + notes[0].time + 400;
+    flushFrames(dom, 1, 0);
+    expect(sayText()).toBe("这个音符溜走啦");
+    const reds = c.fillStyles.filter((s) =>
+      /^#f00$|^#ff0000$|^red$|rgba?\(\s*255\s*,\s*0\s*,\s*0/i.test(s)
+    );
+    expect(reds).toEqual([]);
+    // 变暗层还在:同一句 rgba(120,108,150,…) 的温柔口径
+    expect(c.fillStyles.some((s) => s.startsWith("rgba(120,108,150"))).toBe(true);
+  });
+
+  it("粒子不再走 fillText 字符路径:命中后的帧只有 drawImage 在涨", () => {
+    const { c, start, notes } = intoLevelOne();
+    dom.clock.ms = start + notes[0].time;
+    fireWindow(dom, "keydown", { key: KEYS_SOLO[notes[0].lane] });
+    expect(sayText()).toContain("完美");
+    const text0 = (c.ops.fillText ?? 0) + (c.ops.strokeText ?? 0);
+    const img0 = c.ops.drawImage ?? 0;
+    flushFrames(dom, 3, 16);
+    expect((c.ops.fillText ?? 0) + (c.ops.strokeText ?? 0)).toBe(text0);
+    expect(c.ops.drawImage ?? 0).toBeGreaterThan(img0);
+  });
+
+  it("帧循环自动停机回归:弹完且粒子飘干净之后不再排新帧", () => {
+    const rec = fakeApi(dom.root);
+    mount(rec.api);
+    enterFirstLevel();
+    flushFrames(dom, 40, 900);
+    expect(dom.root.querySelector(".l99-overlay")).toBeTruthy();
+    expect(dom.frames.length).toBe(0);
+    flushFrames(dom, 5, 16);
+    expect(dom.frames.length).toBe(0);
+  });
+
+  it("reduced 下光束静止,平时随进度摆动且摆幅 ≤ 5°", () => {
+    const base = beamAngle(0, 0, true);
+    expect(beamAngle(5000, 0, true)).toBe(base);
+    expect(beamAngle(123456, 0, true)).toBe(base);
+    expect(beamAngle(2600, 0, false)).not.toBe(base);
+    for (const t of [0, 700, 2600, 5100, 99999]) {
+      expect(Math.abs(beamAngle(t, 0, false) - base)).toBeLessThanOrEqual(BEAM_MAX_DEG);
+    }
+  });
+
+  it("连击数字每 +1 弹跳一下,reduced 下永远静态", () => {
+    expect(comboScale(0, false)).toBeGreaterThan(1);
+    expect(comboScale(COMBO_POP_MS - 1, false)).toBeGreaterThan(1);
+    expect(comboScale(COMBO_POP_MS, false)).toBe(1);
+    expect(comboScale(0, true)).toBe(1);
+    expect(comboScale(60, true)).toBe(1);
+  });
+
+  it("连击 ≥ 20 光束转暖色,平时跟主题走", () => {
+    const th = STAGE_THEMES[0];
+    expect(beamTint(th, 0)).toBe(th.beam);
+    expect(beamTint(th, WARM_COMBO - 1)).toBe(th.beam);
+    expect(beamTint(th, WARM_COMBO)).not.toBe(th.beam);
+    // 暖色是统一的,不随主题变
+    expect(beamTint(STAGE_THEMES[2], WARM_COMBO)).toBe(beamTint(th, WARM_COMBO));
+  });
+
+  it("四列列首符号形状互不相同:色弱模式下形状也能认列", () => {
+    expect(LANE_SYMBOLS).toHaveLength(4);
+    expect(new Set(LANE_SYMBOLS).size).toBe(4);
+  });
+
+  it("章节主题查表:紫夜/暖橙/青蓝三套,8 章都查得到且三套都用上", () => {
+    expect(STAGE_THEMES.map((t) => t.name)).toEqual(["紫夜", "暖橙", "青蓝"]);
+    const used = new Set<number>();
+    for (let ci = 0; ci < 8; ci++) {
+      const ti = themeForChapter(ci);
+      expect(STAGE_THEMES[ti], `第 ${ci} 章的主题`).toBeTruthy();
+      used.add(ti);
+    }
+    expect(used.size).toBe(3);
+  });
+
+  it("预备倒数与开场时间轴对齐:3→2→1→收", () => {
+    expect(countdownStep(0, 1200)).toBe(3);
+    expect(countdownStep(500, 1200)).toBe(2);
+    expect(countdownStep(900, 1200)).toBe(1);
+    expect(countdownStep(1200, 1200)).toBe(0);
+    expect(countdownStep(0, 0)).toBe(0);
+  });
+
+  it("结算面板有三色判定统计条、最高连击徽章和星级", () => {
+    const rec = fakeApi(dom.root);
+    mount(rec.api);
+    byText("无尽加速")?.click();
+    flushFrames(dom, 30, 900);
+    expect(dom.root.querySelector(".tt-sum")).toBeTruthy();
+    expect(dom.root.querySelector(".tt-sum-bar")).toBeTruthy();
+    expect(dom.root.querySelector(".tt-sum-legend")?.textContent).toContain("完美");
+    const combo = dom.root.find((e) => e.className.includes("tt-badge") && e.textContent.includes("最高"));
+    expect(combo).toBeTruthy();
+    expect(dom.root.querySelector(".tt-badge-star")?.textContent).toMatch(/[★☆]{3}/);
+  });
+
+  it("双人同屏的结算给出朵朵 / 星星两列对比", () => {
+    const rec = fakeApi(dom.root);
+    mount(rec.api);
+    byText("双人同屏")?.click();
+    flushFrames(dom, 40, 900);
+    expect(dom.root.querySelector(".tt-duo-cols")).toBeTruthy();
+    const cols = dom.root.findAll((e) => e.className.split(/\s+/).includes("tt-duo-col"));
+    expect(cols).toHaveLength(2);
+    expect(cols[0].innerHTML).toContain("朵朵");
+    expect(cols[1].innerHTML).toContain("星星");
   });
 });
 

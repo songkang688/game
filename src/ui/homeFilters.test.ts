@@ -196,8 +196,9 @@ describe("窗口 1 的 12 款新游戏也能用拼音搜", () => {
   // 补 12 款时顺手核了一遍全库,发现 1.1 还有 16 个标题一直缺字 ——
   // 「金矿钩钩」四个字一个都没进表,「保龄球小馆」缺龄和馆。
   // 这些字一并补进来,顺带把它们钉住,免得下次改字表又被搞回去。
+  // bomb-buddies 在 1.3 窗口 5 更名「泡泡布阵」(原名内嵌商标风险词),此处跟着现行标题走。
   const OLD_TITLES_FIXED: { title: string; initials: string }[] = [
-    { title: "泡泡炸弹人", initials: "ppzdr" },
+    { title: "泡泡布阵", initials: "ppbz" },
     { title: "保龄球小馆", initials: "blqxg" },
     { title: "推箱小仓鼠", initials: "txxcs" },
     { title: "碰碰车大乱斗", initials: "ppcdld" },
@@ -669,9 +670,9 @@ describe("首页气泡的数量跟着实际收录走", () => {
   });
 
   it("窗口标题也跟着款数走,不再写死 1.1 · 55 款", () => {
-    expect(windowTitle(76)).toBe("一朵一星 1.2 · 76 款原创小游戏合集");
-    expect(windowTitle(76)).not.toMatch(/1\.1/);
-    expect(windowTitle(0)).toBe("一朵一星 1.2 · 原创小游戏合集");
+    expect(windowTitle(76)).toBe("一朵一星 1.3 · 76 款原创小游戏合集");
+    expect(windowTitle(76)).not.toMatch(/1\.1|1\.2/);
+    expect(windowTitle(0)).toBe("一朵一星 1.3 · 原创小游戏合集");
   });
 
   it("闯关关数也跟着最长的那一款走", () => {

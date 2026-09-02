@@ -14,6 +14,7 @@ export { meta };
 // 和单测跑的是同一套代码。
 import { save } from "../../engine/save";
 import { mulberry32, mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
+import { ballIconSvg } from "./art";
 import { AI_BLURB, AI_LABEL, AI_TIERS, aiCuePlacement, chooseShot, type AiTier } from "./ai";
 import GUIDE from "./guide";
 import {
@@ -59,13 +60,17 @@ const SHELL_CSS = `
 .ps-open--ai{background:linear-gradient(180deg,#8fb8e8,#5f8fd0);box-shadow:0 4px 0 #4a72a8;}
 .ps-open--en{background:linear-gradient(180deg,#b39ae8,#8a6fd0);box-shadow:0 4px 0 #6b53a8;}
 .ps-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
-.ps-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
+.ps-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#3d6152;box-shadow:0 3px 0 rgba(120,160,140,.35);}
 .ps-pick[aria-pressed="true"]{background:linear-gradient(180deg,#7fc9a2,#4fa87f);color:#fff;box-shadow:0 3px 0 #3b8062;}
 .ps-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .ps-over{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:18px 12px;}
 .ps-over-t{font-size:20px;font-weight:900;color:#3f8f68;}
-.ps-over-s{font-size:13.5px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
+.ps-over-s{font-size:14px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
+.ps-over-ball{line-height:0;filter:drop-shadow(0 4px 6px rgba(70,110,90,.35));}
+.ps-recap{display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:center;
+  background:#ffffffcc;border-radius:10px;padding:5px 10px;line-height:0;}
+.ps-recap-t{font-size:14px;font-weight:800;color:#43604f;margin-right:3px;line-height:1.4;}
 `;
 
 const SHELL_STYLE_ID = "ps-shell-style";
@@ -109,11 +114,24 @@ function overBox(
   host: HTMLElement,
   title: string,
   sub: string,
-  buttons: Array<{ label: string; onClick: () => void }>
+  buttons: Array<{ label: string; onClick: () => void }>,
+  deco?: { icon?: string; recap?: string }
 ): void {
   host.innerHTML = "";
   const box = el("div", "ps-over");
+  if (deco?.icon) {
+    // 胜方阵营球的大图（纯装饰，结论都在文字里）
+    const big = el("div", "ps-over-ball");
+    big.setAttribute("aria-hidden", "true");
+    big.innerHTML = deco.icon;
+    box.appendChild(big);
+  }
   box.append(el("div", "ps-over-t", title), el("div", "ps-over-s", sub));
+  if (deco?.recap) {
+    const recap = el("div", "ps-recap");
+    recap.innerHTML = deco.recap;
+    box.appendChild(recap);
+  }
   const row = el("div", "ps-row");
   for (const b of buttons) {
     const btn = button("ps-btn", b.label);
@@ -419,12 +437,21 @@ function mountVersus(
       banner: `第 ${round} 局`,
       seed: round * 13 + 5,
       sfx: (n) => api.play(n),
-      onOver: (winner) => {
+      onOver: (winner, m) => {
         wins[winner]++;
         game?.destroy();
         game = null;
         const names = [P_NAME[0], tier ? AI_LABEL[tier] : P_NAME[1]];
         const over = wins[0] >= 2 || wins[1] >= 2;
+        // 结算装饰：胜方阵营球大图 + 本局进袋的球一排小图标
+        const winGroup = m.groups[winner];
+        const icon = ballIconSvg(winGroup ?? "black", 46);
+        const potted = m.balls.filter((b) => b.potted && b.kind !== "cue");
+        const recap =
+          potted.length > 0
+            ? `<span class="ps-recap-t">本局进袋</span>` +
+              potted.map((b) => ballIconSvg(b.kind, 16)).join("")
+            : "";
         if (winner === 0) {
           api.play("win");
           api.addStars(over ? 3 : 1);
@@ -453,7 +480,7 @@ function mountVersus(
             },
           },
           { label: "◀ 回选关", onClick: () => { api.play("tap"); onBack(); } },
-        ]);
+        ], { icon, recap });
       },
     });
   }
@@ -534,7 +561,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
               },
             },
             { label: "◀ 回选关", onClick: () => { api.play("tap"); onBack(); } },
-          ]
+          ],
+          { icon: ballIconSvg("cue", 40) }
         );
       },
     });

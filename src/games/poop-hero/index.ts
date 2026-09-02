@@ -67,6 +67,47 @@ import {
   type World,
   type WorldEvent,
 } from "./logic";
+// 视觉层只读这两个窗口常量画残影,一个数值都不回写
+import { SWEEP_TIME } from "./tuning";
+import { blendCape, capeMode, type CapeMode } from "../../art/kit/cape";
+import { traceStar } from "../../art/kit/sparkle";
+// 自绘道具小画坊(R1 修复):香香星 / 18 款垃圾条目 / 分类桶图标 / 场内小装饰与粒子字形,
+// 全部顶替裸 emoji,画布做到零 emoji 直出
+import {
+  drawBinIcon,
+  drawBubbleDot,
+  drawMiniStar,
+  drawPadlock,
+  drawParticleGlyph,
+  drawScentStar,
+  drawSoap,
+  drawSponge,
+  drawSwirl,
+  drawThinkBubble,
+  drawTrashItem,
+  type ParticleGlyph,
+} from "./trashArt";
+import {
+  BEAN_COLORS,
+  FLOWER_STYLES,
+  HERO_VIS,
+  PH_ANIM,
+  PH_TOKENS,
+  PhFx,
+  badgePulse,
+  bloomFrame,
+  breathOffset,
+  broomTrailAlpha,
+  drawFlower,
+  easeOutQuad,
+  heroPose,
+  legFrame,
+  poseLean,
+  sceneTheme,
+  shade,
+  showDetail,
+  trailAlpha,
+} from "./visual";
 
 // ---------------------------------------------------------------------------
 // 配色:一章一套粉彩,统一走「可爱棕 + 粉彩」的干净路子
@@ -94,28 +135,14 @@ const PALETTES: Palette[] = [
   { sky0: "#F0EBFC", sky1: "#F9F5FF", far: "#D8CEF2", ground: "#B79CE8", groundDark: "#E2D7F6", deco: "#9B7ADC" },
 ];
 
-/** 两位小主角的配色:朵朵粉披风,星星蓝披风 */
+/** 两位小主角的配色:朵朵粉披风,星星蓝披风(星星披风与 HERO_VIS 同步加深,A-9) */
 const HERO_COLORS = [
   { body: "#FFD9A8", cape: "#FF8FB8", capeDark: "#E4699A", mask: "#7B4DA8", name: "朵朵" },
-  { body: "#FFE2BE", cape: "#7FB2FF", capeDark: "#5A8ADD", mask: "#2F6BAE", name: "星星" },
+  { body: "#FFE2BE", cape: "#6690E0", capeDark: "#4E74C2", mask: "#2F6BAE", name: "星星" },
 ];
 
-const FLOWERS = ["🌸", "🌼", "🌷", "🌻", "💐"];
-
-/**
- * 「豆豆怪」的粉彩配色:一章一套,全是浅浅的糖果色。
- * 造型统一成圆润的小豆豆 + 大眼睛 + 微笑,**一点棕色写实都不要**。
- */
-const BEAN_COLORS = [
-  { body: "#FFC9DE", shade: "#F7A8C6", face: "#B4577E" },
-  { body: "#C9E7C0", shade: "#A9D6A0", face: "#4F8258" },
-  { body: "#C6DCF7", shade: "#A6C4E8", face: "#3F6C9E" },
-  { body: "#FFE0AE", shade: "#F6CB86", face: "#A9782C" },
-  { body: "#F6C6EA", shade: "#E7A6D6", face: "#9B4E86" },
-  { body: "#BFE6F2", shade: "#9CD2E4", face: "#3C7C92" },
-  { body: "#FFF0B0", shade: "#F3DE86", face: "#9C8320" },
-  { body: "#DACDF6", shade: "#C0AEE8", face: "#6A4FA8" },
-];
+// 1.3 视觉升级:变花全部改为自绘五瓣花(FLOWER_STYLES),豆豆怪糖果色原值搬去 visual.ts,
+// 「糖果色不搞脏」的既有约定原样延续。
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -148,7 +175,8 @@ export const PH_CSS = `
 .ph-veil-sub{font-size:14px;font-weight:700;color:#9A7A5E;line-height:1.6;max-width:320px;}
 .ph-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .ph-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;
+  min-height:44px;display:inline-flex;align-items:center;}
 .ph-veil-btn.ph-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
 .ph-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #C25A80;}
 .ph-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
@@ -212,6 +240,15 @@ export const PH_CSS = `
   .ph-pads[data-players="2"]{--k:44px;}
   .ph-tip{margin-top:4px;font-size:11px;}
 }
+@media (max-height:840px) and (min-height:621px){
+  .ph-cv{height:220px;}
+  .ph-wrap[data-players="2"] .ph-cv{height:256px;}
+}
+@media (max-height:840px) and (min-height:501px){
+  .ph-pads{position:sticky;bottom:0;z-index:5;margin-top:4px;--k:44px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .ph-pads[data-players="2"]{--k:44px;}
+}
 
 /* ---- 1.2 新增(一律 pph- 前缀)---- */
 .pph-chip-sort{background:#EAF3FF;color:#3F72A8;}
@@ -243,6 +280,18 @@ export const PH_CSS = `
 @media (prefers-reduced-motion:reduce){
   .pph-goal-fill,.ph-bar-fill{transition:none;}
   .ph-toast{transition:none;}
+}
+
+/* ---- 1.3 视觉升级(第 22 步 C 档,继续 pph- 前缀):HUD 卡片化 ---- */
+.pph-card{background:linear-gradient(180deg,#FFFFFF,#FFF3EA);border:1px solid rgba(244,133,159,.32);
+  font-size:14px;}
+.pph-chip-combo{background:linear-gradient(180deg,#FFF7DE,#FFE9B8);color:#A5732A;
+  border-color:rgba(240,194,90,.55);}
+.pph-chip-combo[hidden]{display:none;}
+.pph-chip-chapter{background:linear-gradient(180deg,#F3F7FF,#E3EEFF);color:#3F72A8;
+  border-color:rgba(127,178,240,.45);}
+@media (max-width:420px){
+  .pph-card{font-size:14px;padding:3px 6px;}
 }
 `;
 
@@ -291,12 +340,8 @@ function viewportWidth(): number {
   return typeof w === "number" && w > 0 ? w : 360;
 }
 
-function emoji(g: CanvasRenderingContext2D, ch: string, x: number, y: number, size: number): void {
-  g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(ch, x, y);
-}
+// R1 修复:画布上最后一个 emoji 直出点位清场后,连 emoji() 工具函数一起删掉,
+// 从根上堵住「往画布贴 emoji 字形」这条回退路(DOM 文案里的装饰 emoji 不归它管)。
 
 // ---------------------------------------------------------------------------
 // 场地:一块画布 + 一套操作 + 一个世界
@@ -307,7 +352,7 @@ interface Particle {
   y: number;
   vy: number;
   life: number;
-  text: string;
+  glyph: ParticleGlyph;
   size: number;
 }
 
@@ -357,17 +402,18 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
   lose: "oops",
 };
 
-const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
-  flower: "🌸",
-  wipe: "✨",
-  sparkle: "⭐",
-  hurt: "💫",
-  smash: "💨",
-  spring: "🍄",
-  pickup: "🫳",
-  sortGood: "⭐",
-  sortSoft: "🤔",
-  cart: "🚚",
+// 事件粒子全部自绘(R1 修复:emoji 文本粒子清场),字形见 trashArt.drawParticleGlyph
+const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], ParticleGlyph>> = {
+  flower: "flower",
+  wipe: "spark",
+  sparkle: "star",
+  hurt: "swirl",
+  smash: "spark",
+  spring: "mushroom",
+  pickup: "bubble",
+  sortGood: "star",
+  sortSoft: "bubble",
+  cart: "star",
 };
 
 function createField(host: HTMLElement, opts: FieldOpts): Field {
@@ -384,6 +430,22 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const sfxAt = new Map<SoundName, number>();
   const gentle = reducedMotion();
   const bag = createDisposer();
+
+  // ---- 1.3 视觉状态(全是「皮」:残影 / 尾流 / 星花 / 连击脉冲 / 披风形态) ----
+  const fx = new PhFx();
+  /** 视觉连击:清扫事件攒起来的,只喂 HUD 卡片与徽章脉冲,不进任何判定 */
+  let combo = 0;
+  let comboT = 0;
+  /** 距上一次脉冲触发过去的毫秒数 */
+  let badgeMs: number = PH_ANIM.badgePulseMs;
+  /** 披风三段形态(逐玩家),记上一形态好做 180ms ease-out 过渡 */
+  const capeStates = world.players.map(() => ({
+    prev: "rest" as CapeMode,
+    mode: "rest" as CapeMode,
+    sinceMs: 9999,
+  }));
+  /** 星星尾流的逐玩家节拍器(每 100ms 落一颗) */
+  const trailAcc = world.players.map(() => 0);
 
   const wrap = el("div", "ph-wrap");
   wrap.dataset.players = String(opts.players);
@@ -402,11 +464,20 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const sortChip = el("span", "ph-chip pph-chip-sort");
   const timerChip = el("span", "ph-chip");
   const extraChip = el("span", "ph-chip");
+  // 1.3 HUD 卡片化:连击卡(有连击才露面)+ 章节卡
+  const comboChip = el("span", "ph-chip pph-card pph-chip-combo");
+  comboChip.hidden = true;
+  const chapterChip = el(
+    "span",
+    "ph-chip pph-card pph-chip-chapter",
+    viewportWidth() <= 420 ? `📖${opts.def.chapterIndex + 1}` : `📖 第 ${opts.def.chapterIndex + 1} 章`
+  );
+  chapterChip.title = "当前章节";
   const pauseBtn = el("button", "ph-btn");
   pauseBtn.type = "button";
   pauseBtn.innerHTML = `⏸<span class="ph-lbl"> 暂停</span>`;
   pauseBtn.setAttribute("aria-label", "暂停(也可以按 Esc)");
-  hud.append(hearts, bar, sparkChip);
+  hud.append(hearts, bar, sparkChip, comboChip, chapterChip);
   const hasSorting = opts.def.bins.length > 0;
   if (hasSorting) hud.appendChild(sortChip);
   if (opts.showTimer) hud.appendChild(timerChip);
@@ -669,10 +740,22 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (sound) playThrottled(sound, now);
       // 投桶的一句话:对了夸一句,错了温和地讲一遍该去哪个桶(不扣任何分)
       if (ev.kind === "sortGood" || ev.kind === "sortSoft") toast(world.sortHint);
+      // 视觉连击:清扫 / 捡星 / 投对桶都算,喂 HUD 连击卡与徽章脉冲(纯装饰)
+      if (ev.kind === "flower" || ev.kind === "wipe" || ev.kind === "sparkle" || ev.kind === "sortGood") {
+        combo++;
+        comboT = 2.5;
+        if (combo >= 2) badgeMs = 0;
+      }
+      // 扫帚碰到豆豆怪的瞬间:接触点星花 4 颗(kit 星花池,reduced 自动只留一帧)
+      if (ev.kind === "flower") {
+        for (let k = 0; k < 4; k++) {
+          fx.sparks.spawn(ev.x + (k % 2 === 0 ? -1 : 1) * (8 + k * 5), ev.y - 8 - (k % 3) * 9, gentle, 7 - k);
+        }
+      }
       if (gentle) continue;
       const art = PARTICLE_FOR_EVENT[ev.kind];
       if (art) {
-        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
+        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, glyph: art, size: 18 });
         if (particles.length > 40) particles.shift();
       }
     }
@@ -680,7 +763,111 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
   // ---- 渲染 ----
   const pal = PALETTES[world.def.chapterIndex % PALETTES.length];
+  /** 章节 → 背景主题:街道 / 公园 / 星空屋顶 轮换(只读章节号) */
+  const theme = sceneTheme(world.def.chapterIndex);
 
+  /** 自绘小气旋:顶替原来贴 💨 emoji 的车尾气与尘土风 */
+  function drawGust(ctx2: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    ctx2.save();
+    ctx2.strokeStyle = "rgba(255,255,255,.65)";
+    ctx2.lineWidth = Math.max(1, r * 0.28);
+    ctx2.lineCap = "round";
+    ctx2.beginPath();
+    ctx2.arc(x, y, r, Math.PI * 0.15, Math.PI * 1.2);
+    ctx2.stroke();
+    ctx2.beginPath();
+    ctx2.arc(x + r * 0.9, y + r * 0.35, r * 0.55, Math.PI * 0.9, Math.PI * 1.9);
+    ctx2.stroke();
+    ctx2.restore();
+  }
+
+  /** 魔法扫帚:木柄渐变 + 金色捆环 + 8 根须状帚毛,挥动时帚毛随进度弯曲(hero 本地坐标) */
+  function drawBroom(ctx2: CanvasRenderingContext2D, w: number, h: number, p: World["players"][number]): void {
+    // 挥动进度只读 sweepT 窗口(SWEEP_TIME 一个数都不动)
+    const prog = p.sweepT > 0 ? 1 - p.sweepT / SWEEP_TIME : 0;
+    ctx2.save();
+    ctx2.translate(w * 0.3, -h * 0.5);
+    ctx2.rotate(p.sweepT > 0 ? -0.5 + easeOutQuad(prog) * 1.05 : 0.55);
+    const len = w * 0.95;
+    const handGrad = ctx2.createLinearGradient(0, 0, len, 0);
+    handGrad.addColorStop(0, shade(PH_TOKENS.phBroom, 18));
+    handGrad.addColorStop(1, shade(PH_TOKENS.phBroom, -12));
+    ctx2.fillStyle = handGrad;
+    roundRect(ctx2, 0, -w * 0.045, len, w * 0.09, w * 0.045);
+    ctx2.fill();
+    // 金色捆环
+    ctx2.fillStyle = PH_TOKENS.phBroomRing;
+    roundRect(ctx2, len * 0.78, -w * 0.075, w * 0.1, w * 0.15, w * 0.03);
+    ctx2.fill();
+    // 帚毛扇形:8 根须状线,挥得越猛弯得越弯
+    const bend = p.sweepT > 0 ? (1 - prog) * 0.55 : 0.12;
+    ctx2.lineWidth = Math.max(1, w * 0.035);
+    ctx2.lineCap = "round";
+    for (let k = 0; k < 8; k++) {
+      const spread = (k / 7 - 0.5) * 0.95;
+      ctx2.strokeStyle = k % 2 === 0 ? "#F6D08A" : "#E9B863";
+      const bx = len * 0.86;
+      const ex = bx + Math.cos(spread * 0.8) * w * 0.36;
+      const ey = Math.sin(spread) * w * 0.32 + bend * w * 0.16;
+      ctx2.beginPath();
+      ctx2.moveTo(bx, 0);
+      ctx2.quadraticCurveTo(bx + w * 0.18, spread * w * 0.12 + bend * w * 0.18, ex, ey);
+      ctx2.stroke();
+    }
+    ctx2.restore();
+  }
+
+  /** 扫帚弧形残影:只在 sweepT > 0 窗口出现,reduced 一帧静态弧;画在超人身后一层 */
+  function drawBroomTrail(ctx2: CanvasRenderingContext2D, sxp: number, syp: number, scale: number, p: World["players"][number]): void {
+    const a = broomTrailAlpha(p.sweepT, SWEEP_TIME, gentle);
+    if (a <= 0) return;
+    const h = (p.crouch ? CROUCH_H : PLAYER_H) * scale;
+    const w = PLAYER_W * scale;
+    const prog = gentle ? 0.5 : 1 - p.sweepT / SWEEP_TIME;
+    ctx2.save();
+    ctx2.translate(sxp, syp);
+    ctx2.scale(p.facing, 1);
+    ctx2.strokeStyle = `rgba(255,255,255,${(a * 0.8).toFixed(3)})`;
+    ctx2.lineWidth = w * 0.14;
+    ctx2.lineCap = "round";
+    ctx2.beginPath();
+    ctx2.arc(w * 0.3, -h * 0.5, w * 0.95, -0.55 + prog * 0.35, 0.35 + prog * 0.35);
+    ctx2.stroke();
+    ctx2.restore();
+  }
+
+  /** 冲刺残影:两帧线性渐隐的剪影(reduced 压根不生成,见 PhFx.spawnGhost) */
+  function drawGhost(
+    ctx2: CanvasRenderingContext2D,
+    sxp: number,
+    syp: number,
+    scale: number,
+    gh: { facing: 1 | -1; crouch: boolean; framesLeft: number }
+  ): void {
+    const h = (gh.crouch ? CROUCH_H : PLAYER_H) * scale;
+    const w = PLAYER_W * scale;
+    const headR = Math.max(4, w * 0.38);
+    const headCY = -h + headR * 0.95;
+    ctx2.save();
+    ctx2.globalAlpha = 0.22 * (gh.framesLeft / PH_ANIM.dashGhostFrames);
+    ctx2.translate(sxp, syp);
+    ctx2.scale(gh.facing, 1);
+    ctx2.fillStyle = PH_TOKENS.phSuit;
+    roundRect(ctx2, -w * 0.36, headCY + headR * 0.7, w * 0.72, -(headCY + headR * 0.7) - h * 0.02, w * 0.26);
+    ctx2.fill();
+    ctx2.beginPath();
+    ctx2.arc(0, headCY, headR, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.restore();
+  }
+
+  /**
+   * 超人九道工序(四·补二):
+   * ①落影 ②披风外层渐变+亮边 ③披风内衬 ④身体三停渐变+菱形高光+描边
+   * ⑤腰带双色+圆扣 ⑥头+下巴阴影+三撮刘海 ⑦眼罩+反光斜杠+眼睛
+   * ⑧手套/靴子收边+跑动腿摆 ⑨状态附加(呼吸/前倾/扫帚)。
+   * 判定盒 PLAYER_W/H、CROUCH_H 只读,画多大都不碰它。
+   */
   function drawHero(
     ctx2: CanvasRenderingContext2D,
     sx: number,
@@ -689,71 +876,172 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     pi: number,
     p: World["players"][number]
   ): void {
-    const colors = HERO_COLORS[pi % HERO_COLORS.length];
+    const vis = HERO_VIS[pi % HERO_VIS.length];
     const h = (p.crouch ? CROUCH_H : PLAYER_H) * scale;
     const w = PLAYER_W * scale;
     const blink = p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 0;
+    const pose = heroPose(p);
+    const tMs = world.time * 1000;
     const headR = Math.max(4, w * 0.38);
     const headCY = -h + headR * 0.95;
     const bodyTop = headCY + headR * 0.7;
+    const bodyH = -bodyTop - h * 0.02;
     ctx2.save();
     ctx2.globalAlpha = blink ? 0.45 : 1;
     ctx2.translate(sx, sy);
+
+    // ── 工序① 落影椭圆(0.8×PLAYER_W 宽、0.2 高),统一 phShadow
+    ctx2.fillStyle = PH_TOKENS.phShadow;
+    ctx2.beginPath();
+    ctx2.ellipse(0, -1, w * 0.4, h * 0.1, 0, 0, Math.PI * 2);
+    ctx2.fill();
+
     ctx2.scale(p.facing, 1);
+    // ⑨ 的姿态接线放在最前:站立呼吸 ±1px(reduced 停),跑 10° / 冲 18° 前倾绕脚底转
+    if (pose === "idle" && p.onGround) ctx2.translate(0, breathOffset(tMs, gentle));
+    ctx2.rotate(poseLean(pose));
 
-    // 披风(在身后飘)
-    const flap = p.onGround ? 0 : 0.22;
-    ctx2.fillStyle = colors.capeDark;
+    // ── 工序② 披风外层:线性渐变(主色顶亮 → 底暗)+ 1px 亮边,三段形态随速度切换
+    const cs = capeStates[pi] ?? capeStates[0];
+    const pts = blendCape(cs.prev, cs.mode, cs.sinceMs, gentle);
+    const capeLen = h * 0.86;
+    const sway = gentle ? 0 : Math.sin(tMs / 260 + pi * 2) * pts.sway * capeLen;
+    const ax = -w * 0.06;
+    const ay = bodyTop - headR * 0.08;
+    const tipX = ax - pts.tipX * capeLen;
+    const tipY = ay + pts.tipY * capeLen + sway;
+    const liftX = ax - pts.liftX * capeLen * 0.72;
+    const liftY = ay + pts.liftY * capeLen - capeLen * 0.16;
+    const capeGrad = ctx2.createLinearGradient(ax, ay, tipX, tipY);
+    capeGrad.addColorStop(0, vis.capeOut0);
+    capeGrad.addColorStop(1, vis.capeOut1);
+    ctx2.fillStyle = capeGrad;
     ctx2.beginPath();
-    ctx2.moveTo(-w * 0.05, bodyTop - headR * 0.1);
-    ctx2.quadraticCurveTo(-w * (1.05 + flap), -h * 0.42, -w * (0.5 + flap), -h * 0.02);
-    ctx2.quadraticCurveTo(-w * 0.22, -h * 0.24, -w * 0.05, bodyTop + h * 0.1);
+    ctx2.moveTo(ax, ay);
+    ctx2.quadraticCurveTo(liftX, liftY, tipX, tipY);
+    ctx2.quadraticCurveTo(ax - capeLen * 0.34, ay + capeLen * 0.62, ax + w * 0.02, ay + h * 0.56);
     ctx2.closePath();
     ctx2.fill();
-    ctx2.fillStyle = colors.cape;
+    ctx2.strokeStyle = "rgba(255,255,255,.75)";
+    ctx2.lineWidth = 1;
+    ctx2.stroke();
+
+    // ── 工序③ 披风内衬:衬色,跟随外层形变 90%
+    ctx2.fillStyle = vis.capeIn;
     ctx2.beginPath();
-    ctx2.moveTo(0, bodyTop - headR * 0.1);
-    ctx2.quadraticCurveTo(-w * (0.82 + flap), -h * 0.4, -w * (0.34 + flap), -h * 0.06);
-    ctx2.quadraticCurveTo(-w * 0.14, -h * 0.26, 0, bodyTop + h * 0.08);
+    ctx2.moveTo(ax, ay + capeLen * 0.06);
+    ctx2.quadraticCurveTo(ax + (liftX - ax) * 0.9, ay + (liftY - ay) * 0.9, ax + (tipX - ax) * 0.9, ay + (tipY - ay) * 0.9);
+    ctx2.quadraticCurveTo(ax - capeLen * 0.28, ay + capeLen * 0.56, ax + w * 0.02, ay + h * 0.5);
     ctx2.closePath();
     ctx2.fill();
 
-    // 小脚
-    ctx2.fillStyle = colors.capeDark;
+    // ── 工序④ 身体:三停渐变(顶亮/主色/底稳)+ 胸口菱形高光 + 1.5px 描边
+    const bodyGrad = ctx2.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+    bodyGrad.addColorStop(0, vis.suitHi);
+    bodyGrad.addColorStop(0.55, vis.suit);
+    bodyGrad.addColorStop(1, shade(vis.suit, -14));
+    ctx2.fillStyle = bodyGrad;
+    roundRect(ctx2, -w * 0.36, bodyTop, w * 0.72, bodyH, w * 0.26);
+    ctx2.fill();
+    ctx2.strokeStyle = shade(vis.suit, -32);
+    ctx2.lineWidth = 1.5;
+    ctx2.stroke();
+    // 菱形高光偏向左上(统一光源 45°)
+    const chestY = bodyTop + bodyH * 0.34;
+    const dR = w * 0.14;
+    ctx2.fillStyle = "rgba(255,255,255,.42)";
     ctx2.beginPath();
-    ctx2.ellipse(-w * 0.17, -h * 0.02, w * 0.16, h * 0.055, 0, 0, Math.PI * 2);
-    ctx2.ellipse(w * 0.17, -h * 0.02, w * 0.16, h * 0.055, 0, 0, Math.PI * 2);
+    ctx2.moveTo(-w * 0.1, chestY - dR);
+    ctx2.lineTo(-w * 0.1 + dR * 0.68, chestY);
+    ctx2.lineTo(-w * 0.1, chestY + dR);
+    ctx2.lineTo(-w * 0.1 - dR * 0.68, chestY);
+    ctx2.closePath();
     ctx2.fill();
-
-    // 身体(套着披风领的连身衣)
-    ctx2.fillStyle = colors.cape;
-    roundRect(ctx2, -w * 0.36, bodyTop, w * 0.72, -bodyTop - h * 0.02, w * 0.26);
-    ctx2.fill();
-    // 胸口小花徽章
+    // 胸口徽章:连击时 500ms 发光脉冲(reduced 静态亮徽章)
+    const badgeR = Math.max(2, w * 0.12);
+    const pulse = combo >= 2 ? badgePulse(badgeMs, gentle) : { scale: 1, glow: 0 };
+    if (pulse.glow > 0) {
+      ctx2.fillStyle = `rgba(255,240,180,${(pulse.glow * 0.9).toFixed(3)})`;
+      ctx2.beginPath();
+      ctx2.arc(w * 0.08, chestY, badgeR * pulse.scale * 1.7, 0, Math.PI * 2);
+      ctx2.fill();
+    }
     ctx2.fillStyle = "#FFF6DC";
     ctx2.beginPath();
-    ctx2.arc(0, bodyTop + (-bodyTop) * 0.42, Math.max(2, w * 0.15), 0, Math.PI * 2);
+    ctx2.arc(w * 0.08, chestY, badgeR * pulse.scale, 0, Math.PI * 2);
     ctx2.fill();
-    ctx2.fillStyle = colors.mask;
+    ctx2.fillStyle = vis.mask;
     ctx2.beginPath();
-    ctx2.arc(0, bodyTop + (-bodyTop) * 0.42, Math.max(1, w * 0.07), 0, Math.PI * 2);
+    ctx2.arc(w * 0.08, chestY, badgeR * 0.45 * pulse.scale, 0, Math.PI * 2);
     ctx2.fill();
 
-    // 脑袋
-    ctx2.fillStyle = colors.body;
+    // ── 工序⑤ 腰带双色 + 圆扣(直径 < 5px 省略扣)
+    const beltH = Math.max(1.5, h * 0.075);
+    const beltY = bodyTop + bodyH - beltH * 1.9;
+    ctx2.fillStyle = PH_TOKENS.phBelt;
+    roundRect(ctx2, -w * 0.36, beltY, w * 0.72, beltH, beltH * 0.5);
+    ctx2.fill();
+    ctx2.fillStyle = shade(PH_TOKENS.phBelt, -16);
+    roundRect(ctx2, -w * 0.36, beltY + beltH * 0.5, w * 0.72, beltH * 0.5, beltH * 0.25);
+    ctx2.fill();
+    const buckleR = w * 0.085;
+    if (showDetail(buckleR * 2)) {
+      ctx2.fillStyle = PH_TOKENS.phBeltBuckle;
+      ctx2.beginPath();
+      ctx2.arc(0, beltY + beltH * 0.5, buckleR, 0, Math.PI * 2);
+      ctx2.fill();
+      ctx2.strokeStyle = shade(PH_TOKENS.phBelt, -28);
+      ctx2.lineWidth = 1;
+      ctx2.stroke();
+    }
+
+    // ── 工序⑥ 头部圆 + 下巴阴影 + 前额三撮刘海(< 5px 省略,都收在头圆里)
+    ctx2.fillStyle = vis.skin;
     ctx2.beginPath();
     ctx2.arc(0, headCY, headR, 0, Math.PI * 2);
     ctx2.fill();
-    // 眼罩
-    ctx2.fillStyle = colors.mask;
+    ctx2.save();
+    ctx2.beginPath();
+    ctx2.arc(0, headCY, headR, 0, Math.PI * 2);
+    ctx2.clip();
+    ctx2.fillStyle = "rgba(90,74,110,.14)";
+    ctx2.beginPath();
+    ctx2.ellipse(0, headCY + headR * 0.78, headR * 0.72, headR * 0.3, 0, 0, Math.PI * 2);
+    ctx2.fill();
+    if (showDetail(headR * 0.42)) {
+      ctx2.fillStyle = vis.hair;
+      for (const [hx, hr] of [
+        [-0.46, 0.24],
+        [-0.02, 0.28],
+        [0.4, 0.22],
+      ] as const) {
+        ctx2.beginPath();
+        ctx2.arc(headR * hx, headCY - headR * 0.66, headR * hr, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    }
+    ctx2.restore();
+
+    // ── 工序⑦ 眼罩 + 反光斜杠 + 眼睛两点
+    ctx2.fillStyle = vis.mask;
     roundRect(ctx2, -headR * 0.98, headCY - headR * 0.38, headR * 1.96, headR * 0.6, headR * 0.26);
     ctx2.fill();
+    ctx2.save();
+    roundRect(ctx2, -headR * 0.98, headCY - headR * 0.38, headR * 1.96, headR * 0.6, headR * 0.26);
+    ctx2.clip();
+    ctx2.strokeStyle = "rgba(255,255,255,.35)";
+    ctx2.lineWidth = headR * 0.2;
+    ctx2.beginPath();
+    ctx2.moveTo(-headR * 0.7, headCY - headR * 0.5);
+    ctx2.lineTo(-headR * 0.2, headCY + headR * 0.3);
+    ctx2.stroke();
+    ctx2.restore();
     ctx2.fillStyle = "#FFFFFF";
     ctx2.beginPath();
     ctx2.arc(headR * 0.34, headCY - headR * 0.08, Math.max(1.2, headR * 0.16), 0, Math.PI * 2);
     ctx2.arc(-headR * 0.24, headCY - headR * 0.08, Math.max(1.2, headR * 0.16), 0, Math.PI * 2);
     ctx2.fill();
-    // 腮红与笑脸
+    // 腮红与笑脸(可爱底子保住)
     ctx2.fillStyle = "#F9B6C6";
     ctx2.globalAlpha = blink ? 0.3 : 0.7;
     ctx2.beginPath();
@@ -767,26 +1055,57 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx2.arc(headR * 0.06, headCY + headR * 0.34, headR * 0.24, 0.1 * Math.PI, 0.9 * Math.PI);
     ctx2.stroke();
 
-    // 手里的小扫帚
-    if (p.sweepT > 0 || p.dashT > 0) {
-      ctx2.strokeStyle = "#B98A5E";
-      ctx2.lineWidth = Math.max(1.5, w * 0.09);
-      ctx2.beginPath();
-      ctx2.moveTo(w * 0.3, -h * 0.55);
-      ctx2.lineTo(w * 0.85, -h * 0.18);
-      ctx2.stroke();
-      ctx2.fillStyle = "#F6D08A";
-      roundRect(ctx2, w * 0.76, -h * 0.3, w * 0.36, h * 0.26, w * 0.1);
+    // 剪影级附件(A-9 双人灰度可分):星星头顶一枚星星发卡,伸出头圆改变轮廓,
+    // 16px 缩略下也能靠外形认人——所以它**不走 showDetail 门槛**,多小都画
+    if (pi % HERO_VIS.length === 1) {
+      const pinR = Math.max(2, headR * 0.55);
+      ctx2.fillStyle = "#F5C542";
+      traceStar(ctx2, headR * 0.55, headCY - headR * 0.98, pinR);
       ctx2.fill();
+      ctx2.strokeStyle = "#B4831E";
+      ctx2.lineWidth = 1;
+      ctx2.stroke();
     }
-    ctx2.restore();
 
-    // 冲刺时的小气流
-    if (p.dashT > 0) {
-      ctx2.globalAlpha = 0.5;
-      emoji(ctx2, "💨", sx - p.facing * w * 1.1, sy - h * 0.5, 16 * Math.max(0.7, scale));
-      ctx2.globalAlpha = 1;
-    }
+    // ── 工序⑧ 手套 / 靴子色块收边 + 跑动 4 帧腿摆(reduced 2 帧)
+    const swings = gentle ? [-1, 1] : [-1, 0, 1, 0];
+    const swing = pose === "run" ? swings[legFrame(tMs, gentle)] : 0;
+    const bootRX = w * 0.16;
+    const bootRY = Math.max(1.5, h * 0.06);
+    const backX = pose === "dash" ? -w * 0.28 : -w * 0.17 - swing * w * 0.09;
+    const frontX = pose === "dash" ? w * 0.04 : w * 0.17 + swing * w * 0.09;
+    const backLift = pose === "run" && swing > 0 ? h * 0.045 : 0;
+    const frontLift = pose === "run" && swing < 0 ? h * 0.045 : 0;
+    ctx2.fillStyle = vis.boot;
+    ctx2.strokeStyle = shade(vis.boot, -20);
+    ctx2.lineWidth = 1;
+    ctx2.beginPath();
+    ctx2.ellipse(backX, -h * 0.02 - bootRY - backLift, bootRX, bootRY, 0, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.stroke();
+    ctx2.beginPath();
+    ctx2.ellipse(frontX, -h * 0.02 - bootRY - frontLift, bootRX, bootRY, 0, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.stroke();
+    const handR = Math.max(1.5, w * 0.09);
+    const handY = bodyTop + bodyH * 0.52;
+    const holding = p.sweepT > 0 || p.dashT > 0;
+    ctx2.fillStyle = vis.glove;
+    ctx2.strokeStyle = shade(vis.glove, -22);
+    ctx2.beginPath();
+    ctx2.arc(-w * 0.32, handY, handR, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.stroke();
+    ctx2.beginPath();
+    // 握持手:挥扫帚时搭在帚柄的握持点上
+    if (holding) ctx2.arc(w * 0.3, -h * 0.5, handR, 0, Math.PI * 2);
+    else ctx2.arc(w * 0.32, handY, handR, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.stroke();
+
+    // ── 工序⑨ 状态附加:扫帚跟手;冲刺残影画在身后一层、星星尾流压在最上,都在 render 里
+    if (holding) drawBroom(ctx2, w, h, p);
+    ctx2.restore();
   }
 
   function drawMonster(
@@ -798,8 +1117,25 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     idx: number
   ): void {
     if (m.clean) {
-      const pop = m.bloom > 0 && !gentle ? 1 + m.bloom : 1;
-      emoji(ctx2, FLOWERS[idx % FLOWERS.length], sx, groundY - MONSTER_H * 0.45 * scale, 24 * scale * pop);
+      // 变花:自绘五瓣花(花心渐变),240ms 三帧展开,reduced 一帧到位
+      const frame = bloomFrame(Math.max(0, 0.6 - m.bloom) * 1000, gentle);
+      const grow = [0.5, 0.78, 1][frame] ?? 1;
+      drawFlower(ctx2, sx, groundY - MONSTER_H * 0.45 * scale, 13 * scale * grow, idx);
+      // 被扫中的「转圈眩晕星」:三颗小星绕着刚开的花打转(纯装饰,reduced 不转)
+      if (m.bloom > 0 && !gentle) {
+        const spin = (0.6 - m.bloom) * 10;
+        ctx2.fillStyle = "rgba(255,255,255,.85)";
+        for (let k = 0; k < 3; k++) {
+          const a2 = spin + (k * Math.PI * 2) / 3;
+          traceStar(
+            ctx2,
+            sx + Math.cos(a2) * 20 * scale,
+            groundY - (MONSTER_H * 0.62 + Math.sin(a2) * 7) * scale,
+            4.5 * scale
+          );
+          ctx2.fill();
+        }
+      }
       return;
     }
     // 「豆豆怪」:一颗圆润的粉彩小豆豆,头顶一个小卷,两只大眼睛加一张笑脸。
@@ -812,6 +1148,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx2.save();
     ctx2.translate(0, bob);
 
+    // 统一落影(左上光源,影子略偏右下)
+    ctx2.fillStyle = PH_TOKENS.phShadow;
+    ctx2.beginPath();
+    ctx2.ellipse(sx + 1.5 * scale, groundY - 1.5 * scale, w * 0.42, 3.5 * scale, 0, 0, Math.PI * 2);
+    ctx2.fill();
+
     // 小短脚
     ctx2.fillStyle = col.shade;
     ctx2.beginPath();
@@ -820,7 +1162,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx2.fill();
 
     // 豆豆身体:下面胖、上面收,一颗鼓鼓的圆豆子
-    ctx2.fillStyle = col.body;
+    // 三停渐变体积:左上受光提亮 → 糖果主色 → 右下贴地收进阴影色(糖果色不搞脏)
+    const beanGrad = ctx2.createRadialGradient(sx - w * 0.18, cy - h * 0.22, h * 0.08, sx, cy, h * 0.78);
+    beanGrad.addColorStop(0, shade(col.body, 16));
+    beanGrad.addColorStop(0.55, col.body);
+    beanGrad.addColorStop(1, col.shade);
+    ctx2.fillStyle = beanGrad;
     ctx2.beginPath();
     ctx2.ellipse(sx, cy + h * 0.14, w * 0.48, h * 0.42, 0, 0, Math.PI * 2);
     ctx2.arc(sx, cy - h * 0.14, h * 0.38, 0, Math.PI * 2);
@@ -884,48 +1231,172 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const sx = (wx: number): number => (wx - camX) * scale;
     const sy = (wy: number): number => groundY + wy * scale;
 
-    // 天空
+    // ── 图层① 章节背景两层视差:远层 0.16 / 中层 0.45,两档速度差把 2.5D 进深拉开
     const sky = g.createLinearGradient(0, 0, 0, cssH);
     sky.addColorStop(0, pal.sky0);
     sky.addColorStop(1, pal.sky1);
     g.fillStyle = sky;
     g.fillRect(0, 0, cssW, cssH);
 
-    // 远景:软软的小房子和云
-    g.globalAlpha = 0.45;
-    for (let i = 0; i < 16; i++) {
-      const bx = ((i * 260 - camX * 0.32) % (viewW + 520)) - 200;
-      const bh = 46 + ((i * 37) % 62);
-      const bw = 88 + ((i * 23) % 46);
-      g.fillStyle = pal.far;
-      roundRect(g, bx * scale, groundY - bh * scale, bw * scale, bh * scale, 14 * scale);
+    // ①-远层(视差 0.16):主题剪影
+    if (theme === "rooftop") {
+      // 星空屋顶:月亮 + 小星星 + 远处屋顶天际线
+      g.fillStyle = "rgba(255,243,194,.9)";
+      g.beginPath();
+      g.arc(cssW * 0.78, cssH * 0.2, 15 * scale, 0, Math.PI * 2);
       g.fill();
+      g.fillStyle = pal.sky0;
+      g.beginPath();
+      g.arc(cssW * 0.78 - 7 * scale, cssH * 0.2 - 4 * scale, 12 * scale, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "rgba(255,255,255,.6)";
+      for (let i = 0; i < 12; i++) {
+        const sxx = ((i * 173 - camX * 0.08) % (viewW + 340)) - 120;
+        traceStar(g, sxx * scale, 16 + ((i * 61) % Math.max(24, cssH * 0.34)), 2.6 * scale);
+        g.fill();
+      }
+      g.globalAlpha = 0.4;
+      g.fillStyle = pal.far;
+      for (let i = 0; i < 14; i++) {
+        const bx = ((i * 230 - camX * 0.16) % (viewW + 460)) - 190;
+        const bh = 34 + ((i * 31) % 40);
+        roundRect(g, bx * scale, groundY - bh * scale, (96 + ((i * 23) % 42)) * scale, bh * scale, 8 * scale);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+    } else if (theme === "park") {
+      // 公园:一排接一排的软树浪
+      g.globalAlpha = 0.4;
+      g.fillStyle = pal.far;
+      for (let i = 0; i < 20; i++) {
+        const bx = ((i * 150 - camX * 0.16) % (viewW + 300)) - 130;
+        const r = (30 + ((i * 27) % 26)) * scale;
+        g.beginPath();
+        g.arc(bx * scale, groundY - r * 0.5, r, Math.PI, 0);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+    } else {
+      // 街道:圆角小楼天际线 + 远窗亮点
+      g.globalAlpha = 0.42;
+      for (let i = 0; i < 15; i++) {
+        const bx = ((i * 225 - camX * 0.16) % (viewW + 450)) - 185;
+        const bh = 52 + ((i * 41) % 68);
+        const bw = 78 + ((i * 29) % 42);
+        g.fillStyle = pal.far;
+        roundRect(g, bx * scale, groundY - bh * scale, bw * scale, bh * scale, 12 * scale);
+        g.fill();
+        g.fillStyle = "#FFFFFF";
+        g.globalAlpha = 0.24;
+        const top = groundY - bh * scale;
+        for (let r = 0; r * 26 + 36 < bh; r++) {
+          for (let c = 0; c * 28 + 28 < bw; c++) {
+            roundRect(g, bx * scale + (15 + c * 28) * scale, top + (15 + r * 26) * scale, 8 * scale, 8 * scale, 3 * scale);
+            g.fill();
+          }
+        }
+        g.globalAlpha = 0.42;
+      }
+      g.globalAlpha = 1;
+    }
+    // 云只给白天主题;星空屋顶让给星星
+    if (theme !== "rooftop") {
+      g.globalAlpha = 0.75;
       g.fillStyle = "#FFFFFF";
-      g.globalAlpha = 0.26;
-      const top = groundY - bh * scale;
-      for (let r = 0; r * 26 + 36 < bh; r++) {
-        for (let c = 0; c * 28 + 28 < bw; c++) {
-          roundRect(g, bx * scale + (15 + c * 28) * scale, top + (15 + r * 26) * scale, 8 * scale, 8 * scale, 3 * scale);
+      for (let i = 0; i < 10; i++) {
+        const cx = ((i * 330 - camX * 0.18) % (viewW + 660)) - 240;
+        const cy = 22 + ((i * 53) % 46);
+        g.beginPath();
+        g.arc(cx * scale, cy, 16 * scale, 0, Math.PI * 2);
+        g.arc(cx * scale + 18 * scale, cy + 4, 12 * scale, 0, Math.PI * 2);
+        g.arc(cx * scale - 17 * scale, cy + 5, 11 * scale, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+    }
+
+    // ①-中层(视差 0.45):街道路灯橱窗 / 公园树与长椅 / 屋顶烟囱围栏
+    g.globalAlpha = 0.8;
+    for (let i = 0; i < 12; i++) {
+      const mx = (((i * 320 - camX * 0.45) % (viewW + 640)) - 240) * scale;
+      if (mx < -80 * scale || mx > cssW + 80 * scale) continue;
+      if (theme === "street") {
+        if (i % 2 === 0) {
+          // 路灯:杆 + 暖光灯头 + 一圈光晕
+          g.fillStyle = pal.deco;
+          roundRect(g, mx - 1.6 * scale, groundY - 64 * scale, 3.2 * scale, 64 * scale, 1.6 * scale);
+          g.fill();
+          g.fillStyle = "rgba(255,233,176,.28)";
+          g.beginPath();
+          g.arc(mx, groundY - 66 * scale, 11 * scale, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = "#FFE9B0";
+          g.beginPath();
+          g.arc(mx, groundY - 66 * scale, 5 * scale, 0, Math.PI * 2);
+          g.fill();
+        } else {
+          // 橱窗:玻璃 + 双色雨棚条纹
+          g.fillStyle = "rgba(255,255,255,.55)";
+          roundRect(g, mx - 20 * scale, groundY - 36 * scale, 40 * scale, 36 * scale, 5 * scale);
+          g.fill();
+          for (let k = 0; k < 5; k++) {
+            g.fillStyle = k % 2 === 0 ? pal.deco : "#FFFFFF";
+            roundRect(g, mx - 20 * scale + k * 8 * scale, groundY - 44 * scale, 8 * scale, 9 * scale, 2 * scale);
+            g.fill();
+          }
+        }
+      } else if (theme === "park") {
+        if (i % 2 === 0) {
+          // 树:树干 + 三球树冠
+          g.fillStyle = "#C89B6C";
+          roundRect(g, mx - 2.4 * scale, groundY - 40 * scale, 4.8 * scale, 40 * scale, 2 * scale);
+          g.fill();
+          g.fillStyle = pal.deco;
+          g.beginPath();
+          g.arc(mx, groundY - 52 * scale, 15 * scale, 0, Math.PI * 2);
+          g.arc(mx - 11 * scale, groundY - 42 * scale, 11 * scale, 0, Math.PI * 2);
+          g.arc(mx + 11 * scale, groundY - 42 * scale, 11 * scale, 0, Math.PI * 2);
+          g.fill();
+        } else {
+          // 长椅:椅背 + 座板 + 两条腿
+          g.fillStyle = "#C89B6C";
+          roundRect(g, mx - 16 * scale, groundY - 22 * scale, 32 * scale, 4 * scale, 2 * scale);
+          g.fill();
+          roundRect(g, mx - 16 * scale, groundY - 13 * scale, 32 * scale, 4 * scale, 2 * scale);
+          g.fill();
+          roundRect(g, mx - 13 * scale, groundY - 13 * scale, 3 * scale, 13 * scale, 1.5 * scale);
+          g.fill();
+          roundRect(g, mx + 10 * scale, groundY - 13 * scale, 3 * scale, 13 * scale, 1.5 * scale);
+          g.fill();
+        }
+      } else if (i % 2 === 0) {
+        // 屋顶烟囱:砖身 + 囱帽
+        g.fillStyle = pal.deco;
+        roundRect(g, mx - 7 * scale, groundY - 42 * scale, 14 * scale, 42 * scale, 3 * scale);
+        g.fill();
+        g.fillStyle = pal.far;
+        roundRect(g, mx - 9 * scale, groundY - 46 * scale, 18 * scale, 6 * scale, 3 * scale);
+        g.fill();
+      } else {
+        // 屋顶围栏:一段横杆 + 三根立柱
+        g.fillStyle = pal.far;
+        roundRect(g, mx - 22 * scale, groundY - 18 * scale, 44 * scale, 3 * scale, 1.5 * scale);
+        g.fill();
+        for (let k = 0; k < 3; k++) {
+          roundRect(g, mx - 16 * scale + k * 16 * scale, groundY - 16 * scale, 3 * scale, 16 * scale, 1.5 * scale);
           g.fill();
         }
       }
-      g.globalAlpha = 0.45;
     }
     g.globalAlpha = 1;
-    g.globalAlpha = 0.75;
-    g.fillStyle = "#FFFFFF";
-    for (let i = 0; i < 10; i++) {
-      const cx = ((i * 330 - camX * 0.18) % (viewW + 660)) - 240;
-      const cy = 22 + ((i * 53) % 46);
-      g.beginPath();
-      g.arc(cx * scale, cy, 16 * scale, 0, Math.PI * 2);
-      g.arc(cx * scale + 18 * scale, cy + 4, 12 * scale, 0, Math.PI * 2);
-      g.arc(cx * scale - 17 * scale, cy + 5, 11 * scale, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.globalAlpha = 1;
+    // 地平线雾带:远近层之间垫一口气,进深更像 2.5D
+    const haze = g.createLinearGradient(0, groundY - 30 * scale, 0, groundY);
+    haze.addColorStop(0, "rgba(255,255,255,0)");
+    haze.addColorStop(1, "rgba(255,255,255,.22)");
+    g.fillStyle = haze;
+    g.fillRect(0, groundY - 30 * scale, cssW, 30 * scale);
 
-    // 地面(断口留空)
+    // ── 图层② 地面 + 干净带(断口留空)
     const segs: Array<[number, number]> = [];
     let cursor = 0;
     for (const gap of def.gaps) {
@@ -933,18 +1404,45 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       cursor = gap.x1;
     }
     segs.push([cursor, def.len]);
+    // 地面主体竖向渐变:顶亮底稳,给 2.5D 一点进深
+    const groundGrad = g.createLinearGradient(0, groundY, 0, cssH);
+    groundGrad.addColorStop(0, shade(pal.groundDark, 10));
+    groundGrad.addColorStop(1, shade(pal.groundDark, -8));
     for (const [a, b] of segs) {
       const x0 = sx(a);
       const x1 = sx(b);
       if (x1 < -40 || x0 > cssW + 40) continue;
-      g.fillStyle = pal.groundDark;
+      g.fillStyle = groundGrad;
       g.fillRect(x0, groundY, x1 - x0, cssH - groundY);
       g.fillStyle = pal.ground;
       g.fillRect(x0, groundY, x1 - x0, 9 * scale);
+      // 顶边一线高光(左上光源)
+      g.fillStyle = "rgba(255,255,255,.5)";
+      g.fillRect(x0, groundY, x1 - x0, 1.5);
       g.fillStyle = pal.deco;
       for (let d = Math.ceil(a / 90) * 90; d < b; d += 90) {
         g.fillRect(sx(d), groundY + 14 * scale, 5 * scale, 5 * scale);
       }
+    }
+    // 扫过区域的「发亮干净带」:phClean 渐变痕迹,纯装饰,只读已清扫状态
+    const cleanGrad = g.createLinearGradient(0, groundY - 14 * scale, 0, groundY + 8 * scale);
+    cleanGrad.addColorStop(0, "rgba(255,244,200,0)");
+    cleanGrad.addColorStop(1, PH_TOKENS.phClean);
+    g.fillStyle = cleanGrad;
+    for (const s of world.sludges) {
+      if (!s.clean) continue;
+      const x0 = sx(s.x);
+      const x1 = sx(s.x + s.w);
+      if (x1 < -30 || x0 > cssW + 30) continue;
+      roundRect(g, x0 - 6 * scale, groundY - 14 * scale, x1 - x0 + 12 * scale, 22 * scale, 6 * scale);
+      g.fill();
+    }
+    for (const s of world.stains) {
+      if (!s.clean) continue;
+      const x = sx(s.x);
+      if (x < -30 || x > cssW + 30) continue;
+      roundRect(g, x - 22 * scale, groundY - 14 * scale, 44 * scale, 22 * scale, 6 * scale);
+      g.fill();
     }
 
     // 泥洼与污渍
@@ -953,8 +1451,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       const x1 = sx(s.x + s.w);
       if (x1 < -30 || x0 > cssW + 30) return;
       if (s.clean) {
+        // 擦亮的水洼开成一排自绘五瓣花:240ms 三帧展开(reduced 一帧)
+        const frame = bloomFrame(Math.max(0, 0.5 - s.bloom) * 1000, gentle);
+        const grow = [0.5, 0.78, 1][frame] ?? 1;
         for (let k = 0; k * 46 < s.w; k++) {
-          emoji(g, FLOWERS[(i + k) % FLOWERS.length], sx(s.x + 22 + k * 46), groundY - 9 * scale, 15 * scale);
+          drawFlower(g, sx(s.x + 22 + k * 46), groundY - 9 * scale, 8 * scale * grow, i + k);
         }
         return;
       }
@@ -975,7 +1476,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       const x = sx(s.x);
       if (x < -30 || x > cssW + 30) return;
       if (s.clean) {
-        emoji(g, FLOWERS[i % FLOWERS.length], x, groundY - 10 * scale, 15 * scale);
+        const frame = bloomFrame(Math.max(0, 0.5 - s.bloom) * 1000, gentle);
+        const grow = [0.5, 0.78, 1][frame] ?? 1;
+        drawFlower(g, x, groundY - 10 * scale, 8 * scale * grow, i);
         return;
       }
       // 小灰尘印:一小片浅浅的粉灰,扫一下就变成花
@@ -988,7 +1491,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.ellipse(x + 6 * scale, groundY - 6 * scale, 5 * scale, 3 * scale, 0, 0, Math.PI * 2);
       g.fill();
       g.globalAlpha = 0.55;
-      emoji(g, "💫", x - 8 * scale, groundY - 12 * scale, 10 * scale);
+      drawSwirl(g, x - 8 * scale, groundY - 12 * scale, 5 * scale);
       g.globalAlpha = 1;
     });
 
@@ -1021,7 +1524,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillStyle = pl.moving ? "#8CC7E8" : pal.groundDark;
       roundRect(g, x, sy(pl.y) + 8 * scale, pl.w * scale, 5 * scale, 3 * scale);
       g.fill();
-      if (pl.moving) emoji(g, "🫧", x + pl.w * scale * 0.5, sy(pl.y) - 9 * scale, 13 * scale);
+      if (pl.moving) drawBubbleDot(g, x + pl.w * scale * 0.5, sy(pl.y) - 9 * scale, 6 * scale);
     }
 
     // 低矮管道
@@ -1042,16 +1545,16 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       }
     }
 
-    // 香香星
+    // 香香星:自绘渐变星(专项①②:平涂 ✨ 清场,原字号 19px ≈ 星半径 9.5)
     world.sparkles.forEach((s) => {
       if (s.taken) return;
       const x = sx(s.x);
       if (x < -30 || x > cssW + 30) return;
       const bob = Math.sin(world.time * 3 + s.x * 0.02) * 3 * scale;
-      emoji(g, "✨", x, sy(s.y) + bob, 19 * scale);
+      drawScentStar(g, x, sy(s.y) + bob, 9.5 * scale);
     });
 
-    // 豆豆怪 / 小花
+    // ── 图层③ 豆豆怪 / 小花
     world.monsters.forEach((m, i) => {
       const x = sx(m.x);
       if (x < -60 || x > cssW + 60) return;
@@ -1090,7 +1593,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.ellipse(x, groundY - 3 * scale, 15 * scale, 5 * scale, 0, 0, Math.PI * 2);
       g.fill();
       g.globalAlpha = 1;
-      emoji(g, item.emoji, x, groundY - 15 * scale, 20 * scale);
+      // 核心道具自绘(专项①:裸 item.emoji 清场),条目造型见 trashArt.drawTrashItem
+      drawTrashItem(g, l.item, x, groundY - 13 * scale, 21 * scale);
     }
 
     // 三色分类站
@@ -1107,14 +1611,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       roundRect(g, x - 19 * scale, groundY - 46 * scale - lift, 38 * scale, 8 * scale, 4 * scale);
       g.fill();
       g.globalAlpha = 1;
-      emoji(g, info.emoji, x, groundY - 24 * scale - lift, 17 * scale);
-      g.fillStyle = "#3C3348";
-      g.font = `900 ${Math.round(9 * Math.max(0.9, scale))}px system-ui,sans-serif`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(info.short, x, groundY - 9 * scale - lift);
+      // 桶面功能图标自绘(专项①:裸 info.emoji 清场);8–9px 桶签一并图形化,
+      // 桶的身份 = 桶色 + 图标,全名走 HUD 图例(A-11)
+      drawBinIcon(g, bin.kind, x, groundY - 20 * scale - lift, 11 * scale, info.color);
       if (bin.flash > 0) {
-        emoji(g, bin.lastOk ? "⭐" : "🤔", x, groundY - 58 * scale, 16 * scale);
+        // 投对亮金星、投错弹「想一想」气泡,都自绘(A-7 装饰 emoji 清场)
+        if (bin.lastOk) drawMiniStar(g, x, groundY - 58 * scale, 8 * scale);
+        else drawThinkBubble(g, x, groundY - 58 * scale, 8 * scale);
       }
     });
 
@@ -1141,8 +1644,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         g.arc(x - 13 * scale, groundY - wheel, wheel, 0, Math.PI * 2);
         g.arc(x + 13 * scale, groundY - wheel, wheel, 0, Math.PI * 2);
         g.fill();
-        emoji(g, "🧽", x, groundY - (CART_H - 12) * scale, 15 * scale);
-        if (world.cart.pushed && !gentle) emoji(g, "💨", x - 34 * scale, groundY - 16 * scale, 13 * scale);
+        drawSponge(g, x, groundY - (CART_H - 12) * scale, 15 * scale);
+        // 推车尾气改自绘小气旋(💨 emoji 清场)
+        if (world.cart.pushed && !gentle) drawGust(g, x - 34 * scale, groundY - 16 * scale, 8 * scale);
       }
     }
 
@@ -1156,9 +1660,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillStyle = open ? "#8FD69C" : "#CBBFB1";
       roundRect(g, doorX - 20 * scale, groundY - 82 * scale, 40 * scale, 82 * scale, 16 * scale);
       g.fill();
-      emoji(g, open ? "🧼" : "🔒", doorX, groundY - 52 * scale, 24 * scale);
+      if (open) drawSoap(g, doorX, groundY - 52 * scale, 24 * scale);
+      else drawPadlock(g, doorX, groundY - 52 * scale, 24 * scale);
       g.fillStyle = "#6B4A32";
-      g.font = `900 ${Math.round(11 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      // 门帘进度是功能文案,360px 档也不许低于 14px(A-11)
+      g.font = `900 ${Math.max(14, Math.round(11 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText(open ? "香喷喷!" : `还差 ${remainingForDoor(world)} 处`, doorX, groundY - 22 * scale);
@@ -1176,7 +1682,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         g.fillStyle = "rgba(178,140,178,.72)";
         g.fillRect(0, 0, Math.max(0, cx - 150 * scale), cssH);
         for (let k = 0; k < 4; k++) {
-          emoji(g, "💨", cx - (12 + k * 26) * scale, groundY - (18 + ((k * 37) % 60)) * scale, 15 * scale);
+          drawGust(g, cx - (12 + k * 26) * scale, groundY - (18 + ((k * 37) % 60)) * scale, 8 * scale);
         }
       }
     }
@@ -1199,7 +1705,20 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillRect(0, 0, cssW, cssH);
     }
 
-    // 角色
+    // ── 图层④ 扫帚弧形残影 + 冲刺残影:永远画在超人身后一层
+    for (const gh of fx.ghosts) {
+      const gx = sx(gh.x);
+      if (gx < -40 || gx > cssW + 40) continue;
+      drawGhost(g, gx, sy(gh.y), scale, gh);
+    }
+    fx.tickGhosts();
+    world.players.forEach((p) => {
+      const x = sx(p.x);
+      if (x < -40 || x > cssW + 40) return;
+      drawBroomTrail(g, x, sy(p.y), scale, p);
+    });
+
+    // ── 图层⑤ 超人
     world.players.forEach((p, i) => {
       const x = sx(p.x);
       if (x < -30 || x > cssW + 30) {
@@ -1211,7 +1730,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
           g.arc(edge, groundY - 60, 11, 0, Math.PI * 2);
           g.fill();
           g.fillStyle = "#FFFFFF";
-          g.font = "900 12px system-ui,sans-serif";
+          // 队友方位箭头是功能提示,提到 14px(A-11)
+          g.font = "900 14px system-ui,sans-serif";
           g.textAlign = "center";
           g.textBaseline = "middle";
           g.fillText(x < 0 ? "◀" : "▶", edge, groundY - 60);
@@ -1219,17 +1739,37 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         return;
       }
       drawHero(g, x, sy(p.y), scale, i, p);
-      // 手上抱着的垃圾:顶在头上,一眼看得出在搬什么
+      // 手上抱着的垃圾:顶在头上,一眼看得出在搬什么(自绘条目,裸 emoji 清场)
       if (p.carry) {
         const item = trashById(p.carry);
-        if (item) emoji(g, item.emoji, x, sy(p.y) - (PLAYER_H + 18) * scale, 17 * scale);
+        if (item) drawTrashItem(g, item.id, x, sy(p.y) - (PLAYER_H + 18) * scale, 18 * scale);
       }
     });
 
-    // 小特效
+    // ── 图层⑥ 星星尾流 / 星花(压在超人上面,离豆豆怪的可读区隔开)
+    for (const st of fx.trail) {
+      const a = trailAlpha(st.ageMs);
+      if (a <= 0) continue;
+      g.globalAlpha = a;
+      g.fillStyle = "#FFF3B8";
+      traceStar(g, sx(st.x), sy(st.y), st.r * scale);
+      g.fill();
+      g.fillStyle = "#FFFFFF";
+      traceStar(g, sx(st.x), sy(st.y), st.r * scale * 0.45);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+    // 接触星花(kit 星花池存世界坐标,套上镜头变换来画)
+    g.save();
+    g.translate(-camX * scale, groundY);
+    g.scale(scale, scale);
+    fx.sparks.draw(g);
+    g.restore();
+
+    // 小特效(自绘粒子字形,emoji 文本清场)
     for (const pt of particles) {
       g.globalAlpha = Math.max(0, Math.min(1, pt.life));
-      emoji(g, pt.text, sx(pt.x), sy(pt.y), pt.size * scale);
+      drawParticleGlyph(g, pt.glyph, sx(pt.x), sy(pt.y), pt.size * scale);
     }
     g.globalAlpha = 1;
 
@@ -1242,16 +1782,18 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText(def.name, cssW / 2, cssH * 0.44);
-      g.font = `800 ${Math.round(13 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      // 开场横幅是功能文案,360px 档也不许低于 14px(W7R2 N-2,写法同门帘计数)
+      g.font = `800 ${Math.max(14, Math.round(13 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
       g.fillStyle = "#9A7A5E";
       g.fillText(def.hint.slice(0, 24), cssW / 2, cssH * 0.56);
       // 开场顺带念一条卫生小知识(洗手 / 分类 / 少用一次性)
-      g.font = `700 ${Math.round(12 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      g.font = `700 ${Math.max(14, Math.round(12 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
       g.fillStyle = "#A98F76";
       g.fillText(hygieneTip(def.index + def.chapterIndex), cssW / 2, cssH * 0.64);
     }
   }
 
+  // ── 图层⑦ HUD(DOM 卡片,永远压在画布上面)
   function renderHud(): void {
     hearts.textContent = `${"❤️".repeat(Math.max(0, world.hearts))}${"🤍".repeat(
       Math.max(0, world.def.hearts - Math.max(0, world.hearts))
@@ -1260,6 +1802,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     barFill.style.width = `${pct}%`;
     barTxt.textContent = `清洁度 ${pct}%`;
     sparkChip.textContent = `✨ ${world.sparklesTaken}/${world.sparkles.length}`;
+    // 连击卡:攒到 2 连才露面(徽章脉冲同一个开关)
+    if (combo >= 2) {
+      comboChip.hidden = false;
+      comboChip.textContent = `⭐ 连击 ×${combo}`;
+    } else {
+      comboChip.hidden = true;
+    }
     if (hasSorting) sortChip.textContent = `♻️ ${world.sorted}/${world.litters.length}`;
     if (opts.showTimer) {
       // 限时清扫显示倒计时,其余显示已用时间
@@ -1293,6 +1842,42 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         consumeEvents(now);
       }
     }
+    // ---- 1.3 视觉计时(纯装饰,不碰任何判定):连击窗口 / 徽章脉冲 / 尾流寿命 / 披风形态 ----
+    const dtMs = dt * 1000;
+    if (comboT > 0) {
+      comboT -= dt;
+      if (comboT <= 0) combo = 0;
+    }
+    badgeMs += dtMs;
+    fx.updateTrail(dtMs);
+    world.players.forEach((p, i) => {
+      const cs = capeStates[i];
+      if (cs) {
+        // 披风三段形态:只读速度,阈值切换后 180ms ease-out 过渡
+        const m = capeMode(p.vx);
+        if (m !== cs.mode) {
+          cs.prev = cs.mode;
+          cs.mode = m;
+          cs.sinceMs = 0;
+        } else {
+          cs.sinceMs += dtMs;
+        }
+      }
+      // 冲刺中撒残影与星星尾流(reduced 在 PhFx 里一律不生成)
+      if (p.dashT > 0 && !paused && !ended) {
+        fx.spawnGhost(p.x - p.facing * 6, p.y, p.facing, p.crouch, gentle);
+        trailAcc[i] = (trailAcc[i] ?? 0) + dtMs;
+        if (trailAcc[i] >= PH_ANIM.trailMs / PH_ANIM.trailStars) {
+          trailAcc[i] = 0;
+          fx.spawnTrailStar(
+            p.x - p.facing * (PLAYER_W * 0.8),
+            p.y - PLAYER_H * 0.55 + Math.sin(world.time * 21 + i * 3) * 6,
+            6.5,
+            gentle
+          );
+        }
+      }
+    });
     for (let i = particles.length - 1; i >= 0; i--) {
       const pt = particles[i];
       pt.life -= dt;
@@ -1329,6 +1914,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       ended = false;
       readyT = 1.1;
       particles.length = 0;
+      // 换图把视觉皮层也清干净:残影 / 尾流 / 星花 / 连击一并归零
+      fx.clear();
+      combo = 0;
+      comboT = 0;
+      badgeMs = PH_ANIM.badgePulseMs;
       clearVeil();
     },
     showVeil,
@@ -1339,6 +1929,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       cancelAnimationFrame(raf);
       // rAF、定时器、window 上的监听全在 bag 里登记过,一把归零
       bag.dispose();
+      // 残影 / 星星尾流 / 星花粒子全部清空,不留一颗
+      fx.clear();
       clearVeil();
       wrap.remove();
     },

@@ -7,6 +7,37 @@ export { meta };
 // 这里只干三件事：把画面画出来、把输入接进去、离开时清干净。
 import { save } from "../../engine/save";
 import { AI_HINTS, AI_LABELS, AI_LEVELS, type AiLevel } from "./ai";
+// 1.3 第 11 步 A：视觉资产全部来自 art.ts（纯绘制，金币/皇冠/心形待上移共享 kit）
+import {
+  boostArrowPhase,
+  coinFrames,
+  coinFrameSpec,
+  drawAvatarBody,
+  drawBoostPad,
+  drawCelestial,
+  drawCheerHeart,
+  drawCloudPuff,
+  drawCoin,
+  drawCoinFrame,
+  drawCrown,
+  drawHeart,
+  drawDecorSilhouette,
+  drawDizzyStars,
+  drawGhostWisp,
+  drawMiniFace,
+  drawObstacle,
+  drawPowerIcon,
+  drawRoadsideFlag,
+  drawRunnerSprite,
+  drawSparkle,
+  drawSpeedTrail,
+  runnerHeadY,
+  sparkleCount,
+  COIN_FRAME_COUNT,
+  type CoinFrame,
+  type DecorKind,
+  type RunnerMood,
+} from "./art";
 import {
   PAD_BUTTONS,
   type Action,
@@ -27,10 +58,12 @@ import {
   JUMP_SECONDS,
   SLIDE_SECONDS,
   type Entity,
+  type PowerKind,
   type RaceMode,
   parseGhostRecord,
 } from "./logic";
 import {
+  CHEER_SECONDS,
   type MatchState,
   type Runner,
   applyAction,
@@ -148,6 +181,14 @@ interface Theme {
   roadEdge: string;
   ink: string;
   hud: string;
+  /* ---- 1.3 第 11 步 A：纵深装饰换装位 ---- */
+  /** 第三层近景剪影画什么（树/糖果柱/冰锥/星塔四种查表） */
+  decor: DecorKind;
+  /** 剪影主色与亮部 */
+  decorColor: string;
+  decorLight: string;
+  /** 天上挂太阳还是月亮 */
+  celestial: "sun" | "moon";
 }
 
 const THEMES: [Theme, Theme] = [
@@ -161,6 +202,10 @@ const THEMES: [Theme, Theme] = [
     roadEdge: "#F4AECC",
     ink: "#C2497E",
     hud: "rgba(255,255,255,.85)",
+    decor: "tree",
+    decorColor: "#E08BB2",
+    decorLight: "#F6C2D9",
+    celestial: "sun",
   },
   {
     sky: ["#F1F7FF", "#CFE2FF"],
@@ -172,6 +217,10 @@ const THEMES: [Theme, Theme] = [
     roadEdge: "#9CC0EA",
     ink: "#3A6BB0",
     hud: "rgba(255,255,255,.85)",
+    decor: "starTower",
+    decorColor: "#7FA4DC",
+    decorLight: "#C9DCF6",
+    celestial: "moon",
   },
 ];
 
@@ -326,9 +375,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-seg button.on { border-color: #F2A0C0; background: #FFE4EF; color: #C2497E; }
       .dr-hint { color: #6E86A0; font-size: 13.5px; margin: 8px 2px 0; min-height: 19px; line-height: 1.5; }
       .dr-ghostline { color: #8A6AB0; font-size: 13.5px; font-weight: 700; margin: 0 2px; min-height: 19px; }
-      .dr-start { border: none; border-radius: 18px; padding: 15px; font-size: 20px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 5px 0 #64AEE0; width: 100%; font-family: inherit; }
+      .dr-start { border: none; border-radius: 18px; padding: 15px; font-size: 20px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 5px 0 #64AEE0; width: 100%; font-family: inherit; min-height: 44px; }
       .dr-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #64AEE0; }
-      .dr-softbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #D9F2C4; color: #4A7A2A; cursor: pointer; box-shadow: 0 4px 0 #ADD68E; width: 100%; font-family: inherit; }
+      .dr-softbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #D9F2C4; color: #4A7A2A; cursor: pointer; box-shadow: 0 4px 0 #ADD68E; width: 100%; font-family: inherit; min-height: 44px; }
       .dr-softbtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #ADD68E; }
       .dr-collectbtn { background: #FFE7C2; color: #9A5A20; box-shadow: 0 4px 0 #E2BE87; }
       .dr-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; background: #EAF3FF; }
@@ -338,6 +387,53 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-keys .k2 { color: #3A6BB0; }
       .dr-btns { display: flex; gap: 8px; margin-top: 8px; }
       .dr-btns button { flex: 1; min-height: 46px; border: none; border-radius: 14px; padding: 11px 4px; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); font-family: inherit; }
+      /* N-40: 矮横屏赛道态暂停/再来/换玩法钉在舞台底，不重钳已在屏的画布与半屏圆钮 */
+      /* N-87: 菜单态怎么玩/收藏册/开跑提到顶并排钉进 412，勿回退 .dr-btns */
+      @media (max-height: 500px) {
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
+        .dr-keys { display: none; }
+        .dr-btns {
+          position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
+          background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
+          box-shadow: 0 -8px 14px rgba(90,140,190,.16);
+        }
+      }
+      @media (max-height: 840px) and (min-height: 501px) {
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
+        .dr-canvas { max-height: min(52dvh, 320px); width: auto; max-width: 100%; margin: 0 auto; }
+        .dr-btns {
+          position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
+          background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
+          box-shadow: 0 -8px 14px rgba(90,140,190,.16);
+        }
+      }
+      @media (max-width: 480px) {
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
+      }
       .dr-pause { background: #E3E8FF; color: #4A55A8; }
       .dr-again { background: #D9F2C4; color: #4A7A2A; }
       .dr-back { background: #FFE0C2; color: #9A5A20; }
@@ -346,11 +442,19 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-pausepanel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(244,250,255,.94); border-radius: 20px; z-index: 5; }
       .dr-pausepanel h3 { color: #C2497E; font-size: 22px; margin: 0; }
       .dr-pausepanel p { color: #4A6A8A; font-size: 14.5px; margin: 0; text-align: center; padding: 0 18px; line-height: 1.6; }
-      .dr-resume { border: none; border-radius: 16px; padding: 13px 28px; font-size: 17px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 4px 0 #64AEE0; font-family: inherit; }
+      .dr-resume { border: none; border-radius: 16px; padding: 13px 28px; font-size: 17px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 4px 0 #64AEE0; font-family: inherit; min-height: 44px; }
       .dr-rules { position: absolute; inset: 0; background: #F4FAFF; border-radius: 20px; padding: 14px; overflow-y: auto; z-index: 6; }
       .dr-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
       .dr-rules p { color: #4A6A8A; font-size: 14.5px; line-height: 1.75; margin: 6px 0; }
-      .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; }
+      .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; min-height: 44px; }
+      /* N-122:390×844 不命中 500 档;竖屏把菜单 CTA 钉视口底,长表单可滚到、开跑不裁 */
+      @media (max-width: 430px) and (min-height: 700px) {
+        .dr-menu-cta {
+          position: sticky; bottom: 0; z-index: 4; padding: 8px 0 4px;
+          background: linear-gradient(180deg, rgba(233,244,255,.2), #E9F4FF 28%, #FFEEF6);
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start { min-height: 44px; }
+      }
       /* ---- 1.2 第 11 步 A 新增,一律 dur- 前缀 ---- */
       .dur-stage { position: relative; line-height: 0; }
       .dur-pad { position: absolute; display: flex; align-items: center; gap: 8px; pointer-events: none; }
@@ -405,9 +509,11 @@ export function mount(api: GameApi): { destroy: () => void } {
         <p class="dr-hint dur-handicap-hint">默认关闭。打开以后画面上会一直写着「让分」，谁都看得见。</p>
       </div>
       <p class="dr-ghostline"></p>
+      <div class="dr-menu-cta">
       <button class="dr-softbtn dr-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
       <button class="dr-softbtn dr-collectbtn dr-hidden" type="button">🎁 我的收藏册</button>
       <button class="dr-start" type="button">准备好，开跑 ▶</button>
+      </div>
     </div>
     <div class="dr-game dr-hidden">
       <div class="dur-stage">
@@ -596,6 +702,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     });
     running = false;
     paused = false;
+    // 视觉状态跟着新一局清零（飘字 / 灰化 / 拾取计数都是演出，不进存档）
+    outSince[0] = null;
+    outSince[1] = null;
+    coinFloats = [];
+    prevCoins[0] = 0;
+    prevCoins[1] = 0;
     pauseEl.classList.add("dr-hidden");
     setupEl.classList.add("dr-hidden");
     gameEl.classList.remove("dr-hidden");
@@ -707,6 +819,22 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 绘制 ---------------- */
 
+  /* ---- 1.3 第 11 步 A：纯视觉状态（不进玩法存档、不碰判定） ---- */
+  /** 金币的 8 帧旋转 sprite：挂载时烘焙一次，绘制时按深度缩放 */
+  const coinSprite: CoinFrame[] = coinFrames(26);
+  /** rAF 时钟（秒）：终局演出、淘汰灰化这些「比赛时间冻结后还要动」的动画用它 */
+  let perfSec = 0;
+  /** 一方淘汰的时刻（perfSec），灰化 0.3s 渐入用 */
+  const outSince: [number | null, number | null] = [null, null];
+  /** 吃金币的 +N 飘字（0.8 秒消散） */
+  interface CoinFloat {
+    seat: Seat;
+    born: number;
+    amount: number;
+  }
+  let coinFloats: CoinFloat[] = [];
+  const prevCoins: [number, number] = [0, 0];
+
   function drawSky(pane: Rect, theme: Theme, dist: number): void {
     const hy = horizonY(pane);
     const g = ctx.createLinearGradient(0, pane.y, 0, hy + 6);
@@ -714,8 +842,46 @@ export function mount(api: GameApi): { destroy: () => void } {
     g.addColorStop(1, theme.sky[1]);
     ctx.fillStyle = g;
     ctx.fillRect(pane.x, pane.y, pane.width, hy - pane.y + 6);
+    // 太阳 / 月亮 + 两朵慢云（视差 0.03），天空不再是一张纸
+    drawCelestial(
+      ctx,
+      pane.x + pane.width * 0.82,
+      pane.y + (hy - pane.y) * 0.4,
+      pane.height * 0.055,
+      theme.celestial,
+    );
+    const cloudPeriod = pane.width + 120;
+    const cloudOff = parallaxOffset(dist, 0.03, cloudPeriod);
+    for (const [k, fy, fr] of [
+      [0.22, 0.3, 0.032],
+      [0.62, 0.55, 0.026],
+    ] as const) {
+      const cx = pane.x + ((k * cloudPeriod + cloudPeriod - cloudOff) % cloudPeriod) - 60;
+      drawCloudPuff(ctx, cx, pane.y + (hy - pane.y) * fy, pane.height * fr);
+    }
     drawHills(pane, dist, theme.farHill, 0.06, pane.height * 0.16, hy + 2);
     drawHills(pane, dist, theme.nearHill, 0.16, pane.height * 0.1, hy + 2);
+    drawDecorLayer(pane, theme, dist, hy + 2);
+  }
+
+  /** 第三层近景剪影：比两层山挪得更快，主题装饰（树 / 星塔）查表换装 */
+  function drawDecorLayer(pane: Rect, theme: Theme, dist: number, baseY: number): void {
+    const period = Math.max(90, pane.width * 0.52);
+    const off = parallaxOffset(dist, 0.26, period);
+    const h = pane.height * 0.09;
+    const n = Math.ceil(pane.width / period) + 1;
+    for (let i = 0; i <= n; i++) {
+      const px = pane.x + i * period - off;
+      drawDecorSilhouette(
+        ctx,
+        theme.decor,
+        px,
+        baseY,
+        h * (i % 2 === 0 ? 1 : 0.72),
+        theme.decorColor,
+        theme.decorLight,
+      );
+    }
   }
 
   /** 远景视差层：一条平滑的周期曲线，所以左右接缝天然对得上 */
@@ -810,6 +976,21 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
     }
+
+    // 路边小旗与路牌：纯装饰，用 project 放在路肩外侧，跟着雾一起淡出
+    const FLAG_SPACING = 46;
+    for (const z of gridLineZs(dist, FLAG_SPACING)) {
+      const a = 1 - fogAlpha(z);
+      if (a <= 0.05) continue;
+      const idx = Math.round((dist + z) / FLAG_SPACING);
+      const p = project(pane, z, idx % 2 === 0 ? -1 : 3);
+      const h = laneWidthAt(pane, z) * 0.5;
+      if (h < 3) continue;
+      ctx.save();
+      ctx.globalAlpha = a;
+      drawRoadsideFlag(ctx, p.x, p.y, h, theme.ink, idx % 4 < 2 ? 0 : 1);
+      ctx.restore();
+    }
   }
 
   function drawFog(pane: Rect, theme: Theme): void {
@@ -822,7 +1003,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.fillRect(pane.x, hy, pane.width, band);
   }
 
-  function drawEntity(pane: Rect, e: Entity, z: number): void {
+  function drawEntity(pane: Rect, e: Entity, z: number, seat: Seat, time: number, calm: boolean): void {
     const zz = Math.max(0, z);
     const p = project(pane, zz, e.lane);
     // 所有尺寸都按「这个深度上一条车道有多宽」换算，横竖分屏一个样
@@ -831,68 +1012,20 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (alpha <= 0.03 || u < 0.4) return;
     ctx.save();
     ctx.globalAlpha = alpha;
-    if (e.kind === "pit") {
-      ctx.fillStyle = "#7A5638";
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, u * 0.42, u * 0.16, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#4A3020";
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, u * 0.33, u * 0.11, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (e.kind === "rock") {
-      ctx.fillStyle = "rgba(60,60,90,.2)";
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, u * 0.36, u * 0.12, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#9E9188";
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y - u * 0.28, u * 0.34, u * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#C4B9B0";
-      ctx.beginPath();
-      ctx.ellipse(p.x - u * 0.1, p.y - u * 0.38, u * 0.15, u * 0.1, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (e.kind === "hurdle") {
-      // 矮木栏：横杆贴着地面 → 跳过去
-      const w = u * 0.4;
-      const barY = p.y - u * 0.3;
-      const th = u * 0.09;
-      ctx.fillStyle = "#C98C51";
-      ctx.fillRect(p.x - w, barY, w * 0.16, u * 0.3);
-      ctx.fillRect(p.x + w - w * 0.16, barY, w * 0.16, u * 0.3);
-      ctx.fillStyle = "#E8B27A";
-      ctx.fillRect(p.x - w, barY, w * 2, th);
-      ctx.fillStyle = "#FFF3E4";
-      ctx.fillRect(p.x - w * 0.34, barY, w * 0.68, th);
-    } else if (e.kind === "gate") {
-      // 高横杆：杆架在半空 → 要下滑钻过去
-      const w = u * 0.42;
-      const top = p.y - u * 0.95;
-      const th = u * 0.2;
-      ctx.fillStyle = "#8FB9E8";
-      ctx.fillRect(p.x - w, top, w * 0.15, u * 0.95);
-      ctx.fillRect(p.x + w - w * 0.15, top, w * 0.15, u * 0.95);
-      ctx.fillStyle = "#5C8FCB";
-      ctx.fillRect(p.x - w, top, w * 2, th);
-      ctx.fillStyle = "#EAF3FF";
-      ctx.fillRect(p.x - w * 0.6, top + th * 0.3, w * 1.2, th * 0.34);
+    if (e.kind === "pit" || e.kind === "rock" || e.kind === "hurdle" || e.kind === "gate") {
+      // 障碍材质在 art.ts：轮廓与判定尺寸和 1.2 完全一致，石头随座位主题换水晶/圆石
+      drawObstacle(ctx, e.kind, p.x, p.y, u, seat);
     } else if (e.kind === "coin") {
       const cy = p.y - u * 0.42;
       ctx.fillStyle = "rgba(60,60,90,.12)";
       ctx.beginPath();
       ctx.ellipse(p.x, p.y, u * 0.14, u * 0.05, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#F1B93A";
-      ctx.beginPath();
-      ctx.ellipse(p.x, cy, u * 0.16, u * 0.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#FFE39B";
-      ctx.beginPath();
-      ctx.ellipse(p.x, cy, u * 0.085, u * 0.12, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // 8 帧绕 Y 旋转的星币；reduced-motion 下停在正面帧
+      const frame = calm ? 0 : Math.floor(time * 9 + e.at * 0.5) % COIN_FRAME_COUNT;
+      drawCoin(ctx, p.x, cy, u * 0.19, coinSprite, frame);
     } else if (e.kind === "power") {
-      // 道具是一颗软软的糖泡，里面浮着它自己的小图标
+      // 道具是一颗软软的糖泡，里面浮着绘制的小图标（emoji 下岗）
       const cy = p.y - u * 0.5;
       ctx.fillStyle = "rgba(60,60,90,.12)";
       ctx.beginPath();
@@ -905,29 +1038,16 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.strokeStyle = "rgba(178,150,220,.85)";
       ctx.lineWidth = Math.max(1, u * 0.03);
       ctx.stroke();
-      const icon = POWERUPS[e.power ?? "speedCloud"].emoji;
-      ctx.font = `${Math.max(6, Math.round(u * 0.3))}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(icon, p.x, cy);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-    } else if (e.kind === "boost") {
-      ctx.fillStyle = "rgba(126,220,150,.8)";
+      // 泡壁高光弧
+      ctx.strokeStyle = "rgba(255,255,255,.95)";
+      ctx.lineWidth = Math.max(1, u * 0.028);
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, u * 0.42, u * 0.15, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#3E9B63";
-      for (let i = 0; i < 2; i++) {
-        const dy = p.y - u * 0.05 - i * u * 0.13;
-        ctx.beginPath();
-        ctx.moveTo(p.x - u * 0.2, dy);
-        ctx.lineTo(p.x, dy - u * 0.13);
-        ctx.lineTo(p.x + u * 0.2, dy);
-        ctx.lineTo(p.x, dy - u * 0.05);
-        ctx.closePath();
-        ctx.fill();
-      }
+      ctx.ellipse(p.x, cy, u * 0.185, u * 0.185, 0, Math.PI * 1.08, Math.PI * 1.5);
+      ctx.stroke();
+      drawPowerIcon(ctx, e.power ?? "speedCloud", p.x, cy, u * 0.13);
+    } else if (e.kind === "boost") {
+      // 发光跑道箭头：三枚向前流动，reduced-motion 下静止
+      drawBoostPad(ctx, p.x, p.y, u, boostArrowPhase(time, calm));
     }
     ctx.restore();
   }
@@ -964,44 +1084,43 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (r.ghost) ctx.globalAlpha = 0.45;
     else if (blink) ctx.globalAlpha = 0.3;
 
-    if (r.out && !r.ghost) {
-      ctx.font = `${Math.round(base)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("😵", cx, cy);
-    } else if (r.ghost) {
-      ctx.font = `${Math.round(base)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("👻", cx, cy);
+    // 1.3：emoji 全部下岗，身体改画 art.ts 的双主角（朵朵 = 花苞裙摆，星星 = 星呆毛披风）
+    const footY = p.y - lift;
+    const headY = runnerHeadY(footY, base, squash);
+    const mood: RunnerMood =
+      r.out && !r.ghost ? "dizzy" : r.ghost ? "ghost" : slideT > 0 ? "slide" : jumpT > 0 ? "jump" : "run";
+    const bounce = mood === "dizzy" ? 0 : Math.abs(Math.sin(s.time * 11)) * base * 0.07;
+    const img = mood === "run" || mood === "jump" || mood === "slide" ? avatarReady(seat) : null;
+
+    if (img) {
+      // 自定义头像：沿 1.2 的椭圆裁剪 drawImage，外加座位色描边环
+      drawAvatarBody(ctx, img, cx, cy - bounce, base, bodyH, seat);
     } else {
-      const img = avatarReady(seat);
-      const bounce = Math.abs(Math.sin(s.time * 11)) * base * 0.07;
-      if (img) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(cx, cy - bounce, base / 2, bodyH / 2, 0, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img, cx - base / 2, cy - bounce - bodyH / 2, base, bodyH);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = seat === 0 ? "#FFC6DC" : "#B9D4FA";
-        ctx.beginPath();
-        ctx.ellipse(cx, cy - bounce, base / 2, bodyH / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.font = `${Math.round(base * 0.62)}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(r.emoji, cx, cy - bounce);
-      }
-      // 加速尾焰
-      if (s.time < r.boostUntil) {
-        ctx.fillStyle = "rgba(255,214,90,.85)";
-        ctx.font = `${Math.round(base * 0.5)}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("💨", cx - base * 0.72, cy);
-      }
+      drawRunnerSprite(ctx, {
+        who: seat,
+        x: cx,
+        footY,
+        unit: base,
+        squash,
+        bounce,
+        runPhase: calm ? 0 : s.time * 11,
+        mood,
+        time: s.time,
+        reduced: calm,
+      });
+    }
+
+    if (mood === "dizzy") {
+      // 被撞定格：×眼 + 三颗星绕头（reduced 下星星不转），没有痛苦表现
+      drawDizzyStars(ctx, cx, headY, base, s.time, calm);
+    }
+    if (r.ghost) {
+      // 幽灵回放：半透明本体 + 头顶一簇小火苗
+      drawGhostWisp(ctx, cx, headY, base, s.time, calm);
+    }
+    if (!r.out && !r.ghost) {
+      // 加速尾焰：三根速度线 + 两粒星屑（reduced 下线不抖、星屑不撒）
+      if (s.time < r.boostUntil) drawSpeedTrail(ctx, cx, cy, base, s.time, calm);
       // 下滑时地面扬起一道小尘
       if (slideT > 0) {
         ctx.fillStyle = "rgba(255,255,255,.7)";
@@ -1014,7 +1133,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         ctx.strokeStyle = "rgba(140,200,255,.9)";
         ctx.lineWidth = Math.max(1.5, base * 0.07);
         ctx.beginPath();
-        ctx.ellipse(cx, cy, base * 0.62, bodyH * 0.68, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, footY - base * 0.62 * squash, base * 0.62, base * 0.74 * squash, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
       // 被撒了彩纸：头顶飘几片纸屑，慢一点点而已
@@ -1022,25 +1141,20 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (let i = 0; i < 3; i++) {
           ctx.fillStyle = ["#FFC6DC", "#B9D4FA", "#FFE39B"][i];
           const dx = Math.sin(s.time * 6 + i * 2) * base * 0.35;
-          ctx.fillRect(cx + dx, cy - bodyH * 0.8 - i * base * 0.16, base * 0.12, base * 0.08);
+          ctx.fillRect(cx + dx, headY - base * 0.5 - i * base * 0.16, base * 0.12, base * 0.08);
         }
       }
-      // 加油：冒一个小爱心，纯打气
+      // 加油：绘制的心形往上飘，纯打气
       if (s.time < r.cheerUntil) {
-        ctx.font = `${Math.round(base * 0.5)}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("💖", cx + base * 0.72, cy - bodyH * 0.5);
+        const prog = 1 - Math.max(0, r.cheerUntil - s.time) / CHEER_SECONDS;
+        drawCheerHeart(ctx, cx + base * 0.72, headY, base, prog, calm);
       }
     }
     ctx.restore();
-    // 领先者头顶一顶小皇冠（落后的一方什么都不写，绝不出现羞辱文案）
+    // 领先者头顶一顶绘制的小金冠（落后的一方什么都不写，绝不出现羞辱文案）
     if (!r.ghost && !r.out && leaderSeat(s) === seat) {
       ctx.save();
-      ctx.font = `${Math.round(base * 0.46)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("👑", p.x, cy - crownOffset(base));
+      drawCrown(ctx, p.x, cy - crownOffset(base) - base * 0.32, base * 0.4);
       ctx.restore();
     }
     ctx.textAlign = "left";
@@ -1048,53 +1162,123 @@ export function mount(api: GameApi): { destroy: () => void } {
     void theme;
   }
 
-  /** 身上还挂着的道具效果，画成一串小图标（没有就返回空串） */
-  function activeIcons(r: Runner): string {
-    let out = "";
-    if (r.powers.speedCloud > 0) out += POWERUPS.speedCloud.emoji;
-    if (r.powers.shield > 0) out += POWERUPS.shieldBubble.emoji.repeat(r.powers.shield);
-    if (r.powers.magnetStar > 0) out += POWERUPS.magnetStar.emoji;
-    if (r.powers.confetti > 0) out += POWERUPS.confetti.emoji;
-    return out;
+  // ---- HUD 手绘化(r2 · B 档 TOP1):emoji 字符不再上画布 ----
+  // 1.2 的 hudText 把 r.emoji/❤️🤍/🪙/✋+道具 emoji 拼成一整串 fillText,
+  // 与 gold-hook「HUD 图标全手绘」口径不齐。现在拆成 token:文字照旧,
+  // 图标全部走 art.ts 的现成资产(drawMiniFace/drawHeart/drawCoinFrame/drawPowerIcon)。
+  type HudToken =
+    | { kind: "text"; text: string }
+    | { kind: "face" }
+    | { kind: "wisp" }
+    | { kind: "heart"; filled: boolean }
+    | { kind: "coin" }
+    | { kind: "slot"; power: PowerKind | null }
+    | { kind: "power"; power: PowerKind };
+
+  /** 身上还挂着的道具效果，画成一串手绘小图标（没有就返回空数组） */
+  function activePowerIcons(r: Runner): PowerKind[] {
+    const on: PowerKind[] = [];
+    if (r.powers.speedCloud > 0) on.push("speedCloud");
+    for (let i = 0; i < r.powers.shield; i++) on.push("shieldBubble");
+    if (r.powers.magnetStar > 0) on.push("magnetStar");
+    if (r.powers.confetti > 0) on.push("confetti");
+    return on;
   }
 
-  /** 正走在哪条支路：左路 / 右路，加一个「稳」或「快」的小标记 */
+  /** 正走在哪条支路：左路 / 右路，加一个「稳」或「快」的小标记（纯文字，不再配 emoji） */
   function branchTag(s: MatchState, r: Runner): string {
     const fork: ForkSection | undefined = s.forks.find((f) => f.at === r.branchAt);
     if (!fork || r.branch === null) return "";
+    const side = fork.branches[r.branch].side === "left" ? "左路" : "右路";
     const mine = fork.branches[r.branch];
     const other = fork.branches[r.branch === 0 ? 1 : 0];
-    const side = mine.side === "left" ? "🌿 左路" : "🌈 右路";
     return `${side}${mine.difficulty <= other.difficulty ? "·稳" : "·快"}`;
   }
 
-  /** HUD 压成一行：名字 + 里程 + 金币 + 心 + 道具槽 + 身上的效果 + 让分标注 */
-  function hudText(s: MatchState, r: Runner, seat: Seat): string {
+  /** HUD 压成一行：小脸 + 名字 + 里程 + 金币 + 心 + 道具槽 + 身上的效果 + 让分标注 */
+  function hudTokens(s: MatchState, r: Runner, seat: Seat): HudToken[] {
     const lives = livesLeft(s, seat);
-    const hearts = r.ghost
-      ? r.emoji
-      : "❤️".repeat(lives) + "🤍".repeat(Math.max(0, CRASH_LIMIT - lives));
-    const parts = [`${r.emoji} ${r.name}`, `${Math.floor(r.dist)} 米`, `🪙 ${r.coins}`, hearts];
-    if (s.usePowerups && !r.ghost) {
-      parts.push(r.held ? `✋${POWERUPS[r.held].emoji}` : "✋—");
-      const on = activeIcons(r);
-      if (on) parts.push(on);
+    const out: HudToken[] = [r.ghost ? { kind: "wisp" } : { kind: "face" }];
+    out.push({ kind: "text", text: `${r.name}　${Math.floor(r.dist)} 米　` });
+    out.push({ kind: "coin" });
+    out.push({ kind: "text", text: ` ${r.coins}` });
+    if (!r.ghost) {
+      out.push({ kind: "text", text: "　" });
+      for (let i = 0; i < CRASH_LIMIT; i++) out.push({ kind: "heart", filled: i < lives });
     }
-    if (r.branch !== null) parts.push(branchTag(s, r));
+    if (s.usePowerups && !r.ghost) {
+      out.push({ kind: "text", text: "　" });
+      out.push({ kind: "slot", power: r.held });
+      for (const p of activePowerIcons(r)) out.push({ kind: "power", power: p });
+    }
+    if (r.branch !== null) {
+      const tag = branchTag(s, r);
+      if (tag) out.push({ kind: "text", text: `　${tag}` });
+    }
     const other = s.runners[seat === 0 ? 1 : 0];
     const boost = r.ghost ? 1 : handicapMult(s.handicap, r.dist, other.dist);
-    if (boost > 1) parts.push(`🤝 让分 +${Math.round((boost - 1) * 100)}%`);
-    return parts.join("　");
+    if (boost > 1) out.push({ kind: "text", text: `　让分 +${Math.round((boost - 1) * 100)}%` });
+    return out;
+  }
+
+  /** 一枚 HUD token 画在槽位中心（文字除外，文字从槽位左缘起笔）。 */
+  function drawHudToken(tk: HudToken, x: number, slotW: number, fs: number, seat: Seat, theme: Theme): void {
+    const cx = x + slotW / 2;
+    switch (tk.kind) {
+      case "text":
+        ctx.fillStyle = theme.ink;
+        ctx.fillText(tk.text, x, 0);
+        break;
+      case "face":
+        drawMiniFace(ctx, cx, fs * 0.08, fs * 0.38, seat);
+        break;
+      case "wisp":
+        drawGhostWisp(ctx, cx, fs * 0.62, fs * 1.7, 0, true);
+        break;
+      case "heart":
+        drawHeart(ctx, cx, 0, fs * 0.42, "#FF7EA8", tk.filled);
+        break;
+      case "coin":
+        drawCoinFrame(ctx, cx, 0, fs * 0.42, coinFrameSpec(0));
+        break;
+      case "slot": {
+        // 手里的道具槽:白圆底板,有货画图标,空槽画一道小横杠(替代旧的小手+道具字符)
+        ctx.fillStyle = "rgba(255,255,255,.78)";
+        ctx.strokeStyle = "rgba(90,90,110,.35)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(cx, 0, fs * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (tk.power) drawPowerIcon(ctx, tk.power, cx, 0, fs * 0.32);
+        else {
+          ctx.strokeStyle = "rgba(90,90,110,.6)";
+          ctx.lineWidth = Math.max(1.2, fs * 0.1);
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(cx - fs * 0.2, 0);
+          ctx.lineTo(cx + fs * 0.2, 0);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "power":
+        drawPowerIcon(ctx, tk.power, cx, 0, fs * 0.34);
+        break;
+    }
   }
 
   function drawHud(pane: Rect, s: MatchState, r: Runner, seat: Seat, theme: Theme): void {
     const fs = Math.max(10, Math.min(17, Math.round(pane.height * 0.085)));
     const pad = Math.round(fs * 0.5);
-    const text = hudText(s, r, seat);
+    const tokens = hudTokens(s, r, seat);
     ctx.save();
     ctx.font = `800 ${fs}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-    // 窄屏上一行放不下就整条压扁横向缩放，绝不换行、绝不溢出自己那一格
-    const raw = ctx.measureText(text).width;
+    // 1.2 的挤压逻辑保留：先量「图标槽 + 文字」总宽，窄屏放不下就整条横向缩放，
+    // 绝不换行、绝不溢出自己那一格
+    const slotW = fs * 1.16;
+    const widths = tokens.map((tk) => (tk.kind === "text" ? ctx.measureText(tk.text).width : slotW));
+    const raw = widths.reduce((a, b) => a + b, 0);
     const room = pane.width - pad * 3;
     const squeeze = raw > room ? room / raw : 1;
     const w = Math.min(raw, room) + pad * 2;
@@ -1102,11 +1286,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.beginPath();
     ctx.roundRect(pane.x + pad, pane.y + pad, w, fs + pad * 1.4, 10);
     ctx.fill();
-    ctx.fillStyle = theme.ink;
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.translate(pane.x + pad * 2, pane.y + pad + (fs + pad * 1.4) / 2);
     ctx.scale(squeeze, 1);
-    ctx.fillText(text, 0, 0);
+    let tx = 0;
+    for (let i = 0; i < tokens.length; i++) {
+      drawHudToken(tokens[i], tx, slotW, fs, seat, theme);
+      tx += widths[i];
+    }
     ctx.restore();
     ctx.textBaseline = "alphabetic";
   }
@@ -1114,6 +1302,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawPane(pane: Rect, s: MatchState, seat: Seat): void {
     const r = s.runners[seat];
     const theme = THEMES[seat];
+    const calm = reducedMotion();
     ctx.save();
     ctx.beginPath();
     ctx.rect(pane.x, pane.y, pane.width, pane.height);
@@ -1130,15 +1319,23 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (z < -1) continue;
       visible.push({ e: view.entities[i], z });
     }
-    for (let i = visible.length - 1; i >= 0; i--) drawEntity(pane, visible[i].e, visible[i].z);
+    for (let i = visible.length - 1; i >= 0; i--) {
+      drawEntity(pane, visible[i].e, visible[i].z, seat, s.time, calm);
+    }
 
     drawRunner(pane, s, r, seat, theme);
+    drawCoinFloats(pane, s, seat, calm);
     drawFog(pane, theme);
     drawHud(pane, s, r, seat, theme);
 
     if (r.out) {
-      ctx.fillStyle = "rgba(60,60,90,.42)";
+      // 温柔灰化：0.3 秒渐入（reduced-motion 直接到位），文案沿用不羞辱的口径
+      if (outSince[seat] === null) outSince[seat] = perfSec;
+      const fade = calm ? 1 : Math.min(1, (perfSec - (outSince[seat] ?? perfSec)) / 0.3);
+      ctx.fillStyle = `rgba(60,60,90,${(0.42 * fade).toFixed(3)})`;
       ctx.fillRect(pane.x, pane.y, pane.width, pane.height);
+      ctx.save();
+      ctx.globalAlpha = fade;
       ctx.fillStyle = "#fff";
       ctx.font = `800 ${Math.round(pane.height * 0.1)}px "PingFang SC", sans-serif`;
       ctx.textAlign = "center";
@@ -1148,10 +1345,43 @@ export function mount(api: GameApi): { destroy: () => void } {
         pane.x + pane.width / 2,
         pane.y + pane.height / 2,
       );
+      ctx.restore();
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
     }
     ctx.restore();
+  }
+
+  /** 吃到金币的 +N 飘字与三粒星屑（reduced-motion：不飘不撒，只淡出） */
+  function drawCoinFloats(pane: Rect, s: MatchState, seat: Seat, calm: boolean): void {
+    const r = s.runners[seat];
+    const p = project(pane, RUNNER_Z, r.laneFloat);
+    const base = laneWidthAt(pane, RUNNER_Z) * 0.6;
+    for (const f of coinFloats) {
+      if (f.seat !== seat) continue;
+      const age = (perfSec - f.born) / 0.8;
+      if (age < 0 || age >= 1) continue;
+      const rise = calm ? 0 : age * base * 0.6;
+      ctx.save();
+      ctx.globalAlpha = 1 - age;
+      ctx.fillStyle = "#C2861A";
+      ctx.font = `800 ${Math.max(14, Math.round(base * 0.3))}px "PingFang SC", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`+${f.amount}`, p.x, p.y - base * 1.5 - rise);
+      for (let i = 0; i < sparkleCount(calm); i++) {
+        const a = age * 2 + (i * Math.PI * 2) / 3;
+        drawSparkle(
+          ctx,
+          p.x + Math.cos(a) * base * (0.3 + age * 0.3),
+          p.y - base * 1.4 - rise + Math.sin(a) * base * 0.18,
+          base * 0.07,
+        );
+      }
+      ctx.restore();
+    }
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
   }
 
   /** 两格之间的粉彩描边：外面一圈粉、里面一条白，谁是谁的地盘一眼看得清 */
@@ -1181,6 +1411,102 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawPane(panes[0], state, 0);
     drawPane(panes[1], state, 1);
     drawDivider();
+    drawPaceStrip(state);
+    if (state.over) drawFinish(state);
+  }
+
+  /** 进度换算：抢金币赛看金币数，其余看里程（领先者顶格，另一方按比例） */
+  function paceProgress(s: MatchState): [number, number] {
+    if (s.mode === "coins") {
+      const c = (i: 0 | 1): number => Math.min(1, s.runners[i].coins / COIN_RACE_TARGET);
+      return [c(0), c(1)];
+    }
+    const lead = Math.max(s.runners[0].dist, s.runners[1].dist, 1);
+    return [s.runners[0].dist / lead, s.runners[1].dist / lead];
+  }
+
+  /** 分屏中缝上的进度对比条：两张迷你脸在同一条轨上跑，隔着分屏也一眼看出差距 */
+  function drawPaceStrip(s: MatchState): void {
+    const w = Math.min(200, size.width * 0.4);
+    const h = 16;
+    const x = size.width / 2 - w / 2;
+    const y = size.height / 2 - h / 2;
+    const [a, b] = paceProgress(s);
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h / 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(242,160,192,.85)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(190,205,225,.9)";
+    ctx.beginPath();
+    ctx.moveTo(x + 10, y + h / 2);
+    ctx.lineTo(x + w - 10, y + h / 2);
+    ctx.stroke();
+    // 并排微错开：打平的时候两张脸也都看得见
+    const run = w - 20;
+    drawMiniFace(ctx, x + 10 + run * a, y + h / 2 - 3, 5.5, 0);
+    drawMiniFace(ctx, x + 10 + run * b, y + h / 2 + 3, 5.5, 1);
+    ctx.restore();
+  }
+
+  /** 终点演出：冲线彩带 + 双人名次卡（胜者小人跳一跳；reduced-motion 下彩带定格） */
+  function drawFinish(s: MatchState): void {
+    const calm = reducedMotion();
+    const colors = ["#FFC6DC", "#B9D4FA", "#FFE39B", "#C9F0D9"];
+    ctx.save();
+    for (let i = 0; i < 14; i++) {
+      const px = (((i * 79) % 97) / 97) * size.width;
+      const fall = calm
+        ? (((i * 53) % 100) / 100) * size.height
+        : ((perfSec * 60 + i * 67) % (size.height + 40)) - 20;
+      ctx.save();
+      ctx.translate(px, fall);
+      ctx.rotate(calm ? i : i + perfSec * (i % 2 === 0 ? 2.2 : -1.8));
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(-4, -2, 8, 4);
+      ctx.restore();
+    }
+    if (s.winner === 0 || s.winner === 1) {
+      const w = Math.min(230, size.width * 0.72);
+      const h = 74;
+      const x = size.width / 2 - w / 2;
+      const y = size.height / 2 - h / 2;
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 14);
+      ctx.fill();
+      ctx.strokeStyle = "#F2A0C0";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      const rows: Array<[Seat, string]> =
+        s.winner === 0
+          ? [
+              [0, "第 1 名"],
+              [1, "第 2 名"],
+            ]
+          : [
+              [1, "第 1 名"],
+              [0, "第 2 名"],
+            ];
+      ctx.font = `800 14px "PingFang SC", "Microsoft YaHei", sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "left";
+      rows.forEach(([seat, label], row) => {
+        const ry = y + 20 + row * 34;
+        const hop = row === 0 && !calm ? Math.abs(Math.sin(perfSec * 6)) * 4 : 0;
+        drawMiniFace(ctx, x + 22, ry - hop, 9, seat);
+        if (row === 0) drawCrown(ctx, x + 22, ry - hop - 15, 14);
+        ctx.fillStyle = row === 0 ? "#C2497E" : "#6E86A0";
+        ctx.fillText(`${s.runners[seat].name} · ${label}`, x + 40, ry);
+      });
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    }
+    ctx.restore();
   }
 
   const LANE_NAMES = ["左道", "中道", "右道"];
@@ -1224,16 +1550,28 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /** 只做拾取反馈：金币数涨了就冒 +N 飘字（纯演出，不碰任何成绩） */
+  function trackCoinPickups(s: MatchState): void {
+    for (const seat of [0, 1] as const) {
+      const gain = s.runners[seat].coins - prevCoins[seat];
+      if (gain > 0) coinFloats.push({ seat, born: perfSec, amount: gain });
+      prevCoins[seat] = s.runners[seat].coins;
+    }
+    if (coinFloats.length > 8) coinFloats = coinFloats.slice(-8);
+  }
+
   let lastFrame = 0;
   function frame(now: number): void {
     if (destroyed) return;
     const dt = Math.min(0.1, (now - lastFrame) / 1000 || 0.016);
     lastFrame = now;
+    perfSec = now / 1000;
     const s = state;
     if (s && !gameEl.classList.contains("dr-hidden")) {
       if (running && !paused && !s.over) {
         stepMatch(s, dt);
         playEvents(s);
+        trackCoinPickups(s);
         if (s.over) onMatchOver(s);
       } else {
         drainEvents(s);
