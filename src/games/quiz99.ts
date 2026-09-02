@@ -163,7 +163,8 @@ const QUIZ_CSS = `
   .qz-prompt svg, .qz-prompt img { max-height: 64px; width: auto; }
   /* N-44:农场竖式是 DOM(.mtf-vert)+题下作物卡(.mtf-illus),不是 svg,旧选择器漏了 */
   .qz-prompt .mtf-vert, .qz-wrap > .mtf-illus:not(.mtf-illus-count) { max-height: 64px; overflow: hidden; }
-  .qz-choices { gap: 8px; }
+  .qz-choices { gap: 8px; position: sticky; bottom: 0; z-index: 3; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,0), #fff 42%); }
   .qz-choice { min-height: 46px; font-size: 22px; padding: 4px 12px; }
   .qz-choice.qz-big { min-width: 84px; min-height: 48px; font-size: 26px; }
   .qz-msg { min-height: 18px; }
