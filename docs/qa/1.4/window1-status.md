@@ -11,7 +11,7 @@
 | 工单 | 状态 | 派发时间 | SHA | 用例水位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
 | w1-infra-feel | 待验 | 11-07 15:45 | 5d913bee → 合入 59770f79 | feel.test 57 例 / kit 定向 532 例 / build 绿 | 16:04 IDLE；只改 5 个独占文件，越界检查通过；已合进 game-1.4-window1 并推远端（59770f79）。全量 `npm test` 因机器过载尚未跑完（见日志），跑完全绿即转已验收。工人报告：本机 14 例守门测试因 CRLF 在 Windows 必红，撤改动对照为同一批，非新增 |
-| w1-infra-frame | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-infra-frame`；level99 锚定 + l99-host 守门 + measure-viewports.mjs；16:50 仍无提交、工作区有改动 |
+| w1-infra-frame | 中止（用户 16:57 停止） | 11-07 15:55 | 465d6a81（未合入） | 未验 | 分支 `game-1.4-window1-infra-frame` 上已有 3 提交：96921c09 N-100 进场锚定 + `level99.n100-anchor.test.ts`；e0692d1a `scripts/qa/measure-viewports.mjs` + README；465d6a81 `__tests__/l99HostScroll.guard.test.ts`。工作区干净。**缺**：`docs/qa/1.4/infra-frame.md`、17 款 915×412 修前/修后数字、工人回复与全量验证。续派时以此分支为起点，只补缺项 |
 | w1-r1-tester | 未派 | | | | 9 款 t1+t2 全部已验收后才派 |
 | w1-r1-learner | 未派 | | | | tester IDLE 后与 fixer 并行 |
 | w1-r1-fixer | 未派 | | | | |
@@ -29,7 +29,7 @@
 | --- | --- | --- | --- | --- | --- |
 | w1-clock-house-t1 | 在跑（非本会话重派） | 11-07 15:55 / 16:30 | | | 15:55 本会话派出；16:05 被用户手动停止；16:32 分支上出现新计划提交 a33cecb1——由另一份窗口 1 会话重派，本会话不再重派、不动该格 |
 | w1-clock-house-t2 | 未派 | | | | 840 横屏钟面 min(42vh,220px) 守 MIN_FACE_PX |
-| w1-math-farm-t1 | 在跑 | 11-07 15:55 | | | 第一波；本地 worktree `yd-w1-math-farm`；16:45 已有 2 提交（计划 + 体检报告初稿 MF-01…MF-18） |
+| w1-math-farm-t1 | 中止（用户 16:57 停止） | 11-07 15:55 | 3aac441e（未合入） | 未验 | 分支上 2 提交：计划 + 体检报告初稿 MF-01…MF-18。worktree `yd-w1-math-farm` 里还有**未提交**改动：`runner.ts`、`domStub.ts`、`upgrade12.test.ts` 修改 + 7 个新文件（`levels.audit.test.ts`、`farmHarness.ts`、`clickGuard/countWords/hintLadder.test.ts` 等）。已只读备份到 `%TEMP%\w1-aborted-backup-1702\math-farm`（patch 129 KB + 7 文件）。**任何人不要在该 worktree 上 reset / checkout / 换行归一**；续派时让工人先 `git status` 接着做 |
 | w1-math-farm-t2 | 未派 | | | | |
 | w1-sudoku-petal-t1 | 在跑（非本会话派出） | 11-07 16:15 | | | 本会话 15:55 的派发调用参数损坏未发出；16:15 由另一份窗口 1 会话派出（同一份工人 prompt）；16:45 已有 2 提交（计划 + 工序 B 审计先红） |
 | w1-sudoku-petal-t2 | 未派 | | | | 人机对战档不卡死 |
@@ -73,3 +73,5 @@
 | 2026-11-07 16:15–16:42 | 另一份窗口 1 会话在同组 worktree 上派出 sudoku-petal、music-stars，并重派 clock-house。 |
 | 2026-11-07 16:30–16:44 | 机器过载（可用内存 1.4 GB、node 97 个）；本会话对 music-stars worktree 的换行归一与该工人开工重叠（见该行备注）。 |
 | 2026-11-07 16:52 | 推送 game-1.4-window1 = 59770f79；在 yd-w1-infra-feel 上后台跑全量测试；暂停新派等主管裁定。 |
+| 2026-11-07 16:57 | math-farm-t1、infra-frame 被用户手动停止。本会话（原统筹）派出的工人至此全部停止；窗口 1 仍在跑的只剩另一份会话的 clock-house / sudoku-petal / music-stars。 |
+| 2026-11-07 17:02 | 机器仍过载（可用 1.5 GB），取消本会话的全量测试任务（feel 全量待空闲补跑）；备份两名被停工人的未提交现场。17:02 另一份会话在 `yd-w1` 上做 LF 归一（`checkout --pathspec-from-file`），说明它已接管本 worktree——**原统筹自此只读，不再对 yd-w1 / yd-w1-* 做任何写操作**，由接管方按本表续派。 |
