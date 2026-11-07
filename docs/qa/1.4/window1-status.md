@@ -10,8 +10,8 @@
 
 | 工单 | 状态 | 派发时间 | SHA | 用例水位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| w1-infra-feel | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-infra-feel`；全绿后立刻报主管合进 game-1.4 |
-| w1-infra-frame | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-infra-frame`；level99 锚定 + l99-host 守门 + measure-viewports.mjs |
+| w1-infra-feel | 待验 | 11-07 15:45 | 5d913bee → 合入 59770f79 | feel.test 57 例 / kit 定向 532 例 / build 绿 | 16:04 IDLE；只改 5 个独占文件，越界检查通过；已合进 game-1.4-window1 并推远端（59770f79）。全量 `npm test` 因机器过载尚未跑完（见日志），跑完全绿即转已验收。工人报告：本机 14 例守门测试因 CRLF 在 Windows 必红，撤改动对照为同一批，非新增 |
+| w1-infra-frame | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-infra-frame`；level99 锚定 + l99-host 守门 + measure-viewports.mjs；16:50 仍无提交、工作区有改动 |
 | w1-r1-tester | 未派 | | | | 9 款 t1+t2 全部已验收后才派 |
 | w1-r1-learner | 未派 | | | | tester IDLE 后与 fixer 并行 |
 | w1-r1-fixer | 未派 | | | | |
@@ -27,17 +27,17 @@
 
 | 工单 | 状态 | 派发时间 | SHA | 用例水位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| w1-clock-house-t1 | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-clock-house`；quiz99 出题器 |
+| w1-clock-house-t1 | 在跑（非本会话重派） | 11-07 15:55 / 16:30 | | | 15:55 本会话派出；16:05 被用户手动停止；16:32 分支上出现新计划提交 a33cecb1——由另一份窗口 1 会话重派，本会话不再重派、不动该格 |
 | w1-clock-house-t2 | 未派 | | | | 840 横屏钟面 min(42vh,220px) 守 MIN_FACE_PX |
-| w1-math-farm-t1 | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-math-farm`；runner.ts 禁盲拷 500 档 |
+| w1-math-farm-t1 | 在跑 | 11-07 15:55 | | | 第一波；本地 worktree `yd-w1-math-farm`；16:45 已有 2 提交（计划 + 体检报告初稿 MF-01…MF-18） |
 | w1-math-farm-t2 | 未派 | | | | |
-| w1-sudoku-petal-t1 | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-sudoku-petal`；188 关唯一解（求解器计数 = 1） |
+| w1-sudoku-petal-t1 | 在跑（非本会话派出） | 11-07 16:15 | | | 本会话 15:55 的派发调用参数损坏未发出；16:15 由另一份窗口 1 会话派出（同一份工人 prompt）；16:45 已有 2 提交（计划 + 工序 B 审计先红） |
 | w1-sudoku-petal-t2 | 未派 | | | | 人机对战档不卡死 |
-| w1-music-stars-t1 | 在跑 | 11-07 15:45 | | | 第一波；本地 worktree `yd-w1-music-stars`；N-113 工具排已修勿回退 |
+| w1-music-stars-t1 | 在跑（非本会话派出） | 11-07 16:40 | | | 本会话派发调用参数损坏未发出；16:42 由另一份窗口 1 会话派出（计划提交 6cc1c2ae）。**事故**：本会话 16:43 在以为无人使用的该 worktree 上做了换行归一（`rm --cached` + `reset --hard`），与该工人开工重叠约 1 分钟；提交完好，16:50 工作区已有新文件在推进，若有未提交草稿被丢需工人重写 |
 | w1-music-stars-t2 | 未派 | | | | 双声部节拍判定窗口 ≥ 120 ms |
-| w1-find-diff-t1 | 未派 | | | | 第二波；三图/旋转/镜像关「不同」像素差阈值测试 |
+| w1-find-diff-t1 | 待派 | | | | 第二波；worktree `yd-w1-find-diff` 已建（基于 59770f79）；等主管确认只剩一份窗口 1 统筹后再派，避免重派 |
 | w1-find-diff-t2 | 未派 | | | | |
-| w1-pinyin-train-t1 | 未派 | | | | 第二波；scene.ts / timed.ts 禁盲拷；多音字唯一正确答案 |
+| w1-pinyin-train-t1 | 待派 | | | | 第二波；分支 `game-1.4-window1-pinyin-train` 已建（59770f79），worktree 创建在机器过载时失败需重建；等主管确认后再派 |
 | w1-pinyin-train-t2 | 未派 | | | | |
 | w1-shape-kingdom-t1 | 未派 | | | | 第二波；周长面积不得出现非整数陷阱 |
 | w1-shape-kingdom-t2 | 未派 | | | | |
@@ -54,7 +54,10 @@
 
 ## 三、给主管的事项
 
-- （待 feel / frame 全绿后填）feel / frame 已推 SHA ____，请合进 game-1.4。
+1. **feel 已推**：`game-1.4-window1` @ `59770f79` 含手感套件（工人分支 `5d913bee`，feel.test 57 例、kit 定向 532 例、build 全绿）。窗口全量 `npm test` 因机器过载尚未跑完，主管合进 `game-1.4` 前请按总纲 6.1 自跑一遍。frame 仍在跑。
+2. **窗口 1 统筹疑似有重复会话**：16:15 起有另一份（或两份）窗口 1 统筹在同一组 worktree 上派工（sudoku-petal、music-stars、重派 clock-house），并在 `D:\Projects\yd-w1` 下跑 node_modules 复制脚本。请只保留一份统筹，其余关闭；在确认前本会话不再新派，以免重派事故。
+3. **机器过载**：16:3x 本机可用内存一度只剩 1.4 GB（31 GB 总量）、node 进程 97 个、磁盘队列 19，git 单条命令要跑 10 分钟以上。五窗口 × 6 工人在一台机器上跑不动。建议：每窗同时 ≤ 3 个工人；工人跑 vitest 一律加 `--maxWorkers=2`；`npm ci` 前设 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`。
+4. **Windows 换行**：本机 `core.autocrlf=true`，工作区 CRLF，14 例读源码字符串的守门测试在 Windows 必红（与 1.3.4 基线相同）。全量验收口径：以 LF 工作区（或 CI）为准。
 
 ## 四、日志
 
@@ -62,4 +65,11 @@
 | --- | --- |
 | 2026-11-07 15:30 | 开工：建 worktree `D:\projects\yd-w1`，砍 `game-1.4-window1`，建本状态表并推远端（5f3b3d71）。 |
 | 2026-11-07 15:38 | 首波 6 个云端工人全部 `unauthenticated`（Cursor 未连接 GitHub），0 个启动。 |
-| 2026-11-07 15:45 | 改本地并发：建 6 个工人 worktree + 分支，Node 22 便携版就位，重派第一波 6 张：infra-feel、infra-frame、clock-house-t1、math-farm-t1、sudoku-petal-t1、music-stars-t1。 |
+| 2026-11-07 15:45 | 改本地并发：建 6 个工人 worktree + 分支，Node 22 便携版就位。 |
+| 2026-11-07 15:55 | 实际派出 4 张：infra-feel、infra-frame、clock-house-t1、math-farm-t1；sudoku-petal / music-stars 两次派发调用参数损坏未发出（当时未察觉）。 |
+| 2026-11-07 16:04 | infra-feel IDLE（5d913bee，3 提交，5 文件，越界检查通过）。 |
+| 2026-11-07 16:05 | clock-house-t1 被用户手动停止。 |
+| 2026-11-07 16:09 | infra-feel 合进 game-1.4-window1 = 59770f79；find-diff worktree 建好；pinyin-train worktree 创建因机器过载失败（分支已建）。 |
+| 2026-11-07 16:15–16:42 | 另一份窗口 1 会话在同组 worktree 上派出 sudoku-petal、music-stars，并重派 clock-house。 |
+| 2026-11-07 16:30–16:44 | 机器过载（可用内存 1.4 GB、node 97 个）；本会话对 music-stars worktree 的换行归一与该工人开工重叠（见该行备注）。 |
+| 2026-11-07 16:52 | 推送 game-1.4-window1 = 59770f79；在 yd-w1-infra-feel 上后台跑全量测试；暂停新派等主管裁定。 |
