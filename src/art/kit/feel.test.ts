@@ -554,6 +554,33 @@ describe("popElement DOM 弹一下", () => {
     vi.runAllTimers();
     expect(el.className).toBe("");
   });
+
+  it("只有动画还在播时才强制回流重播；首次弹与 reduced 不读布局", () => {
+    vi.useFakeTimers();
+    const el = new FakeEl("button");
+    let reads = 0;
+    Object.defineProperty(el, "offsetWidth", {
+      get: () => {
+        reads++;
+        return 44;
+      }
+    });
+    popElement(asEl(el), false);
+    expect(reads).toBe(0);
+    popElement(asEl(el), false);
+    expect(reads).toBe(1);
+    el.fire("animationend");
+    popElement(asEl(el), false);
+    expect(reads).toBe(1);
+    popElement(asEl(el), true);
+    popElement(asEl(el), true);
+    expect(reads).toBe(1);
+  });
+
+  it("空元素 / 没有 classList 的东西直接忽略", () => {
+    expect(() => popElement(null as unknown as HTMLElement, false)).not.toThrow();
+    expect(() => popElement({} as HTMLElement, true)).not.toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -617,6 +644,16 @@ describe("汇总导出与 CSS 对账", () => {
     expect((kf as RegExpExecArray)[1]).toMatch(/scale:/);
     expect((kf as RegExpExecArray)[1]).not.toMatch(/transform|perspective|translateZ|rotate3d|matrix3d/);
     expect(tail).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.feel-pop\s*\{[^}]*animation:\s*none/);
+  });
+
+  it("feel.ts 是纯模块：不碰 Math.random、不查全局 DOM、不挂 rAF", () => {
+    const src = readFileSync(fileURLToPath(new URL("./feel.ts", import.meta.url)), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+    for (const banned of ["Math.random", "document.", "window.", "matchMedia", "requestAnimationFrame", "localStorage"]) {
+      expect(src, banned).not.toContain(banned);
+    }
+    expect(src).not.toMatch(/^import (?!type )/m);
   });
 
   it("CSS 关键帧每一档 sx·sy ≈ 1（与 squashStretch 同一体积守恒口径）", () => {

@@ -330,8 +330,9 @@ export function popElement(el: HTMLElement, reduced: boolean): void {
   clearPop(el, st);
   const state = st;
   const cls = reduced ? "feel-pop-flat" : "feel-pop";
+  const restarting = !reduced && el.classList.contains("feel-pop");
   el.classList.remove("feel-pop", "feel-pop-flat");
-  if (!reduced) void el.offsetWidth; // 强制回流：连点时动画从头再播
+  if (restarting) void el.offsetWidth; // 强制回流：连点时动画从头再播
   el.classList.add(cls);
   const done = (): void => {
     clearPop(el, state);
