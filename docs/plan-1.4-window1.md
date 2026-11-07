@@ -143,5 +143,5 @@
 
 本窗全部工单 + 三轮验收在 `game-1.4-window1` 全绿后：
 1. `git fetch origin game-1.4-window2 game-1.4-window3 game-1.4-window4 game-1.4-window5`，读各窗 `docs/qa/1.4/window<K>-status.md`，找「未派」最多的窗口。
-2. 仍然 Task 转发；工人 `cloud_base_branch` 与 prompt 分支改成 `game-1.4-windowK`；只帮没人在跑的款；派前再 fetch 一次，目录已有别人的 1.4 提交就换下一款。
+2. **先向主管要格**：回复「申请代派 w<K>-<id>-t<k>」，等主管在 `docs/plan-1.4-tracker.md` 标「在跑（窗口 1 代）」后才许派。没登记就派 = 重派事故。仍然 Task 转发；工人 `cloud_base_branch` 与 prompt 分支改成 `game-1.4-windowK`；派前再 fetch 一次，目录已有别人的 1.4 提交就换下一款。
 3. 回复主管「窗口 1 空闲，正在帮窗口 K 的 <id>-t<k>」。五窗全部齐了才停，然后等主管通知派收官文档工人。

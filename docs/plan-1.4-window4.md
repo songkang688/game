@@ -141,4 +141,4 @@
 
 ## 八、本窗做完后必须去帮别人
 
-本窗 19 款 t1 + t2 与三轮验收在 `game-1.4-window4` 全绿后：fetch 其他四个窗口分支与 `docs/qa/1.4/window<K>-status.md`，帮「未派」最多的窗口；仍然 Task 转发；工人分支改成 `game-1.4-windowK`；只帮没人在跑的款；派前再 fetch；回复主管「窗口 4 空闲，正在帮窗口 K 的 <id>-t<k>」。五窗全部齐了才停。
+本窗 19 款 t1 + t2 与三轮验收在 `game-1.4-window4` 全绿后：fetch 其他四个窗口分支与 `docs/qa/1.4/window<K>-status.md`，帮「未派」最多的窗口。**先向主管要格**：回复「申请代派 w<K>-<id>-t<k>」，等主管在 `docs/plan-1.4-tracker.md` 标「在跑（窗口 4 代）」后才许派，没登记就派 = 重派事故。仍然 Task 转发；工人分支改成 `game-1.4-windowK`；派前再 fetch；回复主管「窗口 4 正在帮窗口 K 的 <id>-t<k>」。五窗全部齐了才停。

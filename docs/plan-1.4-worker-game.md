@@ -75,6 +75,12 @@
 4. 素材契约测试新增 ≥ 8 例（`FakeCtx2D` 记账：绘制调用 > 0、色值合法、A/B 主色不等、reduced 分支无粒子）。
 5. 360px 宽实机缩放下主体 ≥ 32px 高且五官可辨。
 
+## 六·五、越界红线补充（工人最容易踩的三条）
+
+1. `src/art/kit/index.ts`、`src/engine/index.ts` 不碰：新文件按路径直接 import。
+2. `src/games/` 顶层跨游戏守门测试（`copy.test.ts`、`hotspot.*.test.ts`、`window*-*.test.ts` 等）被你的合法改动弄红时，只改引用 `{{ID}}` 的那几行期望值；不删断言、不调低阈值、不重排文件；回复里逐条写明。
+3. 别的游戏目录、`src/ui/**`、`src/styles.css`、`level99.ts`、`src/engine/**`、`src/art/runner/**` 一个字不碰（窗口 1 / 窗口 5 的基建工单除外，以其规格的独占文件为准）。
+
 ## 七、收尾（每张工单）
 
 ```bash

@@ -99,6 +99,8 @@ export function popElement(el: HTMLElement, reduced: boolean): void;   // DOM �
 4. **测试只增不减**：不删旧测试、不调低断言；守门测试断言的 CSS 原文（500 档、`SKY_H=420`、`*_PANE_H=200` 等）不动，加档不改档；`npm test` 与 `npm run build` 全绿才许 push。
 5. **孩子文案**：失败只鼓励不批评；攻略只讲方法不给答案；商标黑名单扫描 0 命中：`rg -i "<黑名单>" src/ README.md --glob '!.cursor/skills/**'`（黑名单见 `plan-1.2-supervisor.md` 第八节）。
 6. **所有权**：只改本窗口清单里的目录（第七节）；需要动共享文件 → 写需求单给窗口 1 / 窗口 5，不自己动；`src/styles.css` 只许末尾追加且只有窗口 1 能动；其他窗口在 `src/art/kit/` 只许**新增**带游戏前缀的文件。
+   - **汇总导出文件** `src/art/kit/index.ts`、`src/engine/index.ts` 只有窗口 1 能改：窗口 2–5 新增的 kit 文件、窗口 5 给 `view25d.ts` 新加的导出，一律按文件路径直接 import，不经 index。
+   - **`src/games/` 顶层跨游戏守门测试**（`copy.test.ts`、`hotspot.*.test.ts`、`window*-*.test.ts`、`trioR19FixB.test.ts` 等非 `__tests__/` 的顶层 `*.test.ts`）名义上归窗口 1。其他窗口若因本窗游戏的**合法改动**把它弄红，只许改**引用本窗游戏 id 的那几行**（更新期望值；不删断言、不调低阈值、不重排文件），并在回复里逐条写明；两窗同改一文件由主管合并时保留双方。
 7. **git**：工人只推自己窗口分支；禁止 `--force`（含 `--force-with-lease`）、禁止推 `game-1.3` / `main`、禁止 `gh` 开 / 改 / 合 PR（只读可用）；rebase 冲突保留「该文件所属窗口」的版本。
 8. **工装不进库**：测量脚本、截图、结果 JSON 一律 `/tmp`（Windows 为 `%TEMP%`）；唯一例外是窗口 1 固化的 `scripts/qa/measure-viewports.mjs`。
 9. **不套娃**：工人禁止再 Task；窗口禁止自己写实现代码。
@@ -157,6 +159,7 @@ export function popElement(el: HTMLElement, reduced: boolean): void;   // DOM �
 
 9 + 17 + 21 + 19 + 10 = **76**。窗口 1 游戏少是因为它背全部共享基建与框架需求单；窗口 5 游戏少是因为每款纵深升级都是重活。
 本窗做完**必须去帮最落后的窗口**（规则同 1.3：只帮没人在跑的格子、推到被帮窗口的分支、仍然 Task 转发）。
+**帮别人的锁**：帮忙窗口先回复主管「申请代派 w<K>-<id>-t<k>」→ 主管在 [`plan-1.4-tracker.md`](./plan-1.4-tracker.md) 把该格标「在跑（窗口 N 代）」并提交 → 帮忙窗口才许派。没登记就派 = 重派事故，后推者 revert。
 
 ---
 
