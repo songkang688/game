@@ -3541,3 +3541,42 @@ html {
     background: linear-gradient(180deg, rgba(242, 247, 234, 0.35), #eaf3e4);
   }
 }
+
+/* ==========================================================================
+   1.4 手感套件 · DOM 弹一下(src/art/kit/feel.ts 的 popElement 挂/摘这两个类,窗口 1 末尾追加)
+   时长对账:FEEL_POP_MS = 280(.feel-pop)、FEEL_POP_FLAT_MS = 240(.feel-pop-flat,由 JS 定时摘)。
+   形变走独立的 scale 属性(同 press-pop),不盖掉元素自己的 transform;
+   每一帧 sx·sy ≈ 1,与 squashStretch 同一条体积守恒口径。inline 元素请给 display:inline-block。
+   ========================================================================== */
+.feel-pop {
+  animation: feel-pop 280ms ease-out;
+}
+
+@keyframes feel-pop {
+  0% {
+    scale: 1.22 0.82;
+  }
+  45% {
+    scale: 0.94 1.06;
+  }
+  75% {
+    scale: 1.03 0.97;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+/* reduced 分支:不动,只亮一下 */
+.feel-pop-flat {
+  filter: brightness(1.15) saturate(1.3);
+}
+
+/* 调用方漏传 reduced 时的兜底:系统要求减弱动效,.feel-pop 也只亮不弹 */
+@media (prefers-reduced-motion: reduce) {
+  .feel-pop {
+    animation: none !important;
+    scale: none;
+    filter: brightness(1.15) saturate(1.3);
+  }
+}
