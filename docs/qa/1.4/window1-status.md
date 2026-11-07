@@ -1,17 +1,19 @@
 # 1.4 · 窗口 1 状态表（壳层 / 框架 / 手感套件 + 学习与动手 9 款）
 
-> 本窗分支 `game-1.4-window1`（从 `origin/game-1.4` @ `10926b9b` 砍出）。窗口本体工作区：`D:\projects\yd-w1`（独立 worktree；`D:\projects\game` 由其他窗口共用，本窗不切它的分支）。
+> 本窗分支 `game-1.4-window1`（从 `origin/game-1.4` @ `10926b9b` 砍出）。窗口本体工作区：`D:\Projects\yd-w1`（独立 worktree；`D:\Projects\game` 由其他窗口共用，本窗不切它的分支）。
 > 工人模型 slug：`claude-opus-5-5-xhigh-fast`；并发上限 6，`run_in_background=true`。
-> **派发方式：本地并发（云端不可用）。** 15:38 首波 6 个 `environment=cloud` 工人全部返回 `[unauthenticated] Please reconnect GitHub in Cursor`（Cursor 未连接 GitHub 集成，本机 `gh` 登录不算），按主管指示改本地：每个工人一个独立 worktree `D:\projects\yd-w1-<id>`、分支 `game-1.4-window1-<id>`（砍自 `origin/game-1.4-window1`），工人只 commit 不 push、只跑定向测试；IDLE 后窗口合进 `game-1.4-window1`、跑全量、推远端、`git worktree remove`。
-> 本机工具链：Node 22 便携版 `D:\tools\node22`（v22.23.4）；无 Chrome，无头浏览器用 Edge；`rg` 用 Cursor 自带的 ripgrep。
+> **派发方式：本地并发，全程不连远端。** 15:38 首波 6 个 `environment=cloud` 工人全部返回 `[unauthenticated] Please reconnect GitHub in Cursor`（云端子代理依赖 Cursor 的 GitHub 集成，本机 `gh` 登录不算），改本地：每个工人一个独立 worktree `D:\Projects\yd-w1-<id>`、分支 `game-1.4-window1-<id>`，工人只 commit 不 push、只跑定向测试；IDLE 后窗口合进 `game-1.4-window1`、跑全量、`git worktree remove`。16:08 主管指示「无需连接 git，先在本地干」：窗口本体也不再 fetch / push，远端 `origin/game-1.4-window1` 停在 66ee3fba。
+> 16:08 统筹会话更换：旧会话关闭，新会话接管（旧会话的 6 个工人随之终止，16:19 在原 worktree 原地补派）。
+> 本机工具链：Node 22 便携版 `D:\tools\node22`（不在系统 PATH，每条命令前置）；无 Chrome，无头浏览器用 Edge `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`；`rg` 用 Cursor 自带的 ripgrep。
+> **CRLF 陷阱**：系统 gitconfig `core.autocrlf=true`，worktree 检出的源码是 CRLF，全库约 23 条「读源码字符串按 `\n` 匹配」的守门测试会伪失败（如 `snake-snack/qaC3fix.test.ts`、`tap-tiles/visual-fix-r1.test.ts`）。窗口对 7 个 w1 worktree 做了 LF 归一（只重写与索引仅差 CR 的文件；`checkout-index -f` 对 stat 未变的文件是空操作，必须先删再 `checkout --pathspec-from-file`）。合并后全量以 LF 树为准。
 > 状态：`未派` / `在跑` / `待验` / `已验收` / `打回` / `ERROR`。一行一工单：`工单 | 状态 | 派发时间 | SHA | 用例水位 | 备注`。
 
 ## 〇、基建与验收格
 
 | 工单 | 状态 | 派发时间 | SHA | 用例水位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| w1-infra-feel | 待验 | 11-07 15:45 | 5d913bee → 合入 59770f79 | feel.test 57 例 / kit 定向 532 例 / build 绿 | 16:04 IDLE；只改 5 个独占文件，越界检查通过；已合进 game-1.4-window1 并推远端（59770f79）。全量 `npm test` 因机器过载尚未跑完（见日志），跑完全绿即转已验收。工人报告：本机 14 例守门测试因 CRLF 在 Windows 必红，撤改动对照为同一批，非新增 |
-| w1-infra-frame | 中止（用户 16:57 停止） | 11-07 15:55 | 465d6a81（未合入） | 未验 | 分支 `game-1.4-window1-infra-frame` 上已有 3 提交：96921c09 N-100 进场锚定 + `level99.n100-anchor.test.ts`；e0692d1a `scripts/qa/measure-viewports.mjs` + README；465d6a81 `__tests__/l99HostScroll.guard.test.ts`。工作区干净。**缺**：`docs/qa/1.4/infra-frame.md`、17 款 915×412 修前/修后数字、工人回复与全量验证。续派时以此分支为起点，只补缺项 |
+| w1-infra-feel | 待验 | 11-07 15:45 | 5d913bee → 合入 59770f79 | feel.test.ts 57 例 | 旧会话工人完成（feel.ts + 接入指南 infra-feel.md + index.ts re-export + styles.css 末尾 .feel-pop）；59770f79 全量 19771 通过 / 23 失败均为 CRLF 伪失败、build 绿；LF 归一后复跑全量确认后转「已验收」并报主管合进 game-1.4 |
+| w1-infra-frame | 在跑 | 11-07 16:19（补派） | | | 旧工人被终止，留下未提交 `scripts/qa/`；新工人在 `yd-w1-infra-frame` 续做：level99 N-100 锚定 + l99-host 守门测试 + measure-viewports.mjs；端口 4132/4133 |
 | w1-r1-tester | 未派 | | | | 9 款 t1+t2 全部已验收后才派 |
 | w1-r1-learner | 未派 | | | | tester IDLE 后与 fixer 并行 |
 | w1-r1-fixer | 未派 | | | | |
@@ -27,17 +29,17 @@
 
 | 工单 | 状态 | 派发时间 | SHA | 用例水位 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| w1-clock-house-t1 | 在跑（非本会话重派） | 11-07 15:55 / 16:30 | | | 15:55 本会话派出；16:05 被用户手动停止；16:32 分支上出现新计划提交 a33cecb1——由另一份窗口 1 会话重派，本会话不再重派、不动该格 |
+| w1-clock-house-t1 | 在跑 | 11-07 16:19（补派） | | | worktree `yd-w1-clock-house`；quiz99 出题器；预审线索：作息表随机截段、跨午夜不提示 |
 | w1-clock-house-t2 | 未派 | | | | 840 横屏钟面 min(42vh,220px) 守 MIN_FACE_PX |
-| w1-math-farm-t1 | 中止（用户 16:57 停止） | 11-07 15:55 | 3aac441e（未合入） | 未验 | 分支上 2 提交：计划 + 体检报告初稿 MF-01…MF-18。worktree `yd-w1-math-farm` 里还有**未提交**改动：`runner.ts`、`domStub.ts`、`upgrade12.test.ts` 修改 + 7 个新文件（`levels.audit.test.ts`、`farmHarness.ts`、`clickGuard/countWords/hintLadder.test.ts` 等）。已只读备份到 `%TEMP%\w1-aborted-backup-1702\math-farm`（patch 129 KB + 7 文件）。**任何人不要在该 worktree 上 reset / checkout / 换行归一**；续派时让工人先 `git status` 接着做 |
+| w1-math-farm-t1 | 在跑 | 11-07 16:19（补派） | | | worktree `yd-w1-math-farm`；runner.ts 禁盲拷 500 档；预审线索：「拆一步」第 3 错不可达、量词、提示与题面不符 |
 | w1-math-farm-t2 | 未派 | | | | |
-| w1-sudoku-petal-t1 | 在跑（非本会话派出） | 11-07 16:15 | | | 本会话 15:55 的派发调用参数损坏未发出；16:15 由另一份窗口 1 会话派出（同一份工人 prompt）；16:45 已有 2 提交（计划 + 工序 B 审计先红） |
+| w1-sudoku-petal-t1 | 在跑 | 11-07 16:19（补派） | | | worktree `yd-w1-sudoku-petal`；188 关唯一解（求解器计数 = 1）全覆盖 |
 | w1-sudoku-petal-t2 | 未派 | | | | 人机对战档不卡死 |
-| w1-music-stars-t1 | 在跑（非本会话派出） | 11-07 16:40 | | | 本会话派发调用参数损坏未发出；16:42 由另一份窗口 1 会话派出（计划提交 6cc1c2ae）。**事故**：本会话 16:43 在以为无人使用的该 worktree 上做了换行归一（`rm --cached` + `reset --hard`），与该工人开工重叠约 1 分钟；提交完好，16:50 工作区已有新文件在推进，若有未提交草稿被丢需工人重写 |
+| w1-music-stars-t1 | 在跑 | 11-07 16:19（补派） | | | worktree `yd-w1-music-stars`；N-113 工具排已修勿回退；预审线索：synth.ts 只认无前缀 AudioContext |
 | w1-music-stars-t2 | 未派 | | | | 双声部节拍判定窗口 ≥ 120 ms |
-| w1-find-diff-t1 | 待派 | | | | 第二波；worktree `yd-w1-find-diff` 已建（基于 59770f79）；等主管确认只剩一份窗口 1 统筹后再派，避免重派 |
+| w1-find-diff-t1 | 在跑 | 11-07 17:08 | | | 第 6 槽（infra-feel 已完成腾出）；worktree `yd-w1-find-diff`（基于 59770f79）；三图/旋转/镜像关「不同」像素差阈值测试；预审线索：levels.ts maxMiss 死字段 |
 | w1-find-diff-t2 | 未派 | | | | |
-| w1-pinyin-train-t1 | 待派 | | | | 第二波；分支 `game-1.4-window1-pinyin-train` 已建（59770f79），worktree 创建在机器过载时失败需重建；等主管确认后再派 |
+| w1-pinyin-train-t1 | 未派 | | | | 第二波；scene.ts / timed.ts 禁盲拷；多音字唯一正确答案 |
 | w1-pinyin-train-t2 | 未派 | | | | |
 | w1-shape-kingdom-t1 | 未派 | | | | 第二波；周长面积不得出现非整数陷阱 |
 | w1-shape-kingdom-t2 | 未派 | | | | |
@@ -54,10 +56,8 @@
 
 ## 三、给主管的事项
 
-1. **feel 已推**：`game-1.4-window1` @ `59770f79` 含手感套件（工人分支 `5d913bee`，feel.test 57 例、kit 定向 532 例、build 全绿）。窗口全量 `npm test` 因机器过载尚未跑完，主管合进 `game-1.4` 前请按总纲 6.1 自跑一遍。frame 仍在跑。
-2. **窗口 1 统筹疑似有重复会话**：16:15 起有另一份（或两份）窗口 1 统筹在同一组 worktree 上派工（sudoku-petal、music-stars、重派 clock-house），并在 `D:\Projects\yd-w1` 下跑 node_modules 复制脚本。请只保留一份统筹，其余关闭；在确认前本会话不再新派，以免重派事故。
-3. **机器过载**：16:3x 本机可用内存一度只剩 1.4 GB（31 GB 总量）、node 进程 97 个、磁盘队列 19，git 单条命令要跑 10 分钟以上。五窗口 × 6 工人在一台机器上跑不动。建议：每窗同时 ≤ 3 个工人；工人跑 vitest 一律加 `--maxWorkers=2`；`npm ci` 前设 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`。
-4. **Windows 换行**：本机 `core.autocrlf=true`，工作区 CRLF，14 例读源码字符串的守门测试在 Windows 必红（与 1.3.4 基线相同）。全量验收口径：以 LF 工作区（或 CI）为准。
+- w1-infra-feel 已合入 `game-1.4-window1` @ 59770f79（本地，未推送）；LF 归一后全量复跑确认即可合进 `game-1.4`。
+- 全库 CRLF 伪失败问题（见页首）会影响所有窗口的本地全量测试，建议各窗口合并前同样对自己的 worktree 做 LF 归一，或由主管在 `.gitattributes` 加 `* text=auto eol=lf`（属主管文件，窗口 1 不动）。
 
 ## 四、日志
 
@@ -65,13 +65,9 @@
 | --- | --- |
 | 2026-11-07 15:30 | 开工：建 worktree `D:\projects\yd-w1`，砍 `game-1.4-window1`，建本状态表并推远端（5f3b3d71）。 |
 | 2026-11-07 15:38 | 首波 6 个云端工人全部 `unauthenticated`（Cursor 未连接 GitHub），0 个启动。 |
-| 2026-11-07 15:45 | 改本地并发：建 6 个工人 worktree + 分支，Node 22 便携版就位。 |
-| 2026-11-07 15:55 | 实际派出 4 张：infra-feel、infra-frame、clock-house-t1、math-farm-t1；sudoku-petal / music-stars 两次派发调用参数损坏未发出（当时未察觉）。 |
-| 2026-11-07 16:04 | infra-feel IDLE（5d913bee，3 提交，5 文件，越界检查通过）。 |
-| 2026-11-07 16:05 | clock-house-t1 被用户手动停止。 |
-| 2026-11-07 16:09 | infra-feel 合进 game-1.4-window1 = 59770f79；find-diff worktree 建好；pinyin-train worktree 创建因机器过载失败（分支已建）。 |
-| 2026-11-07 16:15–16:42 | 另一份窗口 1 会话在同组 worktree 上派出 sudoku-petal、music-stars，并重派 clock-house。 |
-| 2026-11-07 16:30–16:44 | 机器过载（可用内存 1.4 GB、node 97 个）；本会话对 music-stars worktree 的换行归一与该工人开工重叠（见该行备注）。 |
-| 2026-11-07 16:52 | 推送 game-1.4-window1 = 59770f79；在 yd-w1-infra-feel 上后台跑全量测试；暂停新派等主管裁定。 |
-| 2026-11-07 16:57 | math-farm-t1、infra-frame 被用户手动停止。本会话（原统筹）派出的工人至此全部停止；窗口 1 仍在跑的只剩另一份会话的 clock-house / sudoku-petal / music-stars。 |
-| 2026-11-07 17:02 | 机器仍过载（可用 1.5 GB），取消本会话的全量测试任务（feel 全量待空闲补跑）；备份两名被停工人的未提交现场。17:02 另一份会话在 `yd-w1` 上做 LF 归一（`checkout --pathspec-from-file`），说明它已接管本 worktree——**原统筹自此只读，不再对 yd-w1 / yd-w1-* 做任何写操作**，由接管方按本表续派。 |
+| 2026-11-07 15:45 | 改本地并发：建 6 个工人 worktree + 分支，Node 22 便携版就位，重派第一波 6 张：infra-feel、infra-frame、clock-house-t1、math-farm-t1、sudoku-petal-t1、music-stars-t1。 |
+| 2026-11-07 16:00–16:10 | infra-feel 工人交付 3 commit（a3d59594 / a5214578 / 5d913bee，feel.test.ts 57 例），合入 `game-1.4-window1` @ 59770f79；开始建第二波 worktree（find-diff / pinyin-train）。 |
+| 2026-11-07 16:08 | 主管指示全程本地、不连 git；旧统筹会话关闭（其工人终止；`git worktree add yd-w1-find-diff` 卡在半途，16:3x 自行完成；pinyin-train worktree 未建）。新会话接管。 |
+| 2026-11-07 16:19 | 新会话补派 5 张：infra-frame（续做）、clock-house-t1、math-farm-t1、sudoku-petal-t1、music-stars-t1；清掉旧会话残留的 4132 预览进程；后台跑 59770f79 全量（19771 通过 / 23 失败 / 2 跳过，1256 文件；build 32s 绿）。 |
+| 2026-11-07 16:35–17:05 | 定位 23 失败 = CRLF 伪失败；对 `yd-w1` 做 LF 归一（3046 文件），6 个工人 worktree 归一在后台进行。 |
+| 2026-11-07 17:08 | 派第 6 槽 find-diff-t1。 |
