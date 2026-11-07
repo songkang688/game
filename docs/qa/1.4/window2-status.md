@@ -93,4 +93,4 @@ LOC > 6000 的 9 款（garden-guard candy-swing prince-princess ocean-munch spro
 | 2026-11-07 15:30 | 从 `origin/game-1.4` @ `10926b9b` 砍出 `game-1.4-window2`，建本表 |
 | 2026-11-07 15:38 | 云端派工失败（GitHub 集成未授权），转本地并发 |
 | 2026-11-07 15:45 | 修复分支串线事故 → `78064e64`；建 6 个工人 worktree `yd-w2-{garden-guard,candy-swing,prince-princess,ocean-munch,sprout-defense,box-hamster}` 并快进到 `78064e64` |
-| 2026-11-07 15:55 | 派波 1 六个 t1（本地，generalPurpose，claude-opus-5-5-xhigh-fast） |
+| 2026-11-07 15:55 | 派波 1 六个 t1（本地，generalPurpose，claude-opus-5-5-xhigh-fast）。工人 ID：garden-guard `1ecc62c5`、candy-swing `150b1a45`、prince-princess `a892e54c`、ocean-munch `38ed8226`、sprout-defense `ad5c7b1f`、box-hamster `7e017a78`（首次派发参数截断，立即补派成功） |
