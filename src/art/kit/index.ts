@@ -11,3 +11,4 @@ export * from "./chars";
 export * from "./props";
 export * from "./fx";
 export * from "./testing";
+export * from "./feel";
